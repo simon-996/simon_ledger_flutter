@@ -77,22 +77,10 @@ class LedgerListTab extends ConsumerWidget {
           ),
           child: Card(
             child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              leading: Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  Icons.book,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               title: Text(
                 ledger.name,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 24),
               ),
               subtitle: Padding(
                 padding: const EdgeInsets.only(top: 8),

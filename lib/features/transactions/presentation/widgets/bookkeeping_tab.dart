@@ -462,8 +462,15 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
             ),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.all(16.0),
+        AnimatedPadding(
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+          padding: EdgeInsets.only(
+            left: 16.0,
+            right: 16.0,
+            top: 16.0,
+            bottom: 16.0 + MediaQuery.of(context).viewInsets.bottom,
+          ),
           child: peopleAsyncValue.maybeWhen(
             data: (peoplePool) => FilledButton.icon(
               onPressed: () => _saveTransaction(peoplePool),

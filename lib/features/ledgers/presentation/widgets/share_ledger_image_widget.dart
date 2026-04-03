@@ -102,14 +102,15 @@ class ShareLedgerImageWidget extends StatelessWidget {
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Wrap(
-                spacing: 12,
-                runSpacing: 12,
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
                 children: peopleInImage.map((p) {
                   final pBalance = personBalances[p.uuid] ?? 0.0;
                   final isPositive = pBalance >= 0;
                   return Container(
-                    width: 110,
-                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                    width: 100,
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF9FAFB),
                       borderRadius: BorderRadius.circular(12),
@@ -118,18 +119,18 @@ class ShareLedgerImageWidget extends StatelessWidget {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(p.avatar, style: const TextStyle(fontSize: 24)),
-                        const SizedBox(height: 6),
+                        Text(p.avatar, style: const TextStyle(fontSize: 20)),
+                        const SizedBox(height: 4),
                         Text(
                           p.name,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563)),
+                          style: const TextStyle(fontSize: 11, color: Color(0xFF4B5563)),
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 2),
                         Text(
                           '${isPositive ? '+' : ''}${pBalance.toStringAsFixed(2)}',
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 11,
                             fontWeight: FontWeight.bold,
                             color: isPositive ? const Color(0xFF10B981) : const Color(0xFFEF4444),
                           ),

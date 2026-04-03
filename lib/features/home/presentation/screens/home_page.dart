@@ -27,6 +27,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     final ledgerStatsAsyncValue = ref.watch(ledgerStatsProvider);
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: _currentIndex == 0 ? null : AppBar(
         title: Text(
           _currentIndex == 1

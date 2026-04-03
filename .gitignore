@@ -43,3 +43,26 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# --- Simon Ledger Added ---
+# Flutter/Dart specific
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+.metadata
+
+# Platform specific
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/flutter_export_environment.sh
+**/macos/Flutter/ephemeral/
+**/windows/flutter/ephemeral/
+**/linux/flutter/ephemeral/
+
+# Security and local configurations
+android/key.properties
+android/local.properties
+*.keystore
+*.jks
+
+# System specific
+Thumbs.db
