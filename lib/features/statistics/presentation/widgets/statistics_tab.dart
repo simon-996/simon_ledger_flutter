@@ -144,71 +144,82 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
             AppTheme.pagePadding,
             12,
           ),
-          child: AppSectionCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _ResponsiveControls(
-                  first: DropdownButtonFormField<String>(
-                    key: ValueKey('stats-ledger-$_selectedLedgerUuid'),
-                    initialValue: _selectedLedgerUuid,
-                    decoration: const InputDecoration(
-                      labelText: '账本',
-                      prefixIcon: Icon(Icons.book_outlined),
+          child: AppAnimatedEntry(
+            child: AppSectionCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _ResponsiveControls(
+                    first: DropdownButtonFormField<String>(
+                      key: ValueKey('stats-ledger-$_selectedLedgerUuid'),
+                      initialValue: _selectedLedgerUuid,
+                      decoration: const InputDecoration(
+                        labelText: '账本',
+                        prefixIcon: Icon(Icons.book_outlined),
+                      ),
+                      isExpanded: true,
+                      items: widget.ledgers
+                          .map(
+                            (l) => DropdownMenuItem(
+                              value: l.uuid,
+                              child: Text(l.name),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() => _selectedLedgerUuid = val);
+                        }
+                      },
                     ),
-                    isExpanded: true,
-                    items: widget.ledgers
-                        .map(
-                          (l) => DropdownMenuItem(
-                            value: l.uuid,
-                            child: Text(l.name),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (val) {
-                      if (val != null) {
-                        setState(() => _selectedLedgerUuid = val);
-                      }
-                    },
+                    second: SegmentedButton<int>(
+                      showSelectedIcon: false,
+                      segments: const [
+                        ButtonSegment(
+                          value: 0,
+                          icon: Icon(Icons.remove_rounded),
+                          label: Text('支出'),
+                        ),
+                        ButtonSegment(
+                          value: 1,
+                          icon: Icon(Icons.add_rounded),
+                          label: Text('收入'),
+                        ),
+                      ],
+                      selected: {_transactionType},
+                      onSelectionChanged: (Set<int> newSelection) {
+                        setState(() => _transactionType = newSelection.first);
+                      },
+                    ),
                   ),
-                  second: SegmentedButton<int>(
-                    showSelectedIcon: false,
-                    segments: const [
-                      ButtonSegment(
-                        value: 0,
-                        icon: Icon(Icons.remove_rounded),
-                        label: Text('支出'),
-                      ),
-                      ButtonSegment(
-                        value: 1,
-                        icon: Icon(Icons.add_rounded),
-                        label: Text('收入'),
-                      ),
-                    ],
-                    selected: {_transactionType},
-                    onSelectionChanged: (Set<int> newSelection) {
-                      setState(() => _transactionType = newSelection.first);
-                    },
+                  const SizedBox(height: 12),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SegmentedButton<TimeFilter>(
+                      showSelectedIcon: false,
+                      segments: const [
+                        ButtonSegment(
+                          value: TimeFilter.week,
+                          label: Text('近7天'),
+                        ),
+                        ButtonSegment(
+                          value: TimeFilter.month,
+                          label: Text('本月'),
+                        ),
+                        ButtonSegment(
+                          value: TimeFilter.year,
+                          label: Text('本年'),
+                        ),
+                        ButtonSegment(value: TimeFilter.all, label: Text('全部')),
+                      ],
+                      selected: {_timeFilter},
+                      onSelectionChanged: (Set<TimeFilter> newSelection) {
+                        setState(() => _timeFilter = newSelection.first);
+                      },
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: SegmentedButton<TimeFilter>(
-                    showSelectedIcon: false,
-                    segments: const [
-                      ButtonSegment(value: TimeFilter.week, label: Text('近7天')),
-                      ButtonSegment(value: TimeFilter.month, label: Text('本月')),
-                      ButtonSegment(value: TimeFilter.year, label: Text('本年')),
-                      ButtonSegment(value: TimeFilter.all, label: Text('全部')),
-                    ],
-                    selected: {_timeFilter},
-                    onSelectionChanged: (Set<TimeFilter> newSelection) {
-                      setState(() => _timeFilter = newSelection.first);
-                    },
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -253,15 +264,18 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-                      child: _SummaryChartCard(
-                        title: '总${_transactionType == 0 ? "支出" : "收入"}',
-                        amount:
-                            '${currentLedger.baseCurrencyCode} ${totalAmount.toStringAsFixed(2)}',
-                        isExpense: _transactionType == 0,
-                        categories: sortedCategories,
-                        totalAmount: totalAmount,
-                        colorForIndex: (index) =>
-                            _getColorForCategory(index, context),
+                      child: AppAnimatedEntry(
+                        delay: const Duration(milliseconds: 70),
+                        child: _SummaryChartCard(
+                          title: '总${_transactionType == 0 ? "支出" : "收入"}',
+                          amount:
+                              '${currentLedger.baseCurrencyCode} ${totalAmount.toStringAsFixed(2)}',
+                          isExpense: _transactionType == 0,
+                          categories: sortedCategories,
+                          totalAmount: totalAmount,
+                          colorForIndex: (index) =>
+                              _getColorForCategory(index, context),
+                        ),
                       ),
                     ),
                   ),
@@ -287,12 +301,16 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                     itemBuilder: (context, index) {
                       final entry = sortedCategories[index];
                       final percentage = entry.value / totalAmount * 100;
-                      return _CategoryBreakdownTile(
-                        color: _getColorForCategory(index, context),
-                        category: entry.key,
-                        amount:
-                            '${currentLedger.baseCurrencyCode} ${entry.value.toStringAsFixed(2)}',
-                        percentage: '${percentage.toStringAsFixed(1)}%',
+                      final delayMs = 100 + (index < 6 ? index : 6) * 35;
+                      return AppAnimatedEntry(
+                        delay: Duration(milliseconds: delayMs),
+                        child: _CategoryBreakdownTile(
+                          color: _getColorForCategory(index, context),
+                          category: entry.key,
+                          amount:
+                              '${currentLedger.baseCurrencyCode} ${entry.value.toStringAsFixed(2)}',
+                          percentage: '${percentage.toStringAsFixed(1)}%',
+                        ),
                       );
                     },
                   ),
@@ -348,12 +366,18 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                                   final p = peopleInLedger[index];
                                   final pBalance =
                                       personBalances[p.uuid] ?? 0.0;
-                                  return AppPersonBalanceCard(
-                                    avatar: p.avatar,
-                                    name: p.name,
-                                    balance:
-                                        '${pBalance >= 0 ? '+' : ''}${pBalance.toStringAsFixed(2)}',
-                                    isPositive: pBalance >= 0,
+                                  return AppAnimatedEntry(
+                                    delay: Duration(
+                                      milliseconds:
+                                          120 + (index < 6 ? index : 6) * 35,
+                                    ),
+                                    child: AppPersonBalanceCard(
+                                      avatar: p.avatar,
+                                      name: p.name,
+                                      balance:
+                                          '${pBalance >= 0 ? '+' : ''}${pBalance.toStringAsFixed(2)}',
+                                      isPositive: pBalance >= 0,
+                                    ),
                                   );
                                 },
                               ),
@@ -405,26 +429,30 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                               })
                               .join('');
 
-                          return AppTransactionTile(
-                            category: t.category,
-                            date: dateStr,
-                            people: peopleStr,
-                            note: t.note,
-                            amount:
-                                '${t.type == 0 ? '-' : '+'} ${t.currencyCode} ${t.amount.toStringAsFixed(2)}',
-                            isExpense: t.type == 0,
-                            onTap: () {
-                              showModalBottomSheet(
-                                context: context,
-                                isScrollControlled: true,
-                                backgroundColor: Colors.transparent,
-                                builder: (context) => TransactionDetailSheet(
-                                  transaction: t,
-                                  peoplePool: peoplePool,
-                                  ledger: currentLedger,
-                                ),
-                              );
-                            },
+                          final delayMs = (index < 8 ? index : 8) * 28;
+                          return AppAnimatedEntry(
+                            delay: Duration(milliseconds: delayMs),
+                            child: AppTransactionTile(
+                              category: t.category,
+                              date: dateStr,
+                              people: peopleStr,
+                              note: t.note,
+                              amount:
+                                  '${t.type == 0 ? '-' : '+'} ${t.currencyCode} ${t.amount.toStringAsFixed(2)}',
+                              isExpense: t.type == 0,
+                              onTap: () {
+                                showModalBottomSheet(
+                                  context: context,
+                                  isScrollControlled: true,
+                                  backgroundColor: Colors.transparent,
+                                  builder: (context) => TransactionDetailSheet(
+                                    transaction: t,
+                                    peoplePool: peoplePool,
+                                    ledger: currentLedger,
+                                  ),
+                                );
+                              },
+                            ),
                           );
                         },
                       );

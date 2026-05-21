@@ -304,51 +304,53 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                   AppTheme.pagePadding,
                   12,
                 ),
-                child: AppSectionCard(
-                  padding: const EdgeInsets.all(20),
-                  color: colorScheme.primaryContainer.withValues(alpha: 0.42),
-                  borderColor: colorScheme.primary.withValues(alpha: 0.12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        '结余 (${widget.ledger.baseCurrencyCode})',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(color: colorScheme.onSurfaceVariant),
-                      ),
-                      const SizedBox(height: 8),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          balance.toStringAsFixed(2),
-                          style: Theme.of(context).textTheme.displayMedium
-                              ?.copyWith(fontWeight: FontWeight.w900),
+                child: AppAnimatedEntry(
+                  child: AppSectionCard(
+                    padding: const EdgeInsets.all(20),
+                    color: colorScheme.primaryContainer.withValues(alpha: 0.42),
+                    borderColor: colorScheme.primary.withValues(alpha: 0.12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          '结余 (${widget.ledger.baseCurrencyCode})',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(color: colorScheme.onSurfaceVariant),
                         ),
-                      ),
-                      const SizedBox(height: 20),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: AppMetricTile(
-                              icon: Icons.arrow_downward_rounded,
-                              label: '总收入',
-                              value: totalIncome.toStringAsFixed(2),
-                              color: colorScheme.primary,
-                            ),
+                        const SizedBox(height: 8),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            balance.toStringAsFixed(2),
+                            style: Theme.of(context).textTheme.displayMedium
+                                ?.copyWith(fontWeight: FontWeight.w900),
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: AppMetricTile(
-                              icon: Icons.arrow_upward_rounded,
-                              label: '总支出',
-                              value: totalExpense.toStringAsFixed(2),
-                              color: colorScheme.error,
+                        ),
+                        const SizedBox(height: 20),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: AppMetricTile(
+                                icon: Icons.arrow_downward_rounded,
+                                label: '总收入',
+                                value: totalIncome.toStringAsFixed(2),
+                                color: colorScheme.primary,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ],
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: AppMetricTile(
+                                icon: Icons.arrow_upward_rounded,
+                                label: '总支出',
+                                value: totalExpense.toStringAsFixed(2),
+                                color: colorScheme.error,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -422,16 +424,22 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                                       final p = peopleInLedger[index];
                                       final pBalance =
                                           personBalances[p.uuid] ?? 0.0;
-                                      return AppPersonBalanceCard(
-                                        avatar: p.avatar,
-                                        name: p.name,
-                                        balance:
-                                            '${pBalance >= 0 ? '+' : ''}${pBalance.toStringAsFixed(2)}',
-                                        isPositive: pBalance >= 0,
-                                        isSelected: _selectedFilterPersonUuids
-                                            .contains(p.uuid),
-                                        onTap: () =>
-                                            _toggleFilterSelection(p.uuid),
+                                      return AppAnimatedEntry(
+                                        delay: Duration(
+                                          milliseconds:
+                                              90 + (index < 6 ? index : 6) * 35,
+                                        ),
+                                        child: AppPersonBalanceCard(
+                                          avatar: p.avatar,
+                                          name: p.name,
+                                          balance:
+                                              '${pBalance >= 0 ? '+' : ''}${pBalance.toStringAsFixed(2)}',
+                                          isPositive: pBalance >= 0,
+                                          isSelected: _selectedFilterPersonUuids
+                                              .contains(p.uuid),
+                                          onTap: () =>
+                                              _toggleFilterSelection(p.uuid),
+                                        ),
                                       );
                                     },
                                   ),
@@ -491,45 +499,49 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                                   _isSelectionMode &&
                                   _selectedTransactionUuids.contains(t.uuid);
 
-                              return AppTransactionTile(
-                                selected: selected,
-                                leading: _isSelectionMode
-                                    ? Checkbox(
-                                        value: selected,
-                                        onChanged: (_) =>
-                                            _toggleSelection(t.uuid),
-                                      )
-                                    : null,
-                                category: t.category,
-                                date: dateStr,
-                                people: peopleStr,
-                                note: t.note,
-                                amount:
-                                    '${t.type == 0 ? '-' : '+'} ${t.currencyCode} ${t.amount.toStringAsFixed(2)}',
-                                isExpense: t.type == 0,
-                                onLongPress: () {
-                                  if (!_isSelectionMode) {
-                                    _toggleSelectionMode();
-                                    _toggleSelection(t.uuid);
-                                  }
-                                },
-                                onTap: () {
-                                  if (_isSelectionMode) {
-                                    _toggleSelection(t.uuid);
-                                    return;
-                                  }
-                                  showModalBottomSheet(
-                                    context: context,
-                                    isScrollControlled: true,
-                                    backgroundColor: Colors.transparent,
-                                    builder: (context) =>
-                                        TransactionDetailSheet(
-                                          transaction: t,
-                                          peoplePool: peoplePool,
-                                          ledger: widget.ledger,
-                                        ),
-                                  );
-                                },
+                              final delayMs = (index < 8 ? index : 8) * 28;
+                              return AppAnimatedEntry(
+                                delay: Duration(milliseconds: delayMs),
+                                child: AppTransactionTile(
+                                  selected: selected,
+                                  leading: _isSelectionMode
+                                      ? Checkbox(
+                                          value: selected,
+                                          onChanged: (_) =>
+                                              _toggleSelection(t.uuid),
+                                        )
+                                      : null,
+                                  category: t.category,
+                                  date: dateStr,
+                                  people: peopleStr,
+                                  note: t.note,
+                                  amount:
+                                      '${t.type == 0 ? '-' : '+'} ${t.currencyCode} ${t.amount.toStringAsFixed(2)}',
+                                  isExpense: t.type == 0,
+                                  onLongPress: () {
+                                    if (!_isSelectionMode) {
+                                      _toggleSelectionMode();
+                                      _toggleSelection(t.uuid);
+                                    }
+                                  },
+                                  onTap: () {
+                                    if (_isSelectionMode) {
+                                      _toggleSelection(t.uuid);
+                                      return;
+                                    }
+                                    showModalBottomSheet(
+                                      context: context,
+                                      isScrollControlled: true,
+                                      backgroundColor: Colors.transparent,
+                                      builder: (context) =>
+                                          TransactionDetailSheet(
+                                            transaction: t,
+                                            peoplePool: peoplePool,
+                                            ledger: widget.ledger,
+                                          ),
+                                    );
+                                  },
+                                ),
                               );
                             },
                           ),

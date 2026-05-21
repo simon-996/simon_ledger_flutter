@@ -1,5 +1,122 @@
 import 'package:flutter/material.dart';
 
+class AppMotion {
+  static const Duration fast = Duration(milliseconds: 160);
+  static const Duration normal = Duration(milliseconds: 260);
+  static const Duration slow = Duration(milliseconds: 420);
+
+  static const Curve standard = Curves.easeOutCubic;
+  static const Curve emphasized = Curves.easeOutQuart;
+}
+
+class AppAnimatedEntry extends StatefulWidget {
+  const AppAnimatedEntry({
+    super.key,
+    required this.child,
+    this.delay = Duration.zero,
+    this.duration = AppMotion.slow,
+    this.offset = const Offset(0, 0.035),
+    this.curve = AppMotion.emphasized,
+  });
+
+  final Widget child;
+  final Duration delay;
+  final Duration duration;
+  final Offset offset;
+  final Curve curve;
+
+  @override
+  State<AppAnimatedEntry> createState() => _AppAnimatedEntryState();
+}
+
+class _AppAnimatedEntryState extends State<AppAnimatedEntry>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _opacity;
+  late final Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: widget.duration);
+    final curved = CurvedAnimation(parent: _controller, curve: widget.curve);
+    _opacity = curved;
+    _slide = Tween<Offset>(
+      begin: widget.offset,
+      end: Offset.zero,
+    ).animate(curved);
+
+    if (widget.delay == Duration.zero) {
+      _controller.forward();
+    } else {
+      Future.delayed(widget.delay, () {
+        if (mounted) _controller.forward();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _opacity,
+      child: SlideTransition(position: _slide, child: widget.child),
+    );
+  }
+}
+
+class AppAnimatedIndexedStack extends StatelessWidget {
+  const AppAnimatedIndexedStack({
+    super.key,
+    required this.index,
+    required this.children,
+    this.duration = AppMotion.normal,
+  });
+
+  final int index;
+  final List<Widget> children;
+  final Duration duration;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        for (var i = 0; i < children.length; i++)
+          Positioned.fill(
+            child: IgnorePointer(
+              ignoring: i != index,
+              child: ExcludeSemantics(
+                excluding: i != index,
+                child: AnimatedOpacity(
+                  opacity: i == index ? 1 : 0,
+                  duration: duration,
+                  curve: AppMotion.standard,
+                  child: AnimatedSlide(
+                    offset: i == index
+                        ? Offset.zero
+                        : Offset(i < index ? -0.025 : 0.025, 0),
+                    duration: duration,
+                    curve: AppMotion.emphasized,
+                    child: TickerMode(
+                      enabled: i == index,
+                      child: RepaintBoundary(child: children[i]),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 class AppEmptyState extends StatelessWidget {
   const AppEmptyState({
     super.key,
@@ -21,38 +138,40 @@ class AppEmptyState extends StatelessWidget {
     return Center(
       child: SafeArea(
         minimum: const EdgeInsets.all(24),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 360),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 88,
-                height: 88,
-                decoration: BoxDecoration(
-                  color: colorScheme.primaryContainer.withValues(alpha: 0.72),
-                  borderRadius: BorderRadius.circular(28),
-                ),
-                child: Icon(icon, size: 44, color: colorScheme.primary),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              if (message != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  message!,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
+        child: AppAnimatedEntry(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 360),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 88,
+                  height: 88,
+                  decoration: BoxDecoration(
+                    color: colorScheme.primaryContainer.withValues(alpha: 0.72),
+                    borderRadius: BorderRadius.circular(28),
                   ),
+                  child: Icon(icon, size: 44, color: colorScheme.primary),
                 ),
+                const SizedBox(height: 20),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                if (message != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    message!,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+                if (action != null) ...[const SizedBox(height: 24), action!],
               ],
-              if (action != null) ...[const SizedBox(height: 24), action!],
-            ],
+            ),
           ),
         ),
       ),
@@ -80,7 +199,9 @@ class AppSectionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Container(
+    return AnimatedContainer(
+      duration: AppMotion.normal,
+      curve: AppMotion.standard,
       margin: margin,
       padding: padding,
       decoration: BoxDecoration(
@@ -197,48 +318,43 @@ class AppPersonBalanceCard extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final amountColor = isPositive ? colorScheme.primary : colorScheme.error;
 
-    return Material(
+    return _AnimatedTapSurface(
       color: isSelected
           ? colorScheme.primaryContainer.withValues(alpha: 0.76)
           : colorScheme.surfaceContainerLowest,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: BorderSide(
-          width: isSelected ? 1.5 : 1,
-          color: isSelected ? colorScheme.primary : colorScheme.outlineVariant,
-        ),
+      borderRadius: 18,
+      borderSide: BorderSide(
+        width: isSelected ? 1.5 : 1,
+        color: isSelected ? colorScheme.primary : colorScheme.outlineVariant,
       ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: SizedBox(
-          width: 92,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(avatar, style: const TextStyle(fontSize: 24)),
-                const SizedBox(height: 6),
-                Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelMedium,
-                ),
-                const SizedBox(height: 6),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    balance,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: amountColor,
-                      fontWeight: FontWeight.w800,
-                    ),
+      onTap: onTap,
+      child: SizedBox(
+        width: 92,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(avatar, style: const TextStyle(fontSize: 24)),
+              const SizedBox(height: 6),
+              Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelMedium,
+              ),
+              const SizedBox(height: 6),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  balance,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: amountColor,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -280,95 +396,149 @@ class AppTransactionTile extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: Material(
+      child: _AnimatedTapSurface(
         color: selected
             ? colorScheme.primaryContainer.withValues(alpha: 0.58)
             : colorScheme.surfaceContainerLowest,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-          side: BorderSide(
-            color: selected
-                ? colorScheme.primary.withValues(alpha: 0.45)
-                : colorScheme.outlineVariant.withValues(alpha: 0.72),
-          ),
+        borderRadius: 18,
+        borderSide: BorderSide(
+          color: selected
+              ? colorScheme.primary.withValues(alpha: 0.45)
+              : colorScheme.outlineVariant.withValues(alpha: 0.72),
         ),
-        child: InkWell(
-          onTap: onTap,
-          onLongPress: onLongPress,
-          borderRadius: BorderRadius.circular(18),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                leading ?? _TypeBadge(isExpense: isExpense, color: amountColor),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
+        onTap: onTap,
+        onLongPress: onLongPress,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              leading ?? _TypeBadge(isExpense: isExpense, color: amountColor),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            category,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                        ),
+                        if (people.isNotEmpty) ...[
+                          const SizedBox(width: 8),
                           Flexible(
                             child: Text(
-                              category,
+                              people,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.titleSmall,
+                              style: Theme.of(context).textTheme.bodySmall,
                             ),
                           ),
-                          if (people.isNotEmpty) ...[
-                            const SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                people,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ),
-                          ],
                         ],
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      date,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
                       ),
+                    ),
+                    if (hasNote) ...[
                       const SizedBox(height: 4),
                       Text(
-                        date,
+                        note!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: colorScheme.onSurfaceVariant,
+                          fontStyle: FontStyle.italic,
                         ),
                       ),
-                      if (hasNote) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          note!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                                fontStyle: FontStyle.italic,
-                              ),
-                        ),
-                      ],
                     ],
-                  ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 132),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      amount,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: amountColor,
-                        fontWeight: FontWeight.w800,
-                      ),
+              ),
+              const SizedBox(width: 12),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 132),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    amount,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: amountColor,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AnimatedTapSurface extends StatefulWidget {
+  const _AnimatedTapSurface({
+    required this.child,
+    required this.color,
+    required this.borderRadius,
+    required this.borderSide,
+    this.onTap,
+    this.onLongPress,
+  });
+
+  final Widget child;
+  final Color color;
+  final double borderRadius;
+  final BorderSide borderSide;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+
+  @override
+  State<_AnimatedTapSurface> createState() => _AnimatedTapSurfaceState();
+}
+
+class _AnimatedTapSurfaceState extends State<_AnimatedTapSurface> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(widget.borderRadius);
+
+    return AnimatedScale(
+      scale: _pressed ? 0.985 : 1,
+      duration: AppMotion.fast,
+      curve: AppMotion.standard,
+      child: AnimatedContainer(
+        duration: AppMotion.normal,
+        curve: AppMotion.standard,
+        decoration: BoxDecoration(
+          color: widget.color,
+          borderRadius: radius,
+          border: Border.all(
+            color: widget.borderSide.color,
+            width: widget.borderSide.width,
+          ),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: widget.onTap,
+            onLongPress: widget.onLongPress,
+            onHighlightChanged: (pressed) {
+              if (_pressed != pressed) setState(() => _pressed = pressed);
+            },
+            borderRadius: radius,
+            child: widget.child,
           ),
         ),
       ),
@@ -384,7 +554,9 @@ class _TypeBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return AnimatedContainer(
+      duration: AppMotion.normal,
+      curve: AppMotion.standard,
       width: 40,
       height: 40,
       decoration: BoxDecoration(

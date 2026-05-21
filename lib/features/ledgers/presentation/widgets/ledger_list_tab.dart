@@ -76,6 +76,7 @@ class LedgerListTab extends ConsumerWidget {
         final stats =
             ledgerStats[ledger.uuid] ??
             {'expense': 0.0, 'income': 0.0, 'balance': 0.0};
+        final delayMs = (index < 6 ? index : 6) * 45;
 
         return Dismissible(
           key: ValueKey(ledger.uuid),
@@ -83,14 +84,17 @@ class LedgerListTab extends ConsumerWidget {
           confirmDismiss: (direction) => _confirmDelete(context, ledger),
           onDismissed: (_) => onDelete(ledger),
           background: _DeleteBackground(),
-          child: _LedgerCard(
-            ledger: ledger,
-            income: stats['income'] ?? 0,
-            expense: stats['expense'] ?? 0,
-            balance: stats['balance'] ?? 0,
-            index: index,
-            onTap: () => onTap(ledger),
-            onEdit: () => onEdit(ledger),
+          child: AppAnimatedEntry(
+            delay: Duration(milliseconds: delayMs),
+            child: _LedgerCard(
+              ledger: ledger,
+              income: stats['income'] ?? 0,
+              expense: stats['expense'] ?? 0,
+              balance: stats['balance'] ?? 0,
+              index: index,
+              onTap: () => onTap(ledger),
+              onEdit: () => onEdit(ledger),
+            ),
           ),
         );
       },

@@ -312,222 +312,251 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _QuickEntryHeader(
-                  ledgerName: selectedLedger?.name,
-                  currencyCode: _selectedCurrency,
-                  isIncome: _transactionType == 1,
-                ),
-                const SizedBox(height: 14),
-                AppSectionCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _ResponsivePair(
-                        breakpoint: 430,
-                        first: DropdownButtonFormField<String>(
-                          key: ValueKey('ledger-$_selectedLedgerUuid'),
-                          initialValue: _selectedLedgerUuid,
-                          decoration: const InputDecoration(
-                            labelText: '所属账本',
-                            prefixIcon: Icon(Icons.book_outlined),
-                          ),
-                          isExpanded: true,
-                          items: widget.ledgers
-                              .map(
-                                (l) => DropdownMenuItem(
-                                  value: l.uuid,
-                                  child: Text(l.name),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (val) {
-                            if (val == null) return;
-                            setState(() => _updateSelectedLedger(val));
-                          },
-                        ),
-                        second: SegmentedButton<int>(
-                          showSelectedIcon: false,
-                          segments: const [
-                            ButtonSegment(
-                              value: 0,
-                              icon: Icon(Icons.remove_rounded),
-                              label: Text('支出'),
-                            ),
-                            ButtonSegment(
-                              value: 1,
-                              icon: Icon(Icons.add_rounded),
-                              label: Text('收入'),
-                            ),
-                          ],
-                          selected: {_transactionType},
-                          onSelectionChanged: (Set<int> newSelection) {
-                            setState(() {
-                              _transactionType = newSelection.first;
-                              _selectedCategory = _currentCategories.first;
-                            });
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      _ResponsivePair(
-                        breakpoint: 390,
-                        firstFlex: 3,
-                        secondFlex: 6,
-                        first: DropdownButtonFormField<String>(
-                          key: ValueKey('currency-$_selectedCurrency'),
-                          initialValue: _selectedCurrency,
-                          decoration: const InputDecoration(
-                            labelText: '币种',
-                            prefixIcon: Icon(Icons.payments_outlined),
-                          ),
-                          isExpanded: true,
-                          items: const [
-                            DropdownMenuItem(value: 'CNY', child: Text('CNY')),
-                            DropdownMenuItem(value: 'USD', child: Text('USD')),
-                            DropdownMenuItem(value: 'EUR', child: Text('EUR')),
-                            DropdownMenuItem(value: 'JPY', child: Text('JPY')),
-                            DropdownMenuItem(value: 'THB', child: Text('THB')),
-                          ],
-                          onChanged: (val) =>
-                              setState(() => _selectedCurrency = val),
-                        ),
-                        second: TextField(
-                          controller: _amountController,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          style: Theme.of(context).textTheme.headlineSmall
-                              ?.copyWith(fontWeight: FontWeight.w800),
-                          decoration: InputDecoration(
-                            labelText: '金额',
-                            hintText: '0.00',
-                            prefixText: '${_selectedCurrency ?? 'CNY'} ',
-                          ),
-                          onChanged: _limitAmountPrecision,
-                        ),
-                      ),
-                    ],
+                AppAnimatedEntry(
+                  child: _QuickEntryHeader(
+                    ledgerName: selectedLedger?.name,
+                    currencyCode: _selectedCurrency,
+                    isIncome: _transactionType == 1,
                   ),
                 ),
                 const SizedBox(height: 14),
-                AppSectionCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      AppSectionHeader(
-                        title: '分类',
-                        trailing: Icon(
-                          _transactionType == 0
-                              ? Icons.trending_down_rounded
-                              : Icons.trending_up_rounded,
-                          color: _transactionType == 0
-                              ? colorScheme.error
-                              : colorScheme.primary,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: _currentCategories.map((cat) {
-                          final isSelected = _selectedCategory == cat;
-                          return ChoiceChip(
-                            label: Text(cat),
-                            selected: isSelected,
-                            onSelected: (selected) {
-                              if (selected) {
-                                setState(() => _selectedCategory = cat);
-                              }
+                AppAnimatedEntry(
+                  delay: const Duration(milliseconds: 60),
+                  child: AppSectionCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _ResponsivePair(
+                          breakpoint: 430,
+                          first: DropdownButtonFormField<String>(
+                            key: ValueKey('ledger-$_selectedLedgerUuid'),
+                            initialValue: _selectedLedgerUuid,
+                            decoration: const InputDecoration(
+                              labelText: '所属账本',
+                              prefixIcon: Icon(Icons.book_outlined),
+                            ),
+                            isExpanded: true,
+                            items: widget.ledgers
+                                .map(
+                                  (l) => DropdownMenuItem(
+                                    value: l.uuid,
+                                    child: Text(l.name),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (val) {
+                              if (val == null) return;
+                              setState(() => _updateSelectedLedger(val));
                             },
-                          );
-                        }).toList(),
-                      ),
-                    ],
+                          ),
+                          second: SegmentedButton<int>(
+                            showSelectedIcon: false,
+                            segments: const [
+                              ButtonSegment(
+                                value: 0,
+                                icon: Icon(Icons.remove_rounded),
+                                label: Text('支出'),
+                              ),
+                              ButtonSegment(
+                                value: 1,
+                                icon: Icon(Icons.add_rounded),
+                                label: Text('收入'),
+                              ),
+                            ],
+                            selected: {_transactionType},
+                            onSelectionChanged: (Set<int> newSelection) {
+                              setState(() {
+                                _transactionType = newSelection.first;
+                                _selectedCategory = _currentCategories.first;
+                              });
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        _ResponsivePair(
+                          breakpoint: 390,
+                          firstFlex: 3,
+                          secondFlex: 6,
+                          first: DropdownButtonFormField<String>(
+                            key: ValueKey('currency-$_selectedCurrency'),
+                            initialValue: _selectedCurrency,
+                            decoration: const InputDecoration(
+                              labelText: '币种',
+                              prefixIcon: Icon(Icons.payments_outlined),
+                            ),
+                            isExpanded: true,
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'CNY',
+                                child: Text('CNY'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'USD',
+                                child: Text('USD'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'EUR',
+                                child: Text('EUR'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'JPY',
+                                child: Text('JPY'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'THB',
+                                child: Text('THB'),
+                              ),
+                            ],
+                            onChanged: (val) =>
+                                setState(() => _selectedCurrency = val),
+                          ),
+                          second: TextField(
+                            controller: _amountController,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            style: Theme.of(context).textTheme.headlineSmall
+                                ?.copyWith(fontWeight: FontWeight.w800),
+                            decoration: InputDecoration(
+                              labelText: '金额',
+                              hintText: '0.00',
+                              prefixText: '${_selectedCurrency ?? 'CNY'} ',
+                            ),
+                            onChanged: _limitAmountPrecision,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                AppAnimatedEntry(
+                  delay: const Duration(milliseconds: 120),
+                  child: AppSectionCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        AppSectionHeader(
+                          title: '分类',
+                          trailing: Icon(
+                            _transactionType == 0
+                                ? Icons.trending_down_rounded
+                                : Icons.trending_up_rounded,
+                            color: _transactionType == 0
+                                ? colorScheme.error
+                                : colorScheme.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: _currentCategories.map((cat) {
+                            final isSelected = _selectedCategory == cat;
+                            return ChoiceChip(
+                              label: Text(cat),
+                              selected: isSelected,
+                              onSelected: (selected) {
+                                if (selected) {
+                                  setState(() => _selectedCategory = cat);
+                                }
+                              },
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 14),
                 if (selectedLedger != null)
-                  peopleAsyncValue.when(
-                    loading: () => const AppSectionCard(
-                      child: Center(child: CircularProgressIndicator()),
-                    ),
-                    error: (e, st) => AppSectionCard(child: Text('加载人员失败: $e')),
-                    data: (peoplePool) {
-                      if (selectedLedger.personUuids.isEmpty) {
-                        return const SizedBox.shrink();
-                      }
+                  AppAnimatedEntry(
+                    delay: const Duration(milliseconds: 180),
+                    child: peopleAsyncValue.when(
+                      loading: () => const AppSectionCard(
+                        child: Center(child: CircularProgressIndicator()),
+                      ),
+                      error: (e, st) =>
+                          AppSectionCard(child: Text('加载人员失败: $e')),
+                      data: (peoplePool) {
+                        if (selectedLedger.personUuids.isEmpty) {
+                          return const SizedBox.shrink();
+                        }
 
-                      return AppSectionCard(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            AppSectionHeader(
-                              title: '参与人员',
-                              trailing: TextButton(
-                                onPressed: () {
-                                  setState(() {
-                                    if (_selectedPersonIds.length ==
-                                        selectedLedger.personUuids.length) {
-                                      _selectedPersonIds.clear();
-                                    } else {
-                                      _selectedPersonIds.addAll(
-                                        selectedLedger.personUuids,
-                                      );
-                                    }
-                                  });
-                                },
-                                child: Text(
-                                  _selectedPersonIds.length ==
-                                          selectedLedger.personUuids.length
-                                      ? '取消全选'
-                                      : '全选',
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: selectedLedger.personUuids.map((pid) {
-                                final person = peoplePool.firstWhere(
-                                  (p) => p.uuid == pid,
-                                  orElse: () => Person()
-                                    ..uuid = ''
-                                    ..name = '未知',
-                                );
-                                final isSelected = _selectedPersonIds.contains(
-                                  pid,
-                                );
-                                return FilterChip(
-                                  avatar: Text(person.avatar),
-                                  label: Text(person.name),
-                                  selected: isSelected,
-                                  onSelected: (selected) {
+                        return AppSectionCard(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              AppSectionHeader(
+                                title: '参与人员',
+                                trailing: TextButton(
+                                  onPressed: () {
                                     setState(() {
-                                      if (selected) {
-                                        _selectedPersonIds.add(pid);
+                                      if (_selectedPersonIds.length ==
+                                          selectedLedger.personUuids.length) {
+                                        _selectedPersonIds.clear();
                                       } else {
-                                        _selectedPersonIds.remove(pid);
+                                        _selectedPersonIds.addAll(
+                                          selectedLedger.personUuids,
+                                        );
                                       }
                                     });
                                   },
-                                );
-                              }).toList(),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+                                  child: Text(
+                                    _selectedPersonIds.length ==
+                                            selectedLedger.personUuids.length
+                                        ? '取消全选'
+                                        : '全选',
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: selectedLedger.personUuids.map((pid) {
+                                  final person = peoplePool.firstWhere(
+                                    (p) => p.uuid == pid,
+                                    orElse: () => Person()
+                                      ..uuid = ''
+                                      ..name = '未知',
+                                  );
+                                  final isSelected = _selectedPersonIds
+                                      .contains(pid);
+                                  return FilterChip(
+                                    avatar: Text(person.avatar),
+                                    label: Text(person.name),
+                                    selected: isSelected,
+                                    onSelected: (selected) {
+                                      setState(() {
+                                        if (selected) {
+                                          _selectedPersonIds.add(pid);
+                                        } else {
+                                          _selectedPersonIds.remove(pid);
+                                        }
+                                      });
+                                    },
+                                  );
+                                }).toList(),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
                   ),
                 if (selectedLedger != null) const SizedBox(height: 14),
-                TextField(
-                  controller: _noteController,
-                  decoration: const InputDecoration(
-                    labelText: '备注（选填）',
-                    prefixIcon: Icon(Icons.notes_outlined),
+                AppAnimatedEntry(
+                  delay: const Duration(milliseconds: 220),
+                  child: TextField(
+                    controller: _noteController,
+                    decoration: const InputDecoration(
+                      labelText: '备注（选填）',
+                      prefixIcon: Icon(Icons.notes_outlined),
+                    ),
+                    maxLines: 2,
+                    minLines: 1,
                   ),
-                  maxLines: 2,
-                  minLines: 1,
                 ),
                 const SizedBox(height: 24),
               ],

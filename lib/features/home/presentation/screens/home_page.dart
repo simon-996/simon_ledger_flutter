@@ -42,7 +42,7 @@ class _HomePageState extends ConsumerState<HomePage> {
             message: '$err',
           ),
           data: (ledgers) {
-            return IndexedStack(
+            return AppAnimatedIndexedStack(
               index: _currentIndex,
               children: [
                 BookkeepingTab(ledgers: ledgers),
@@ -69,13 +69,25 @@ class _HomePageState extends ConsumerState<HomePage> {
           },
         ),
       ),
-      floatingActionButton: _currentIndex == 1
-          ? FloatingActionButton.extended(
-              onPressed: _openCreateLedger,
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('添加账本'),
-            )
-          : null,
+      floatingActionButton: AnimatedSwitcher(
+        duration: AppMotion.normal,
+        switchInCurve: AppMotion.emphasized,
+        switchOutCurve: AppMotion.standard,
+        transitionBuilder: (child, animation) {
+          return ScaleTransition(
+            scale: animation,
+            child: FadeTransition(opacity: animation, child: child),
+          );
+        },
+        child: _currentIndex == 1
+            ? FloatingActionButton.extended(
+                key: const ValueKey('ledger-fab'),
+                onPressed: _openCreateLedger,
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('添加账本'),
+              )
+            : const SizedBox.shrink(key: ValueKey('empty-fab')),
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (index) {
