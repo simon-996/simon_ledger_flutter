@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:gal/gal.dart';
+import '../../../../core/common/gallery_launcher.dart';
 import '../../../../core/models/ledger.dart';
 import '../../../../core/models/person.dart';
 import '../../../../core/models/transaction_record.dart';
@@ -70,22 +71,8 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
           .where((t) => _selectedTransactionUuids.contains(t.uuid))
           .toList();
 
-      final imageBytes = await _screenshotController.captureFromWidget(
-        MediaQuery(
-          data: MediaQuery.of(context),
-          child: Directionality(
-            textDirection: Directionality.of(context),
-            child: Material(
-              child: ShareLedgerImageWidget(
-                ledger: widget.ledger,
-                transactions: selectedTransactions,
-                peoplePool: peoplePool,
-              ),
-            ),
-          ),
-        ),
-        delay: const Duration(milliseconds: 100),
-      );
+      final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
+      final pixelRatio = devicePixelRatio.clamp(1.0, 2.0).toDouble();
 
       final hasAccess = await Gal.hasAccess();
       if (!hasAccess) {
@@ -103,11 +90,66 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
         }
       }
 
-      await Gal.putImageBytes(imageBytes, name: 'SimonLedger_${DateTime.now().millisecondsSinceEpoch}');
+      const maxTransactionsPerImage = 25;
+      final pageCount = (selectedTransactions.length / maxTransactionsPerImage).ceil().clamp(1, 9999);
+      final total = selectedTransactions.length;
+      final base = total ~/ pageCount;
+      final remainder = total % pageCount;
+
+      final pages = <List<TransactionRecord>>[];
+      var start = 0;
+      for (var i = 0; i < pageCount; i++) {
+        final size = base + (i < remainder ? 1 : 0);
+        if (size <= 0) continue;
+        pages.add(selectedTransactions.sublist(start, start + size));
+        start += size;
+      }
+
+      if (!mounted) return;
+
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      for (var i = 0; i < pages.length; i++) {
+        if (!mounted) return;
+        final imageBytes = await _screenshotController.captureFromLongWidget(
+          ShareLedgerImageWidget(
+            ledger: widget.ledger,
+            transactions: pages[i],
+            summaryTransactions: selectedTransactions,
+            peoplePool: peoplePool,
+            pageIndex: i + 1,
+            totalPages: pages.length,
+          ),
+          context: context,
+          pixelRatio: pixelRatio,
+          constraints: const BoxConstraints(maxWidth: 400),
+          delay: const Duration(milliseconds: 100),
+        );
+
+        await Gal.putImageBytes(
+          imageBytes,
+          name: 'SimonLedger_${nowMs}_p${i + 1}of${pages.length}',
+        );
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('长图已保存到相册')),
+          SnackBar(
+            content: Text(pages.length > 1 ? '已保存 ${pages.length} 张到相册' : '长图已保存到相册'),
+            duration: const Duration(seconds: 6),
+            action: SnackBarAction(
+              label: '打开相册',
+              onPressed: () async {
+                try {
+                  await GalleryLauncher.openGalleryApp();
+                } catch (e) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('打开相册失败: $e')),
+                  );
+                }
+              },
+            ),
+          ),
         );
         _toggleSelectionMode();
       }

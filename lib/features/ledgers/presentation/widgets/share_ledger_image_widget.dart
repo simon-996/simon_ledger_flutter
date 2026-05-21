@@ -8,20 +8,27 @@ class ShareLedgerImageWidget extends StatelessWidget {
     super.key,
     required this.ledger,
     required this.transactions,
+    this.summaryTransactions,
     required this.peoplePool,
+    this.pageIndex,
+    this.totalPages,
   });
 
   final Ledger ledger;
   final List<TransactionRecord> transactions;
+  final List<TransactionRecord>? summaryTransactions;
   final List<Person> peoplePool;
+  final int? pageIndex;
+  final int? totalPages;
 
   @override
   Widget build(BuildContext context) {
-    final totalExpense = transactions.where((t) => t.type == 0).fold(0.0, (sum, t) => sum + t.amount);
-    final totalIncome = transactions.where((t) => t.type == 1).fold(0.0, (sum, t) => sum + t.amount);
+    final summary = summaryTransactions ?? transactions;
+    final totalExpense = summary.where((t) => t.type == 0).fold(0.0, (sum, t) => sum + t.amount);
+    final totalIncome = summary.where((t) => t.type == 1).fold(0.0, (sum, t) => sum + t.amount);
     final balance = totalIncome - totalExpense;
     final Map<String, double> personBalances = {};
-    for (final t in transactions) {
+    for (final t in summary) {
       if (t.personUuids.isEmpty) continue;
       final splitAmount = t.amount / t.personUuids.length;
       for (final pid in t.personUuids) {
@@ -229,6 +236,17 @@ class ShareLedgerImageWidget extends StatelessWidget {
               ),
             ),
           ),
+          if ((totalPages ?? 1) > 1)
+            Center(
+              child: Text(
+                '第 ${pageIndex ?? 1}/${totalPages ?? 1} 页',
+                style: const TextStyle(
+                  color: Color(0xFF9CA3AF),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
           const SizedBox(height: 8),
         ],
       ),

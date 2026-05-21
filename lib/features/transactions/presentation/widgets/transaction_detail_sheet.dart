@@ -40,7 +40,7 @@ class TransactionDetailSheet extends ConsumerWidget {
             height: 4,
             margin: const EdgeInsets.only(bottom: 16),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.4),
+              color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -98,24 +98,6 @@ class TransactionDetailSheet extends ConsumerWidget {
             ],
           ),
           
-          CircleAvatar(
-            radius: 32,
-            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-            child: Text(
-              transaction.category.characters.first,
-              style: TextStyle(
-                fontSize: 28,
-                color: Theme.of(context).colorScheme.onPrimaryContainer,
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            transaction.category,
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 4),
-          
           Text(
             '${transaction.currencyCode} ${transaction.amount.toStringAsFixed(2)}',
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
@@ -128,13 +110,18 @@ class TransactionDetailSheet extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.5),
+              color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildDetailRow(context, Icons.access_time, '时间', dateStr),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Divider(height: 1),
+                ),
+                _buildDetailRow(context, Icons.category, '分类', transaction.category),
                 if (transaction.note.isNotEmpty) ...[
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 8),
@@ -163,7 +150,7 @@ class TransactionDetailSheet extends ConsumerWidget {
               shrinkWrap: true,
               physics: const BouncingScrollPhysics(),
               itemCount: transaction.personUuids.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              separatorBuilder: (context, index) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
                 final pid = transaction.personUuids[index];
                 final person = peoplePool.firstWhere(
@@ -177,7 +164,7 @@ class TransactionDetailSheet extends ConsumerWidget {
                     color: Theme.of(context).colorScheme.surfaceContainerLow,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.5),
+                      color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5),
                     ),
                   ),
                   child: Row(
