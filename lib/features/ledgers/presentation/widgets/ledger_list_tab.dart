@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../../core/models/ledger.dart';
+import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/app_components.dart';
 import '../providers/ledger_provider.dart';
 
 class LedgerListTab extends ConsumerWidget {
@@ -24,166 +27,329 @@ class LedgerListTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (ledgers.isEmpty) {
-      return _EmptyState(onCreate: onCreate);
+      return AppEmptyState(
+        icon: Icons.account_balance_wallet_outlined,
+        title: '还没有账本',
+        message: '先创建一个账本，并设置默认币种。数据仅保存在本机。',
+        action: FilledButton.icon(
+          onPressed: onCreate,
+          icon: const Icon(Icons.add_rounded),
+          label: const Text('添加账本'),
+        ),
+      );
     }
 
     return ReorderableListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      buildDefaultDragHandles: false,
+      padding: const EdgeInsets.fromLTRB(
+        AppTheme.pagePadding,
+        12,
+        AppTheme.pagePadding,
+        96,
+      ),
       itemCount: ledgers.length,
-      onReorder: (oldIndex, newIndex) {
-        ref.read(ledgerNotifierProvider.notifier).reorderLedgers(oldIndex, newIndex);
+      onReorderItem: (oldIndex, newIndex) {
+        ref
+            .read(ledgerNotifierProvider.notifier)
+            .reorderLedgers(oldIndex, newIndex);
+      },
+      proxyDecorator: (child, index, animation) {
+        return AnimatedBuilder(
+          animation: animation,
+          builder: (context, child) {
+            final elevation = Tween<double>(
+              begin: 0,
+              end: 8,
+            ).evaluate(animation);
+            return Material(
+              color: Colors.transparent,
+              elevation: elevation,
+              borderRadius: BorderRadius.circular(20),
+              child: child,
+            );
+          },
+          child: child,
+        );
       },
       itemBuilder: (context, index) {
         final ledger = ledgers[index];
-        final stats = ledgerStats[ledger.uuid] ?? {'expense': 0.0, 'income': 0.0, 'balance': 0.0};
-        final expense = stats['expense']!;
-        final income = stats['income']!;
-        final balance = stats['balance']!;
+        final stats =
+            ledgerStats[ledger.uuid] ??
+            {'expense': 0.0, 'income': 0.0, 'balance': 0.0};
 
         return Dismissible(
           key: ValueKey(ledger.uuid),
           direction: DismissDirection.endToStart,
-          confirmDismiss: (direction) async {
-            return await showDialog<bool>(
-              context: context,
-              builder: (context) => AlertDialog(
-                title: const Text('删除账本'),
-                content: Text('确定要删除账本“${ledger.name}”吗？\n删除后无法恢复。'),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(false),
-                    child: const Text('取消'),
-                  ),
-                  FilledButton(
-                    onPressed: () => Navigator.of(context).pop(true),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.error,
-                    ),
-                    child: const Text('删除'),
-                  ),
-                ],
-              ),
-            );
-          },
+          confirmDismiss: (direction) => _confirmDelete(context, ledger),
           onDismissed: (_) => onDelete(ledger),
-          background: Container(
-            color: Theme.of(context).colorScheme.error,
-            alignment: Alignment.centerRight,
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: const Padding(
-              padding: EdgeInsets.only(right: 24),
-              child: Icon(Icons.delete, color: Colors.white),
-            ),
-          ),
-          child: Card(
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              title: Text(
-                ledger.name,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 24),
-              ),
-              subtitle: Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '默认币种：${ledger.baseCurrencyCode} ${ledger.exchangeRateToCNY != 1.0 ? "(汇率 ${ledger.exchangeRateToCNY})" : ""}',
-                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 4,
-                      children: [
-                        Text(
-                          '收 ${income.toStringAsFixed(2)}',
-                          style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 13, fontWeight: FontWeight.w500),
-                        ),
-                        Text(
-                          '支 ${expense.toStringAsFixed(2)}',
-                          style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 13, fontWeight: FontWeight.w500),
-                        ),
-                        Text(
-                          '余 ${balance.toStringAsFixed(2)}',
-                          style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 13, fontWeight: FontWeight.w600),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.edit_outlined),
-                    onPressed: () => onEdit(ledger),
-                  ),
-                  Icon(
-                    Icons.drag_handle,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-                  ),
-                ],
-              ),
-              onTap: () => onTap(ledger),
-            ),
+          background: _DeleteBackground(),
+          child: _LedgerCard(
+            ledger: ledger,
+            income: stats['income'] ?? 0,
+            expense: stats['expense'] ?? 0,
+            balance: stats['balance'] ?? 0,
+            index: index,
+            onTap: () => onTap(ledger),
+            onEdit: () => onEdit(ledger),
           ),
         );
       },
     );
   }
+
+  Future<bool?> _confirmDelete(BuildContext context, Ledger ledger) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('删除账本'),
+        content: Text('确定要删除账本“${ledger.name}”吗？\n删除后无法恢复。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.onCreate});
+class _LedgerCard extends StatelessWidget {
+  const _LedgerCard({
+    required this.ledger,
+    required this.income,
+    required this.expense,
+    required this.balance,
+    required this.index,
+    required this.onTap,
+    required this.onEdit,
+  });
 
-  final VoidCallback onCreate;
+  final Ledger ledger;
+  final double income;
+  final double expense;
+  final double balance;
+  final int index;
+  final VoidCallback onTap;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 320),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer,
-                  shape: BoxShape.circle,
+    final colorScheme = Theme.of(context).colorScheme;
+    final hasRate = ledger.exchangeRateToCNY != 1.0;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Material(
+        color: colorScheme.surfaceContainerLowest,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: colorScheme.outlineVariant),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: colorScheme.primaryContainer.withValues(
+                          alpha: 0.65,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Icon(
+                        Icons.menu_book_rounded,
+                        color: colorScheme.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            ledger.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            children: [
+                              _MetaChip(text: ledger.baseCurrencyCode),
+                              if (hasRate)
+                                _MetaChip(
+                                  text: '汇率 ${ledger.exchangeRateToCNY}',
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: '编辑',
+                      icon: const Icon(Icons.edit_outlined),
+                      onPressed: onEdit,
+                    ),
+                    Tooltip(
+                      message: '排序',
+                      child: ReorderableDragStartListener(
+                        index: index,
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Icon(
+                            Icons.drag_handle_rounded,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                child: Icon(
-                  Icons.account_balance_wallet_outlined,
-                  size: 64,
-                  color: Theme.of(context).colorScheme.primary,
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _StatPill(
+                        label: '收入',
+                        value: income.toStringAsFixed(2),
+                        color: colorScheme.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _StatPill(
+                        label: '支出',
+                        value: expense.toStringAsFixed(2),
+                        color: colorScheme.error,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _StatPill(
+                        label: '结余',
+                        value: balance.toStringAsFixed(2),
+                        color: colorScheme.onSurface,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                '还没有账本',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '先创建一个账本，并设置默认币种。\n数据仅保存在本机。',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 32),
-              FilledButton.icon(
-                onPressed: onCreate,
-                icon: const Icon(Icons.add),
-                label: const Text('添加账本'),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _MetaChip extends StatelessWidget {
+  const _MetaChip({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: colorScheme.onSurfaceVariant,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _StatPill extends StatelessWidget {
+  const _StatPill({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: Theme.of(
+                context,
+              ).textTheme.labelLarge?.copyWith(color: color),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DeleteBackground extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final error = Theme.of(context).colorScheme.error;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 24),
+        decoration: BoxDecoration(
+          color: error,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: const Icon(Icons.delete_rounded, color: Colors.white),
       ),
     );
   }

@@ -40,10 +40,7 @@ class LedgerNotifier extends _$LedgerNotifier {
     if (currentLedgers == null) return;
 
     final items = List<Ledger>.from(currentLedgers);
-    
-    if (newIndex > oldIndex) {
-      newIndex -= 1;
-    }
+
     final item = items.removeAt(oldIndex);
     items.insert(newIndex, item);
 

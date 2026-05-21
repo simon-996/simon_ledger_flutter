@@ -13,8 +13,28 @@ class PersonEditDialog extends StatefulWidget {
 class _PersonEditDialogState extends State<PersonEditDialog> {
   late final TextEditingController _nameController;
   late String _selectedAvatar;
-  
-  final List<String> _avatars = ['🧑', '😎', '👨‍💻', '👩‍💻', '🐱', '🐶', '🦊', '🐻', '🐼', '🐯', '🦁', '🐷', '🐸', '🐵','🦝','🦐','🦇','🐌','🐜'];
+
+  final List<String> _avatars = [
+    '🧑',
+    '😎',
+    '👨‍💻',
+    '👩‍💻',
+    '🐱',
+    '🐶',
+    '🦊',
+    '🐻',
+    '🐼',
+    '🐯',
+    '🦁',
+    '🐷',
+    '🐸',
+    '🐵',
+    '🦝',
+    '🦐',
+    '🦇',
+    '🐌',
+    '🐜',
+  ];
 
   @override
   void initState() {
@@ -31,15 +51,24 @@ class _PersonEditDialogState extends State<PersonEditDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final canSubmit = _nameController.text.trim().isNotEmpty;
+    final colorScheme = Theme.of(context).colorScheme;
+
     return AlertDialog(
+      icon: Icon(
+        widget.person == null
+            ? Icons.person_add_alt_1_rounded
+            : Icons.manage_accounts_rounded,
+        color: colorScheme.primary,
+      ),
       title: Text(widget.person == null ? '新增人员' : '编辑人员'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('选择头像:'),
-            const SizedBox(height: 8),
+            Text('选择头像', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 10),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -50,10 +79,15 @@ class _PersonEditDialogState extends State<PersonEditDialog> {
                   child: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: isSelected ? Theme.of(context).colorScheme.primaryContainer : null,
-                      borderRadius: BorderRadius.circular(8),
+                      color: isSelected
+                          ? colorScheme.primaryContainer
+                          : colorScheme.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                        color: isSelected ? Theme.of(context).colorScheme.primary : Colors.transparent,
+                        color: isSelected
+                            ? colorScheme.primary
+                            : colorScheme.outlineVariant,
+                        width: isSelected ? 1.5 : 1,
                       ),
                     ),
                     child: Text(avatar, style: const TextStyle(fontSize: 24)),
@@ -61,14 +95,15 @@ class _PersonEditDialogState extends State<PersonEditDialog> {
                 );
               }).toList(),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
             TextField(
               controller: _nameController,
               autofocus: widget.person == null,
               decoration: const InputDecoration(
                 labelText: '人员名称',
-                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.badge_outlined),
               ),
+              onChanged: (_) => setState(() {}),
             ),
           ],
         ),
@@ -79,16 +114,21 @@ class _PersonEditDialogState extends State<PersonEditDialog> {
           child: const Text('取消'),
         ),
         FilledButton(
-          onPressed: () {
-            final name = _nameController.text.trim();
-            if (name.isNotEmpty) {
-              Navigator.of(context).pop(Person()
-                ..uuid = widget.person?.uuid ?? DateTime.now().microsecondsSinceEpoch.toString()
-                ..name = name
-                ..avatar = _selectedAvatar
-              );
-            }
-          },
+          onPressed: canSubmit
+              ? () {
+                  final name = _nameController.text.trim();
+                  if (name.isNotEmpty) {
+                    Navigator.of(context).pop(
+                      Person()
+                        ..uuid =
+                            widget.person?.uuid ??
+                            DateTime.now().microsecondsSinceEpoch.toString()
+                        ..name = name
+                        ..avatar = _selectedAvatar,
+                    );
+                  }
+                }
+              : null,
           child: const Text('确定'),
         ),
       ],

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/models/ledger.dart';
 import '../../../../core/models/person.dart';
+import '../../../../core/widgets/app_components.dart';
 import '../../../people_pool/presentation/widgets/person_edit_dialog.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
 
@@ -21,7 +22,7 @@ class CreateLedgerResult {
 
 class CreateLedgerSheet extends ConsumerStatefulWidget {
   const CreateLedgerSheet({super.key, this.existingLedger});
-  
+
   final Ledger? existingLedger;
 
   @override
@@ -33,18 +34,20 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
   late final TextEditingController _rateController;
   final FocusNode _nameFocus = FocusNode();
   late String _baseCurrencyCode;
-  
-  final Set<String> _selectedPersonIds = {}; 
+
+  final Set<String> _selectedPersonIds = {};
 
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.existingLedger?.name ?? '');
+    _nameController = TextEditingController(
+      text: widget.existingLedger?.name ?? '',
+    );
     _baseCurrencyCode = widget.existingLedger?.baseCurrencyCode ?? 'CNY';
     _rateController = TextEditingController(
       text: widget.existingLedger?.exchangeRateToCNY.toString() ?? '1.0',
     );
-    
+
     if (widget.existingLedger != null) {
       _selectedPersonIds.addAll(widget.existingLedger!.personUuids);
     }
@@ -65,8 +68,10 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
     );
 
     if (result != null && mounted) {
-      await ref.read(personNotifierProvider().notifier).addOrUpdatePerson(result);
-      
+      await ref
+          .read(personNotifierProvider().notifier)
+          .addOrUpdatePerson(result);
+
       setState(() {
         _selectedPersonIds.add(result.uuid);
       });
@@ -80,7 +85,9 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
     );
 
     if (result != null && mounted) {
-      await ref.read(personNotifierProvider().notifier).addOrUpdatePerson(result);
+      await ref
+          .read(personNotifierProvider().notifier)
+          .addOrUpdatePerson(result);
     }
   }
 
@@ -97,7 +104,9 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
             child: const Text('删除'),
           ),
         ],
@@ -105,7 +114,9 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
     );
 
     if (confirm == true && mounted) {
-      await ref.read(personNotifierProvider().notifier).deletePerson(person.uuid);
+      await ref
+          .read(personNotifierProvider().notifier)
+          .deletePerson(person.uuid);
       setState(() {
         _selectedPersonIds.remove(person.uuid);
       });
@@ -128,8 +139,14 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
               },
             ),
             ListTile(
-              leading: Icon(Icons.delete, color: Theme.of(context).colorScheme.error),
-              title: Text('删除', style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              leading: Icon(
+                Icons.delete,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              title: Text(
+                '删除',
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
               onTap: () {
                 Navigator.pop(context);
                 _deletePerson(person);
@@ -145,131 +162,176 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final canSubmit = _nameController.text.trim().isNotEmpty;
-    
-    final peopleAsyncValue = ref.watch(personNotifierProvider(includeDeleted: false));
+    final maxHeight = MediaQuery.sizeOf(context).height * 0.86;
+    final peopleAsyncValue = ref.watch(
+      personNotifierProvider(includeDeleted: false),
+    );
 
-    return Padding(
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 150),
+      curve: Curves.easeOut,
       padding: EdgeInsets.only(
         left: 16,
         right: 16,
-        top: 12,
+        top: 8,
         bottom: bottomInset + 16,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            widget.existingLedger == null ? '新建账本' : '编辑账本',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _nameController,
-            focusNode: _nameFocus,
-            autofocus: widget.existingLedger == null,
-            textInputAction: TextInputAction.next,
-            decoration: const InputDecoration(
-              labelText: '账本名称',
-              border: OutlineInputBorder(),
-            ),
-            onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: 12),
-          Row(
+      child: SafeArea(
+        top: false,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: maxHeight),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                flex: 4,
-                child: DropdownButtonFormField<String>(
-                  value: _baseCurrencyCode,
-                  decoration: const InputDecoration(
-                    labelText: '默认币种',
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-                  ),
-                  isExpanded: true,
-                  items: const [
-                    DropdownMenuItem(value: 'CNY', child: Text('CNY 人民币')),
-                    DropdownMenuItem(value: 'USD', child: Text('USD 美元')),
-                    DropdownMenuItem(value: 'EUR', child: Text('EUR 欧元')),
-                    DropdownMenuItem(value: 'JPY', child: Text('JPY 日元')),
-                    DropdownMenuItem(value: 'THB', child: Text('THB 泰铢')),
-                  ],
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setState(() => _baseCurrencyCode = value);
-                  },
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 5,
-                child: TextField(
-                  controller: _rateController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(
-                    labelText: '对人民币汇率',
-                    border: const OutlineInputBorder(),
-                    helperText: '1 $_baseCurrencyCode = ? CNY',
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('账本人员', style: Theme.of(context).textTheme.titleMedium),
-              TextButton.icon(
-                onPressed: _addNewPerson,
-                icon: const Icon(Icons.person_add, size: 18),
-                label: const Text('新增'),
-              ),
-            ],
-          ),
-          peopleAsyncValue.when(
-            loading: () => const CircularProgressIndicator(),
-            error: (e, st) => Text('Error: $e'),
-            data: (peoplePool) {
-              // Select default person initially
-              if (widget.existingLedger == null && _selectedPersonIds.isEmpty && peoplePool.isNotEmpty) {
-                 WidgetsBinding.instance.addPostFrameCallback((_) {
-                    final self = peoplePool.firstWhere((p) => p.name == '自己', orElse: () => peoplePool.first);
-                    setState(() => _selectedPersonIds.add(self.uuid));
-                 });
-              }
-              return Wrap(
-                spacing: 8,
-                children: peoplePool.map((person) {
-                  final isSelected = _selectedPersonIds.contains(person.uuid);
-                  return GestureDetector(
-                    onLongPress: () => _showPersonOptions(person),
-                    child: FilterChip(
-                      avatar: Text(person.avatar, style: const TextStyle(fontSize: 16)),
-                      label: Text(person.name),
-                      selected: isSelected,
-                      onSelected: (selected) {
-                        setState(() {
-                          if (selected) {
-                            _selectedPersonIds.add(person.uuid);
-                          } else {
-                            _selectedPersonIds.remove(person.uuid);
-                          }
-                        });
-                      },
+              Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                  );
-                }).toList(),
-              );
-            },
+                    child: Icon(
+                      Icons.menu_book_rounded,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      widget.existingLedger == null ? '新建账本' : '编辑账本',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      AppSectionCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            TextField(
+                              controller: _nameController,
+                              focusNode: _nameFocus,
+                              autofocus: widget.existingLedger == null,
+                              textInputAction: TextInputAction.next,
+                              decoration: const InputDecoration(
+                                labelText: '账本名称',
+                                prefixIcon: Icon(
+                                  Icons.drive_file_rename_outline,
+                                ),
+                              ),
+                              onChanged: (_) => setState(() {}),
+                            ),
+                            const SizedBox(height: 12),
+                            _CurrencyRateFields(
+                              baseCurrencyCode: _baseCurrencyCode,
+                              rateController: _rateController,
+                              onCurrencyChanged: (value) {
+                                if (value == null) return;
+                                setState(() => _baseCurrencyCode = value);
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      AppSectionCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            AppSectionHeader(
+                              title: '账本人员',
+                              trailing: TextButton.icon(
+                                onPressed: _addNewPerson,
+                                icon: const Icon(
+                                  Icons.person_add_alt_1_rounded,
+                                  size: 18,
+                                ),
+                                label: const Text('新增'),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            peopleAsyncValue.when(
+                              loading: () => const Center(
+                                child: CircularProgressIndicator(),
+                              ),
+                              error: (e, st) => Text('加载人员失败: $e'),
+                              data: (peoplePool) {
+                                if (widget.existingLedger == null &&
+                                    _selectedPersonIds.isEmpty &&
+                                    peoplePool.isNotEmpty) {
+                                  WidgetsBinding.instance.addPostFrameCallback((
+                                    _,
+                                  ) {
+                                    if (!mounted) return;
+                                    final self = peoplePool.firstWhere(
+                                      (p) => p.name == '自己',
+                                      orElse: () => peoplePool.first,
+                                    );
+                                    setState(
+                                      () => _selectedPersonIds.add(self.uuid),
+                                    );
+                                  });
+                                }
+
+                                return Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: peoplePool.map((person) {
+                                    final isSelected = _selectedPersonIds
+                                        .contains(person.uuid);
+                                    return GestureDetector(
+                                      onLongPress: () =>
+                                          _showPersonOptions(person),
+                                      child: FilterChip(
+                                        avatar: Text(
+                                          person.avatar,
+                                          style: const TextStyle(fontSize: 16),
+                                        ),
+                                        label: Text(person.name),
+                                        selected: isSelected,
+                                        onSelected: (selected) {
+                                          setState(() {
+                                            if (selected) {
+                                              _selectedPersonIds.add(
+                                                person.uuid,
+                                              );
+                                            } else {
+                                              _selectedPersonIds.remove(
+                                                person.uuid,
+                                              );
+                                            }
+                                          });
+                                        },
+                                      ),
+                                    );
+                                  }).toList(),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              FilledButton(
+                onPressed: canSubmit ? _submit : null,
+                child: Text(widget.existingLedger == null ? '创建' : '保存修改'),
+              ),
+            ],
           ),
-          const SizedBox(height: 24),
-          FilledButton(
-            onPressed: canSubmit ? _submit : null,
-            child: Text(widget.existingLedger == null ? '创建' : '保存修改'),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -277,7 +339,7 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
   void _submit() {
     final name = _nameController.text.trim();
     if (name.isEmpty) return;
-    
+
     final rate = double.tryParse(_rateController.text) ?? 1.0;
 
     Navigator.of(context).pop(
@@ -287,6 +349,68 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
         exchangeRateToCNY: rate,
         personIds: _selectedPersonIds.toList(),
       ),
+    );
+  }
+}
+
+class _CurrencyRateFields extends StatelessWidget {
+  const _CurrencyRateFields({
+    required this.baseCurrencyCode,
+    required this.rateController,
+    required this.onCurrencyChanged,
+  });
+
+  final String baseCurrencyCode;
+  final TextEditingController rateController;
+  final ValueChanged<String?> onCurrencyChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final currencyField = DropdownButtonFormField<String>(
+          key: ValueKey('ledger-currency-$baseCurrencyCode'),
+          initialValue: baseCurrencyCode,
+          decoration: const InputDecoration(
+            labelText: '默认币种',
+            prefixIcon: Icon(Icons.payments_outlined),
+          ),
+          isExpanded: true,
+          items: const [
+            DropdownMenuItem(value: 'CNY', child: Text('CNY 人民币')),
+            DropdownMenuItem(value: 'USD', child: Text('USD 美元')),
+            DropdownMenuItem(value: 'EUR', child: Text('EUR 欧元')),
+            DropdownMenuItem(value: 'JPY', child: Text('JPY 日元')),
+            DropdownMenuItem(value: 'THB', child: Text('THB 泰铢')),
+          ],
+          onChanged: onCurrencyChanged,
+        );
+
+        final rateField = TextField(
+          controller: rateController,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: InputDecoration(
+            labelText: '对人民币汇率',
+            prefixIcon: const Icon(Icons.currency_exchange_rounded),
+            helperText: '1 $baseCurrencyCode = ? CNY',
+          ),
+        );
+
+        if (constraints.maxWidth < 390) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [currencyField, const SizedBox(height: 12), rateField],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(flex: 4, child: currencyField),
+            const SizedBox(width: 12),
+            Expanded(flex: 5, child: rateField),
+          ],
+        );
+      },
     );
   }
 }

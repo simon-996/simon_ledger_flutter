@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/models/ledger.dart';
+import '../../../../core/widgets/app_components.dart';
 import '../../../transactions/presentation/widgets/bookkeeping_tab.dart';
 import '../../../ledgers/presentation/widgets/ledger_list_tab.dart';
 import '../../../ledgers/presentation/widgets/create_ledger_sheet.dart';
@@ -28,44 +29,50 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
-      appBar: _currentIndex == 0 ? null : AppBar(
-        title: Text(
-          _currentIndex == 1
-              ? '账本'
-              : '统计',
-        ),
-      ),
+      appBar: _currentIndex == 0
+          ? null
+          : AppBar(title: Text(_currentIndex == 1 ? '账本' : '统计')),
       body: SafeArea(
         top: _currentIndex == 0,
         child: ledgersAsyncValue.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(child: Text('加载账本失败: $err')),
-        data: (ledgers) {
-          return IndexedStack(
-            index: _currentIndex,
-            children: [
-              BookkeepingTab(ledgers: ledgers),
-              ledgerStatsAsyncValue.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (err, stack) => Center(child: Text('加载统计失败: $err')),
-                data: (stats) => LedgerListTab(
-                  ledgers: ledgers,
-                  ledgerStats: stats,
-                  onTap: _openLedger,
-                  onEdit: _editLedger,
-                  onDelete: _deleteLedger,
-                  onCreate: _openCreateLedger,
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (err, stack) => AppEmptyState(
+            icon: Icons.error_outline_rounded,
+            title: '加载账本失败',
+            message: '$err',
+          ),
+          data: (ledgers) {
+            return IndexedStack(
+              index: _currentIndex,
+              children: [
+                BookkeepingTab(ledgers: ledgers),
+                ledgerStatsAsyncValue.when(
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
+                  error: (err, stack) => AppEmptyState(
+                    icon: Icons.error_outline_rounded,
+                    title: '加载统计失败',
+                    message: '$err',
+                  ),
+                  data: (stats) => LedgerListTab(
+                    ledgers: ledgers,
+                    ledgerStats: stats,
+                    onTap: _openLedger,
+                    onEdit: _editLedger,
+                    onDelete: _deleteLedger,
+                    onCreate: _openCreateLedger,
+                  ),
                 ),
-              ),
-              StatisticsTab(ledgers: ledgers),
-            ],
-          );
-        },
-      )),
+                StatisticsTab(ledgers: ledgers),
+              ],
+            );
+          },
+        ),
+      ),
       floatingActionButton: _currentIndex == 1
           ? FloatingActionButton.extended(
               onPressed: _openCreateLedger,
-              icon: const Icon(Icons.add),
+              icon: const Icon(Icons.add_rounded),
               label: const Text('添加账本'),
             )
           : null,
@@ -118,7 +125,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     // 直接通过 Provider 操作，不再依赖全局 dbService，且 UI 会自动更新
     await ref.read(ledgerNotifierProvider.notifier).addLedger(newLedger);
   }
-  
+
   void _editLedger(Ledger ledger) async {
     final result = await showModalBottomSheet<CreateLedgerResult>(
       context: context,
@@ -137,10 +144,10 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     await ref.read(ledgerNotifierProvider.notifier).updateLedger(ledger);
   }
-  
+
   void _deleteLedger(Ledger ledger) async {
     await ref.read(ledgerNotifierProvider.notifier).deleteLedger(ledger.uuid);
-    
+
     final prefs = await SharedPreferences.getInstance();
     final lastUuid = prefs.getString('last_selected_ledger_uuid');
     if (lastUuid == ledger.uuid) {
@@ -150,9 +157,7 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   void _openLedger(Ledger ledger) {
     Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => LedgerDashboardPage(ledger: ledger),
-      ),
+      MaterialPageRoute(builder: (_) => LedgerDashboardPage(ledger: ledger)),
     );
   }
 }
