@@ -15,10 +15,14 @@ class ApiResult<T> {
     Map<String, dynamic> json,
     T Function(Object? json)? fromJsonT,
   ) {
+    final code = (json['code'] as num?)?.toInt() ?? -1;
+    final data = json['data'];
     return ApiResult<T>(
-      code: (json['code'] as num?)?.toInt() ?? -1,
+      code: code,
       message: json['message']?.toString() ?? '',
-      data: fromJsonT == null ? json['data'] as T? : fromJsonT(json['data']),
+      data: code == 0
+          ? (fromJsonT == null ? data as T? : fromJsonT(data))
+          : null,
     );
   }
 }
