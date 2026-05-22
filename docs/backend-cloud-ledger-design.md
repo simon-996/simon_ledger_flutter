@@ -1012,7 +1012,7 @@ Web 需要额外处理：
 
 ## 14. 推荐第一步
 
-先创建后端项目 `backend/simon-ledger-api`，完成：
+先创建后端项目 `/Users/simon/workplace/projects/simon_ledger/simon-ledger-api`，与 `simon_ledger_flutter` 同级，包名使用 `com.simon.ledger`，完成：
 
 1. Spring Boot 项目骨架。
 2. MySQL + Redis Docker Compose。
