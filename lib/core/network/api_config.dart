@@ -5,6 +5,6 @@ class ApiConfig {
 
   static const defaultBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://127.0.0.1:18080',
+    defaultValue: 'https://ledger-api.simon996.com',
   );
 }
