@@ -194,6 +194,8 @@
 
 说明：2026-05-22 已通过自动化检查：后端 `mvn test`、Flutter `flutter analyze`、Flutter `flutter test`。以下验收项需要连接真实后端服务和目标数据库后逐项确认。
 
+验收步骤见 `docs/backend-acceptance-checklist.md`。
+
 - [ ] 注册、登录、退出流程可用。
 - [ ] 登录后能创建云端账本。
 - [ ] 登录后能看到自己的云端账本列表。
