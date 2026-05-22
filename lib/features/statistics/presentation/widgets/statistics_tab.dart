@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/models/ledger.dart';
-import '../../../../core/models/person.dart';
+import '../../../../core/models/person_lookup.dart';
 import '../../../../core/models/transaction_record.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
@@ -325,14 +325,9 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                       child: Center(child: Text('加载人员失败: $e')),
                     ),
                     data: (peoplePool) {
+                      final personMap = peopleByUuid(peoplePool);
                       final peopleInLedger = personBalances.keys.map((pid) {
-                        return peoplePool.firstWhere(
-                          (p) => p.uuid == pid,
-                          orElse: () => Person()
-                            ..uuid = pid
-                            ..name = '未知'
-                            ..avatar = '👤',
-                        );
+                        return personOrFallback(personMap, pid);
                       }).toList();
 
                       if (peopleInLedger.isEmpty) {
@@ -410,24 +405,17 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                     error: (e, st) =>
                         const SliverToBoxAdapter(child: SizedBox.shrink()),
                     data: (peoplePool) {
+                      final personMap = peopleByUuid(peoplePool);
                       return SliverList.builder(
                         itemCount: sortedTransactions.length,
                         itemBuilder: (context, index) {
                           final t = sortedTransactions[index];
                           final dateStr =
                               '${t.createdAt.month.toString().padLeft(2, '0')}-${t.createdAt.day.toString().padLeft(2, '0')} ${t.createdAt.hour.toString().padLeft(2, '0')}:${t.createdAt.minute.toString().padLeft(2, '0')}';
-                          final peopleStr = t.personUuids
-                              .map((pid) {
-                                return peoplePool
-                                    .firstWhere(
-                                      (p) => p.uuid == pid,
-                                      orElse: () => Person()
-                                        ..uuid = ''
-                                        ..name = '?',
-                                    )
-                                    .avatar;
-                              })
-                              .join('');
+                          final peopleStr = avatarsForPeople(
+                            personMap,
+                            t.personUuids,
+                          );
 
                           final delayMs = (index < 8 ? index : 8) * 28;
                           return AppAnimatedEntry(

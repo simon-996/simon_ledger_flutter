@@ -5,6 +5,7 @@ import 'package:gal/gal.dart';
 import '../../../../core/common/gallery_launcher.dart';
 import '../../../../core/models/ledger.dart';
 import '../../../../core/models/person.dart';
+import '../../../../core/models/person_lookup.dart';
 import '../../../../core/models/transaction_record.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
@@ -360,6 +361,7 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                       const Center(child: CircularProgressIndicator()),
                   error: (e, st) => Center(child: Text('加载人员失败: $e')),
                   data: (peoplePool) {
+                    final personMap = peopleByUuid(peoplePool);
                     final filteredTransactions = List<TransactionRecord>.from(
                       _selectedFilterPersonUuids.isEmpty
                           ? transactions
@@ -372,13 +374,7 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                     )..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
                     final peopleInLedger = personBalances.keys.map((pid) {
-                      return peoplePool.firstWhere(
-                        (p) => p.uuid == pid,
-                        orElse: () => Person()
-                          ..uuid = pid
-                          ..name = '未知'
-                          ..avatar = '👤',
-                      );
+                      return personOrFallback(personMap, pid);
                     }).toList();
 
                     return CustomScrollView(
@@ -483,18 +479,10 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                               final t = filteredTransactions[index];
                               final dateStr =
                                   '${t.createdAt.month.toString().padLeft(2, '0')}-${t.createdAt.day.toString().padLeft(2, '0')} ${t.createdAt.hour.toString().padLeft(2, '0')}:${t.createdAt.minute.toString().padLeft(2, '0')}';
-                              final peopleStr = t.personUuids
-                                  .map((pid) {
-                                    return peoplePool
-                                        .firstWhere(
-                                          (p) => p.uuid == pid,
-                                          orElse: () => Person()
-                                            ..uuid = ''
-                                            ..name = '?',
-                                        )
-                                        .avatar;
-                                  })
-                                  .join('');
+                              final peopleStr = avatarsForPeople(
+                                personMap,
+                                t.personUuids,
+                              );
                               final selected =
                                   _isSelectionMode &&
                                   _selectedTransactionUuids.contains(t.uuid);
