@@ -6,6 +6,7 @@ import '../repositories/auth_repository.dart';
 import '../repositories/ledger_repository.dart';
 import '../repositories/person_repository.dart';
 import '../repositories/transaction_repository.dart';
+import '../services/cloud_import_service.dart';
 
 /// Provides the global instance of DatabaseService.
 /// This acts as our base Dependency Injection for the database layer.
@@ -61,4 +62,11 @@ final transactionRepositoryProvider = Provider<TransactionRepository>((ref) {
     return RemoteTransactionRepository(ref.watch(apiClientProvider));
   }
   return LocalTransactionRepository(ref.watch(databaseProvider));
+});
+
+final cloudImportServiceProvider = Provider<CloudImportService>((ref) {
+  return CloudImportService(
+    database: ref.watch(databaseProvider),
+    apiClient: ref.watch(apiClientProvider),
+  );
 });

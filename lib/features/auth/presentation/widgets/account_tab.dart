@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/di/providers.dart';
+import '../../../../core/services/cloud_import_service.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../ledgers/presentation/providers/ledger_provider.dart';
 import '../../../ledgers/presentation/providers/ledger_stats_provider.dart';
@@ -87,6 +88,8 @@ class _SignedInPanel extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 16),
+        const _CloudImportCard(),
+        const SizedBox(height: 16),
         FilledButton.icon(
           onPressed: () async {
             await ref.read(authRepositoryProvider).logout();
@@ -100,6 +103,226 @@ class _SignedInPanel extends ConsumerWidget {
         ),
       ],
     );
+  }
+}
+
+class _CloudImportCard extends ConsumerStatefulWidget {
+  const _CloudImportCard();
+
+  @override
+  ConsumerState<_CloudImportCard> createState() => _CloudImportCardState();
+}
+
+class _CloudImportCardState extends ConsumerState<_CloudImportCard> {
+  late Future<List<LocalLedgerImportCandidate>> _scanFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _scanFuture = _scan();
+  }
+
+  Future<List<LocalLedgerImportCandidate>> _scan() {
+    return ref.read(cloudImportServiceProvider).scanLocalLedgers();
+  }
+
+  void _reload() {
+    setState(() {
+      _scanFuture = _scan();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppSectionCard(
+      child: FutureBuilder<List<LocalLedgerImportCandidate>>(
+        future: _scanFuture,
+        builder: (context, snapshot) {
+          final candidates = snapshot.data ?? const [];
+          final pendingCount = candidates
+              .where((item) => !item.imported)
+              .length;
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AppSectionHeader(
+                title: '本地数据导入云端',
+                trailing: IconButton(
+                  tooltip: '刷新',
+                  onPressed: _reload,
+                  icon: const Icon(Icons.refresh_rounded),
+                ),
+              ),
+              const SizedBox(height: 8),
+              if (snapshot.connectionState == ConnectionState.waiting)
+                const Center(child: CircularProgressIndicator())
+              else if (snapshot.hasError)
+                Text('扫描失败：${snapshot.error}')
+              else ...[
+                Text(
+                  '可导入账本 $pendingCount 个，已导入 ${candidates.length - pendingCount} 个',
+                ),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: pendingCount == 0
+                      ? null
+                      : () => _openImportDialog(candidates),
+                  icon: const Icon(Icons.cloud_upload_outlined),
+                  label: const Text('选择并导入'),
+                ),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _openImportDialog(
+    List<LocalLedgerImportCandidate> candidates,
+  ) async {
+    final pending = candidates.where((item) => !item.imported).toList();
+    final imported = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _CloudImportDialog(candidates: pending),
+    );
+
+    if (!mounted || imported != true) return;
+    _reload();
+    ref.invalidate(ledgerNotifierProvider);
+    ref.invalidate(ledgerStatsProvider);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('本地账本导入完成')));
+  }
+}
+
+class _CloudImportDialog extends ConsumerStatefulWidget {
+  const _CloudImportDialog({required this.candidates});
+
+  final List<LocalLedgerImportCandidate> candidates;
+
+  @override
+  ConsumerState<_CloudImportDialog> createState() => _CloudImportDialogState();
+}
+
+class _CloudImportDialogState extends ConsumerState<_CloudImportDialog> {
+  late final Set<String> _selectedLedgerUuids;
+  bool _importing = false;
+  CloudImportProgress? _progress;
+  String? _errorText;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedLedgerUuids = {
+      for (final candidate in widget.candidates) candidate.ledger.uuid,
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('导入本地账本'),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: widget.candidates.length,
+                itemBuilder: (context, index) {
+                  final candidate = widget.candidates[index];
+                  final ledger = candidate.ledger;
+                  return CheckboxListTile(
+                    value: _selectedLedgerUuids.contains(ledger.uuid),
+                    onChanged: _importing
+                        ? null
+                        : (selected) {
+                            setState(() {
+                              if (selected == true) {
+                                _selectedLedgerUuids.add(ledger.uuid);
+                              } else {
+                                _selectedLedgerUuids.remove(ledger.uuid);
+                              }
+                            });
+                          },
+                    title: Text(ledger.name),
+                    subtitle: Text('${candidate.transactionCount} 条流水'),
+                  );
+                },
+              ),
+            ),
+            if (_progress != null) ...[
+              const SizedBox(height: 12),
+              LinearProgressIndicator(
+                value: _progress!.total == 0
+                    ? null
+                    : _progress!.done / _progress!.total,
+              ),
+              const SizedBox(height: 8),
+              Text(_progress!.message),
+            ],
+            if (_errorText != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _errorText!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _importing ? null : () => Navigator.pop(context, false),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: _importing || _selectedLedgerUuids.isEmpty
+              ? null
+              : _startImport,
+          child: _importing
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('导入'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _startImport() async {
+    setState(() {
+      _importing = true;
+      _errorText = null;
+    });
+
+    try {
+      await ref
+          .read(cloudImportServiceProvider)
+          .importLedgers(
+            _selectedLedgerUuids.toList(),
+            onProgress: (progress) {
+              if (!mounted) return;
+              setState(() => _progress = progress);
+            },
+          );
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorText = '导入失败，请重试：$error';
+        _importing = false;
+      });
+    }
   }
 }
 
