@@ -134,13 +134,13 @@
 
 ## 11. Flutter API 基础层
 
-- [ ] 添加 HTTP 客户端依赖。
-- [ ] 新增 `lib/core/network/api_client.dart`。
-- [ ] 新增 `lib/core/network/api_result.dart`。
-- [ ] 新增 Token 存储。
-- [ ] 添加请求自动带 Token。
-- [ ] 添加统一错误解析。
-- [ ] 添加登录状态 Provider。
+- [x] 添加 HTTP 客户端依赖。
+- [x] 新增 `lib/core/network/api_client.dart`。
+- [x] 新增 `lib/core/network/api_result.dart`。
+- [x] 新增 Token 存储。
+- [x] 添加请求自动带 Token。
+- [x] 添加统一错误解析。
+- [x] 添加登录状态 Provider。
 
 ## 12. Flutter Repository 抽象
 
