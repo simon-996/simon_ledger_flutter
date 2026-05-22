@@ -122,15 +122,15 @@
 
 ## 10. 幂等和同步基础
 
-- [ ] 写接口支持 `Idempotency-Key` 或 `clientOperationId`。
-- [ ] 创建账本支持幂等。
-- [ ] 创建邀请支持幂等。
-- [ ] 加入账本支持幂等。
-- [ ] 新增流水支持幂等。
-- [ ] 编辑流水支持幂等。
-- [ ] 删除流水支持幂等。
-- [ ] 实现变更记录写入 `ledger_change_log`。
-- [ ] 实现增量变更接口 `GET /api/ledgers/{ledgerUuid}/changes`。
+- [x] 写接口支持 `Idempotency-Key` 或 `clientOperationId`。
+- [x] 创建账本支持幂等。
+- [x] 创建邀请支持幂等。
+- [x] 加入账本支持幂等。
+- [x] 新增流水支持幂等。
+- [x] 编辑流水支持幂等。
+- [x] 删除流水支持幂等。
+- [x] 实现变更记录写入 `ledger_change_log`。
+- [x] 实现增量变更接口 `GET /api/ledgers/{ledgerUuid}/changes`。
 
 ## 11. Flutter API 基础层
 
