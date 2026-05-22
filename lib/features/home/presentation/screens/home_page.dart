@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/models/ledger.dart';
 import '../../../../core/preferences/last_selected_ledger_preference.dart';
 import '../../../../core/widgets/app_components.dart';
+import '../../../auth/presentation/widgets/account_tab.dart';
 import '../../../transactions/presentation/widgets/bookkeeping_tab.dart';
 import '../../../ledgers/presentation/widgets/ledger_list_tab.dart';
 import '../../../ledgers/presentation/widgets/create_ledger_sheet.dart';
@@ -26,48 +27,49 @@ class _HomePageState extends ConsumerState<HomePage> {
     // 监听 Provider
     final ledgersAsyncValue = ref.watch(ledgerNotifierProvider);
     final ledgerStatsAsyncValue = ref.watch(ledgerStatsProvider);
+    final isAccountTab = _currentIndex == 3;
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
-      appBar: _currentIndex == 0
-          ? null
-          : AppBar(title: Text(_currentIndex == 1 ? '账本' : '统计')),
+      appBar: _currentIndex == 0 ? null : AppBar(title: Text(_appBarTitle)),
       body: SafeArea(
         top: _currentIndex == 0,
-        child: ledgersAsyncValue.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (err, stack) => AppEmptyState(
-            icon: Icons.error_outline_rounded,
-            title: '加载账本失败',
-            message: '$err',
-          ),
-          data: (ledgers) {
-            return AppAnimatedIndexedStack(
-              index: _currentIndex,
-              children: [
-                BookkeepingTab(ledgers: ledgers),
-                ledgerStatsAsyncValue.when(
-                  loading: () =>
-                      const Center(child: CircularProgressIndicator()),
-                  error: (err, stack) => AppEmptyState(
-                    icon: Icons.error_outline_rounded,
-                    title: '加载统计失败',
-                    message: '$err',
-                  ),
-                  data: (stats) => LedgerListTab(
-                    ledgers: ledgers,
-                    ledgerStats: stats,
-                    onTap: _openLedger,
-                    onEdit: _editLedger,
-                    onDelete: _deleteLedger,
-                    onCreate: _openCreateLedger,
-                  ),
+        child: isAccountTab
+            ? const AccountTab()
+            : ledgersAsyncValue.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (err, stack) => AppEmptyState(
+                  icon: Icons.error_outline_rounded,
+                  title: '加载账本失败',
+                  message: '$err',
                 ),
-                StatisticsTab(ledgers: ledgers),
-              ],
-            );
-          },
-        ),
+                data: (ledgers) {
+                  return AppAnimatedIndexedStack(
+                    index: _currentIndex,
+                    children: [
+                      BookkeepingTab(ledgers: ledgers),
+                      ledgerStatsAsyncValue.when(
+                        loading: () =>
+                            const Center(child: CircularProgressIndicator()),
+                        error: (err, stack) => AppEmptyState(
+                          icon: Icons.error_outline_rounded,
+                          title: '加载统计失败',
+                          message: '$err',
+                        ),
+                        data: (stats) => LedgerListTab(
+                          ledgers: ledgers,
+                          ledgerStats: stats,
+                          onTap: _openLedger,
+                          onEdit: _editLedger,
+                          onDelete: _deleteLedger,
+                          onCreate: _openCreateLedger,
+                        ),
+                      ),
+                      StatisticsTab(ledgers: ledgers),
+                    ],
+                  );
+                },
+              ),
       ),
       floatingActionButton: AnimatedSwitcher(
         duration: AppMotion.normal,
@@ -111,9 +113,23 @@ class _HomePageState extends ConsumerState<HomePage> {
             selectedIcon: Icon(Icons.bar_chart),
             label: '统计',
           ),
+          NavigationDestination(
+            icon: Icon(Icons.account_circle_outlined),
+            selectedIcon: Icon(Icons.account_circle),
+            label: '我的',
+          ),
         ],
       ),
     );
+  }
+
+  String get _appBarTitle {
+    return switch (_currentIndex) {
+      1 => '账本',
+      2 => '统计',
+      3 => '我的',
+      _ => '',
+    };
   }
 
   void _openCreateLedger() async {
