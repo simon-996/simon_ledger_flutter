@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/models/ledger.dart';
 import '../../../../core/models/person.dart';
 import '../../../../core/models/person_lookup.dart';
 import '../../../../core/models/transaction_record.dart';
+import '../../../../core/preferences/last_selected_ledger_preference.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
@@ -40,8 +40,6 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     '居住',
   ];
   final List<String> _incomeCategories = ['默认', '工资', '兼职', '理财', '红包', '其他'];
-
-  static const _lastLedgerKey = 'last_selected_ledger_uuid';
 
   @override
   void initState() {
@@ -87,8 +85,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
   Future<void> _initDefaults() async {
     _selectedCategory ??= _currentCategories.first;
 
-    final prefs = await SharedPreferences.getInstance();
-    final lastUuid = prefs.getString(_lastLedgerKey);
+    final lastUuid = await LastSelectedLedgerPreference.getUuid();
 
     if (!mounted || widget.ledgers.isEmpty) return;
 
@@ -115,9 +112,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
       _selectedPersonIds.clear();
     }
 
-    SharedPreferences.getInstance().then((prefs) {
-      prefs.setString(_lastLedgerKey, ledgerUuid);
-    });
+    LastSelectedLedgerPreference.setUuid(ledgerUuid);
   }
 
   List<String> get _currentCategories {

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/models/ledger.dart';
+import '../../../../core/preferences/last_selected_ledger_preference.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../transactions/presentation/widgets/bookkeeping_tab.dart';
 import '../../../ledgers/presentation/widgets/ledger_list_tab.dart';
@@ -160,11 +160,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   void _deleteLedger(Ledger ledger) async {
     await ref.read(ledgerNotifierProvider.notifier).deleteLedger(ledger.uuid);
 
-    final prefs = await SharedPreferences.getInstance();
-    final lastUuid = prefs.getString('last_selected_ledger_uuid');
-    if (lastUuid == ledger.uuid) {
-      prefs.remove('last_selected_ledger_uuid');
-    }
+    await LastSelectedLedgerPreference.clearIfMatches(ledger.uuid);
   }
 
   void _openLedger(Ledger ledger) {
