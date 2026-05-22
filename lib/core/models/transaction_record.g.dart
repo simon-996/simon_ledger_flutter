@@ -37,28 +37,33 @@ const TransactionRecordSchema = CollectionSchema(
       name: r'currencyCode',
       type: IsarType.string,
     ),
-    r'ledgerUuid': PropertySchema(
+    r'isDeleted': PropertySchema(
       id: 4,
+      name: r'isDeleted',
+      type: IsarType.bool,
+    ),
+    r'ledgerUuid': PropertySchema(
+      id: 5,
       name: r'ledgerUuid',
       type: IsarType.string,
     ),
     r'note': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'note',
       type: IsarType.string,
     ),
     r'personUuids': PropertySchema(
-      id: 6,
+      id: 7,
       name: r'personUuids',
       type: IsarType.stringList,
     ),
     r'type': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'type',
       type: IsarType.int,
     ),
     r'uuid': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'uuid',
       type: IsarType.string,
     )
@@ -148,11 +153,12 @@ void _transactionRecordSerialize(
   writer.writeString(offsets[1], object.category);
   writer.writeDateTime(offsets[2], object.createdAt);
   writer.writeString(offsets[3], object.currencyCode);
-  writer.writeString(offsets[4], object.ledgerUuid);
-  writer.writeString(offsets[5], object.note);
-  writer.writeStringList(offsets[6], object.personUuids);
-  writer.writeInt(offsets[7], object.type);
-  writer.writeString(offsets[8], object.uuid);
+  writer.writeBool(offsets[4], object.isDeleted);
+  writer.writeString(offsets[5], object.ledgerUuid);
+  writer.writeString(offsets[6], object.note);
+  writer.writeStringList(offsets[7], object.personUuids);
+  writer.writeInt(offsets[8], object.type);
+  writer.writeString(offsets[9], object.uuid);
 }
 
 TransactionRecord _transactionRecordDeserialize(
@@ -167,11 +173,12 @@ TransactionRecord _transactionRecordDeserialize(
   object.createdAt = reader.readDateTime(offsets[2]);
   object.currencyCode = reader.readString(offsets[3]);
   object.id = id;
-  object.ledgerUuid = reader.readString(offsets[4]);
-  object.note = reader.readString(offsets[5]);
-  object.personUuids = reader.readStringList(offsets[6]) ?? [];
-  object.type = reader.readInt(offsets[7]);
-  object.uuid = reader.readString(offsets[8]);
+  object.isDeleted = reader.readBool(offsets[4]);
+  object.ledgerUuid = reader.readString(offsets[5]);
+  object.note = reader.readString(offsets[6]);
+  object.personUuids = reader.readStringList(offsets[7]) ?? [];
+  object.type = reader.readInt(offsets[8]);
+  object.uuid = reader.readString(offsets[9]);
   return object;
 }
 
@@ -191,14 +198,16 @@ P _transactionRecordDeserializeProp<P>(
     case 3:
       return (reader.readString(offset)) as P;
     case 4:
-      return (reader.readString(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 5:
       return (reader.readString(offset)) as P;
     case 6:
-      return (reader.readStringList(offset) ?? []) as P;
+      return (reader.readString(offset)) as P;
     case 7:
-      return (reader.readInt(offset)) as P;
+      return (reader.readStringList(offset) ?? []) as P;
     case 8:
+      return (reader.readInt(offset)) as P;
+    case 9:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -999,6 +1008,16 @@ extension TransactionRecordQueryFilter
   }
 
   QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
+      isDeletedEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'isDeleted',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterFilterCondition>
       ledgerUuidEqualTo(
     String value, {
     bool caseSensitive = true,
@@ -1753,6 +1772,20 @@ extension TransactionRecordQuerySortBy
   }
 
   QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
+      sortByIsDeleted() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isDeleted', Sort.asc);
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
+      sortByIsDeletedDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isDeleted', Sort.desc);
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
       sortByLedgerUuid() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'ledgerUuid', Sort.asc);
@@ -1881,6 +1914,20 @@ extension TransactionRecordQuerySortThenBy
   }
 
   QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
+      thenByIsDeleted() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isDeleted', Sort.asc);
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
+      thenByIsDeletedDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isDeleted', Sort.desc);
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QAfterSortBy>
       thenByLedgerUuid() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'ledgerUuid', Sort.asc);
@@ -1968,6 +2015,13 @@ extension TransactionRecordQueryWhereDistinct
   }
 
   QueryBuilder<TransactionRecord, TransactionRecord, QDistinct>
+      distinctByIsDeleted() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'isDeleted');
+    });
+  }
+
+  QueryBuilder<TransactionRecord, TransactionRecord, QDistinct>
       distinctByLedgerUuid({bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'ledgerUuid', caseSensitive: caseSensitive);
@@ -2034,6 +2088,12 @@ extension TransactionRecordQueryProperty
       currencyCodeProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'currencyCode');
+    });
+  }
+
+  QueryBuilder<TransactionRecord, bool, QQueryOperations> isDeletedProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'isDeleted');
     });
   }
 

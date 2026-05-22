@@ -16,15 +16,17 @@ class TransactionRecord {
   short type = 0;
 
   late double amount;
-  
+
   late String currencyCode;
-  
+
   late String category;
-  
+
   List<String> personUuids = [];
-  
+
   late String note;
-  
+
   @Index()
   late DateTime createdAt;
+
+  bool isDeleted = false;
 }

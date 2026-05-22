@@ -230,7 +230,8 @@ class AppSectionHeader extends StatelessWidget {
         Expanded(
           child: Text(title, style: Theme.of(context).textTheme.titleMedium),
         ),
-        ?trailing,
+        // ignore: use_null_aware_elements, build_runner's analyzer cannot parse ?element yet.
+        if (trailing != null) trailing!,
       ],
     );
   }

@@ -10,10 +10,11 @@ class DatabaseService {
 
   Future<void> init() async {
     final dir = await getApplicationDocumentsDirectory();
-    isar = await Isar.open(
-      [PersonSchema, LedgerSchema, TransactionRecordSchema],
-      directory: dir.path,
-    );
+    isar = await Isar.open([
+      PersonSchema,
+      LedgerSchema,
+      TransactionRecordSchema,
+    ], directory: dir.path);
 
     // Initialize default person if empty
     final count = await isar.persons.count();
@@ -22,7 +23,7 @@ class DatabaseService {
         ..uuid = 'p1'
         ..name = '自己'
         ..avatar = '😎';
-      
+
       await isar.writeTxn(() async {
         await isar.persons.put(defaultPerson);
       });
@@ -58,7 +59,11 @@ class DatabaseService {
     if (includeDeleted) {
       return await isar.ledgers.where().sortBySortOrder().findAll();
     }
-    return await isar.ledgers.filter().isDeletedEqualTo(false).sortBySortOrder().findAll();
+    return await isar.ledgers
+        .filter()
+        .isDeletedEqualTo(false)
+        .sortBySortOrder()
+        .findAll();
   }
 
   Future<void> saveLedger(Ledger ledger) async {
@@ -74,14 +79,36 @@ class DatabaseService {
         ledger.isDeleted = true;
         await isar.ledgers.put(ledger);
       }
+
+      final transactions = await isar.transactionRecords
+          .where()
+          .ledgerUuidEqualTo(uuid)
+          .findAll();
+      for (final transaction in transactions) {
+        transaction.isDeleted = true;
+      }
+      await isar.transactionRecords.putAll(transactions);
     });
   }
 
   // Transaction operations
-  Future<List<TransactionRecord>> getTransactionsForLedger(String ledgerUuid) async {
+  Future<List<TransactionRecord>> getTransactionsForLedger(
+    String ledgerUuid, {
+    bool includeDeleted = false,
+  }) async {
+    if (includeDeleted) {
+      return await isar.transactionRecords
+          .where()
+          .ledgerUuidEqualTo(ledgerUuid)
+          .sortByCreatedAtDesc()
+          .findAll();
+    }
+
     return await isar.transactionRecords
         .where()
         .ledgerUuidEqualTo(ledgerUuid)
+        .filter()
+        .isDeletedEqualTo(false)
         .sortByCreatedAtDesc()
         .findAll();
   }
@@ -94,7 +121,14 @@ class DatabaseService {
 
   Future<void> deleteTransaction(String uuid) async {
     await isar.writeTxn(() async {
-      await isar.transactionRecords.filter().uuidEqualTo(uuid).deleteAll();
+      final transaction = await isar.transactionRecords
+          .where()
+          .uuidEqualTo(uuid)
+          .findFirst();
+      if (transaction != null) {
+        transaction.isDeleted = true;
+        await isar.transactionRecords.put(transaction);
+      }
     });
   }
 }
