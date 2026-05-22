@@ -49,12 +49,21 @@ class _HomePageState extends ConsumerState<HomePage> {
                     children: [
                       BookkeepingTab(ledgers: ledgers),
                       ledgerStatsAsyncValue.when(
-                        loading: () =>
-                            const Center(child: CircularProgressIndicator()),
-                        error: (err, stack) => AppEmptyState(
-                          icon: Icons.error_outline_rounded,
-                          title: '加载统计失败',
-                          message: '$err',
+                        loading: () => LedgerListTab(
+                          ledgers: ledgers,
+                          ledgerStats: const {},
+                          onTap: _openLedger,
+                          onEdit: _editLedger,
+                          onDelete: _deleteLedger,
+                          onCreate: _openCreateLedger,
+                        ),
+                        error: (err, stack) => LedgerListTab(
+                          ledgers: ledgers,
+                          ledgerStats: const {},
+                          onTap: _openLedger,
+                          onEdit: _editLedger,
+                          onDelete: _deleteLedger,
+                          onCreate: _openCreateLedger,
                         ),
                         data: (stats) => LedgerListTab(
                           ledgers: ledgers,

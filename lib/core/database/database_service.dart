@@ -1,94 +1,101 @@
-import 'package:isar/isar.dart';
-import 'package:path_provider/path_provider.dart';
+import 'dart:convert';
+
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/ledger.dart';
 import '../models/person.dart';
 import '../models/transaction_record.dart';
 
 class DatabaseService {
-  late Isar isar;
+  static const _peopleKey = 'local_store.people.v1';
+  static const _ledgersKey = 'local_store.ledgers.v1';
+  static const _transactionsKey = 'local_store.transactions.v1';
 
   Future<void> init() async {
-    final dir = await getApplicationDocumentsDirectory();
-    isar = await Isar.open([
-      PersonSchema,
-      LedgerSchema,
-      TransactionRecordSchema,
-    ], directory: dir.path);
+    final people = await _readPeople();
+    if (people.isNotEmpty) {
+      return;
+    }
 
-    // Initialize default person if empty
-    final count = await isar.persons.count();
-    if (count == 0) {
-      final defaultPerson = Person()
+    await _writePeople([
+      Person()
+        ..id = 1
         ..uuid = 'p1'
         ..name = '自己'
-        ..avatar = '😎';
-
-      await isar.writeTxn(() async {
-        await isar.persons.put(defaultPerson);
-      });
-    }
+        ..avatar = '😎',
+    ]);
   }
 
   // Person operations
   Future<List<Person>> getAllPeople({bool includeDeleted = false}) async {
+    final people = await _readPeople();
     if (includeDeleted) {
-      return await isar.persons.where().findAll();
+      return people;
     }
-    return await isar.persons.filter().isDeletedEqualTo(false).findAll();
+    return people.where((person) => !person.isDeleted).toList();
   }
 
   Future<void> savePerson(Person person) async {
-    await isar.writeTxn(() async {
-      await isar.persons.put(person);
-    });
+    final people = await _readPeople();
+    _upsertByUuid<Person>(
+      people,
+      person,
+      uuidOf: (value) => value.uuid,
+      assignId: (value) => value.id = _nextId(people.map((item) => item.id)),
+    );
+    await _writePeople(people);
   }
 
   Future<void> deletePerson(String uuid) async {
-    await isar.writeTxn(() async {
-      final person = await isar.persons.where().uuidEqualTo(uuid).findFirst();
-      if (person != null) {
-        person.isDeleted = true;
-        await isar.persons.put(person);
-      }
-    });
+    final people = await _readPeople();
+    final person = people.where((item) => item.uuid == uuid).firstOrNull;
+    if (person == null) {
+      return;
+    }
+    person.isDeleted = true;
+    await _writePeople(people);
   }
 
   // Ledger operations
   Future<List<Ledger>> getAllLedgers({bool includeDeleted = false}) async {
-    if (includeDeleted) {
-      return await isar.ledgers.where().sortBySortOrder().findAll();
-    }
-    return await isar.ledgers
-        .filter()
-        .isDeletedEqualTo(false)
-        .sortBySortOrder()
-        .findAll();
+    final ledgers = await _readLedgers();
+    final visible = includeDeleted
+        ? ledgers
+        : ledgers.where((ledger) => !ledger.isDeleted).toList();
+    visible.sort((left, right) => left.sortOrder.compareTo(right.sortOrder));
+    return visible;
   }
 
   Future<void> saveLedger(Ledger ledger) async {
-    await isar.writeTxn(() async {
-      await isar.ledgers.put(ledger);
-    });
+    final ledgers = await _readLedgers();
+    _upsertByUuid<Ledger>(
+      ledgers,
+      ledger,
+      uuidOf: (value) => value.uuid,
+      assignId: (value) => value.id = _nextId(ledgers.map((item) => item.id)),
+    );
+    await _writeLedgers(ledgers);
   }
 
   Future<void> deleteLedger(String uuid) async {
-    await isar.writeTxn(() async {
-      final ledger = await isar.ledgers.where().uuidEqualTo(uuid).findFirst();
-      if (ledger != null) {
-        ledger.isDeleted = true;
-        await isar.ledgers.put(ledger);
-      }
+    final ledgers = await _readLedgers();
+    final ledger = ledgers.where((item) => item.uuid == uuid).firstOrNull;
+    if (ledger != null) {
+      ledger.isDeleted = true;
+      await _writeLedgers(ledgers);
+    }
 
-      final transactions = await isar.transactionRecords
-          .where()
-          .ledgerUuidEqualTo(uuid)
-          .findAll();
-      for (final transaction in transactions) {
+    final transactions = await _readTransactions();
+    var changed = false;
+    for (final transaction in transactions) {
+      if (transaction.ledgerUuid == uuid && !transaction.isDeleted) {
         transaction.isDeleted = true;
+        changed = true;
       }
-      await isar.transactionRecords.putAll(transactions);
-    });
+    }
+    if (changed) {
+      await _writeTransactions(transactions);
+    }
   }
 
   // Transaction operations
@@ -96,21 +103,15 @@ class DatabaseService {
     String ledgerUuid, {
     bool includeDeleted = false,
   }) async {
-    if (includeDeleted) {
-      return await isar.transactionRecords
-          .where()
-          .ledgerUuidEqualTo(ledgerUuid)
-          .sortByCreatedAtDesc()
-          .findAll();
-    }
-
-    return await isar.transactionRecords
-        .where()
-        .ledgerUuidEqualTo(ledgerUuid)
-        .filter()
-        .isDeletedEqualTo(false)
-        .sortByCreatedAtDesc()
-        .findAll();
+    final transactions = await _readTransactions();
+    final visible = transactions.where((transaction) {
+      if (transaction.ledgerUuid != ledgerUuid) {
+        return false;
+      }
+      return includeDeleted || !transaction.isDeleted;
+    }).toList();
+    visible.sort((left, right) => right.createdAt.compareTo(left.createdAt));
+    return visible;
   }
 
   Future<List<TransactionRecord>> getTransactionsForLedgers(
@@ -119,35 +120,200 @@ class DatabaseService {
   }) async {
     if (ledgerUuids.isEmpty) return [];
 
-    final query = isar.transactionRecords.filter().anyOf(
-      ledgerUuids,
-      (q, ledgerUuid) => q.ledgerUuidEqualTo(ledgerUuid),
-    );
-
-    if (includeDeleted) {
-      return await query.findAll();
-    }
-
-    return await query.isDeletedEqualTo(false).findAll();
+    final ledgerUuidSet = ledgerUuids.toSet();
+    final transactions = await _readTransactions();
+    final visible = transactions.where((transaction) {
+      if (!ledgerUuidSet.contains(transaction.ledgerUuid)) {
+        return false;
+      }
+      return includeDeleted || !transaction.isDeleted;
+    }).toList();
+    visible.sort((left, right) => right.createdAt.compareTo(left.createdAt));
+    return visible;
   }
 
   Future<void> saveTransaction(TransactionRecord transaction) async {
-    await isar.writeTxn(() async {
-      await isar.transactionRecords.put(transaction);
-    });
+    final transactions = await _readTransactions();
+    _upsertByUuid<TransactionRecord>(
+      transactions,
+      transaction,
+      uuidOf: (value) => value.uuid,
+      assignId: (value) =>
+          value.id = _nextId(transactions.map((item) => item.id)),
+    );
+    await _writeTransactions(transactions);
   }
 
   Future<void> deleteTransaction(String uuid) async {
-    await isar.writeTxn(() async {
-      final transaction = await isar.transactionRecords
-          .where()
-          .uuidEqualTo(uuid)
-          .findFirst();
-      if (transaction != null) {
-        transaction.isDeleted = true;
-        await isar.transactionRecords.put(transaction);
-      }
-    });
+    final transactions = await _readTransactions();
+    final transaction = transactions
+        .where((item) => item.uuid == uuid)
+        .firstOrNull;
+    if (transaction == null) {
+      return;
+    }
+    transaction.isDeleted = true;
+    await _writeTransactions(transactions);
+  }
+
+  Future<List<Person>> _readPeople() async {
+    final values = await _readJsonList(_peopleKey);
+    return values.map(_personFromJson).toList();
+  }
+
+  Future<void> _writePeople(List<Person> people) {
+    return _writeJsonList(_peopleKey, people.map(_personToJson).toList());
+  }
+
+  Future<List<Ledger>> _readLedgers() async {
+    final values = await _readJsonList(_ledgersKey);
+    return values.map(_ledgerFromJson).toList();
+  }
+
+  Future<void> _writeLedgers(List<Ledger> ledgers) {
+    return _writeJsonList(_ledgersKey, ledgers.map(_ledgerToJson).toList());
+  }
+
+  Future<List<TransactionRecord>> _readTransactions() async {
+    final values = await _readJsonList(_transactionsKey);
+    return values.map(_transactionFromJson).toList();
+  }
+
+  Future<void> _writeTransactions(List<TransactionRecord> transactions) {
+    return _writeJsonList(
+      _transactionsKey,
+      transactions.map(_transactionToJson).toList(),
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> _readJsonList(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(key);
+    if (raw == null || raw.isEmpty) {
+      return [];
+    }
+
+    final decoded = jsonDecode(raw);
+    if (decoded is! List<dynamic>) {
+      return [];
+    }
+    return decoded
+        .whereType<Map<dynamic, dynamic>>()
+        .map((value) => value.cast<String, dynamic>())
+        .toList();
+  }
+
+  Future<void> _writeJsonList(
+    String key,
+    List<Map<String, dynamic>> values,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(key, jsonEncode(values));
+  }
+
+  void _upsertByUuid<T>(
+    List<T> items,
+    T item, {
+    required String Function(T value) uuidOf,
+    required void Function(T value) assignId,
+  }) {
+    final index = items.indexWhere((value) => uuidOf(value) == uuidOf(item));
+    if (index == -1) {
+      assignId(item);
+      items.add(item);
+      return;
+    }
+    items[index] = item;
+  }
+
+  int _nextId(Iterable<int> ids) {
+    return ids.fold<int>(0, (max, id) => id > max ? id : max) + 1;
+  }
+
+  static Person _personFromJson(Map<String, dynamic> json) {
+    return Person()
+      ..id = (json['id'] as num?)?.toInt() ?? 0
+      ..uuid = json['uuid']?.toString() ?? ''
+      ..name = json['name']?.toString() ?? ''
+      ..avatar = json['avatar']?.toString() ?? '🧑'
+      ..isDeleted = json['isDeleted'] == true;
+  }
+
+  static Map<String, dynamic> _personToJson(Person person) {
+    return {
+      'id': person.id,
+      'uuid': person.uuid,
+      'name': person.name,
+      'avatar': person.avatar,
+      'isDeleted': person.isDeleted,
+    };
+  }
+
+  static Ledger _ledgerFromJson(Map<String, dynamic> json) {
+    return Ledger()
+      ..id = (json['id'] as num?)?.toInt() ?? 0
+      ..uuid = json['uuid']?.toString() ?? ''
+      ..name = json['name']?.toString() ?? ''
+      ..baseCurrencyCode = json['baseCurrencyCode']?.toString() ?? 'CNY'
+      ..exchangeRateToCNY =
+          (json['exchangeRateToCNY'] as num?)?.toDouble() ?? 1.0
+      ..personUuids = (json['personUuids'] as List<dynamic>? ?? [])
+          .map((value) => value.toString())
+          .toList()
+      ..sortOrder = (json['sortOrder'] as num?)?.toInt() ?? 0
+      ..isDeleted = json['isDeleted'] == true
+      ..role = json['role']?.toString();
+  }
+
+  static Map<String, dynamic> _ledgerToJson(Ledger ledger) {
+    return {
+      'id': ledger.id,
+      'uuid': ledger.uuid,
+      'name': ledger.name,
+      'baseCurrencyCode': ledger.baseCurrencyCode,
+      'exchangeRateToCNY': ledger.exchangeRateToCNY,
+      'personUuids': ledger.personUuids,
+      'sortOrder': ledger.sortOrder,
+      'isDeleted': ledger.isDeleted,
+      'role': ledger.role,
+    };
+  }
+
+  static TransactionRecord _transactionFromJson(Map<String, dynamic> json) {
+    return TransactionRecord()
+      ..id = (json['id'] as num?)?.toInt() ?? 0
+      ..uuid = json['uuid']?.toString() ?? ''
+      ..ledgerUuid = json['ledgerUuid']?.toString() ?? ''
+      ..type = (json['type'] as num?)?.toInt() ?? 0
+      ..amount = (json['amount'] as num?)?.toDouble() ?? 0
+      ..currencyCode = json['currencyCode']?.toString() ?? 'CNY'
+      ..category = json['category']?.toString() ?? ''
+      ..personUuids = (json['personUuids'] as List<dynamic>? ?? [])
+          .map((value) => value.toString())
+          .toList()
+      ..note = json['note']?.toString() ?? ''
+      ..createdAt =
+          DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
+          DateTime.now()
+      ..isDeleted = json['isDeleted'] == true;
+  }
+
+  static Map<String, dynamic> _transactionToJson(
+    TransactionRecord transaction,
+  ) {
+    return {
+      'id': transaction.id,
+      'uuid': transaction.uuid,
+      'ledgerUuid': transaction.ledgerUuid,
+      'type': transaction.type,
+      'amount': transaction.amount,
+      'currencyCode': transaction.currencyCode,
+      'category': transaction.category,
+      'personUuids': transaction.personUuids,
+      'note': transaction.note,
+      'createdAt': transaction.createdAt.toIso8601String(),
+      'isDeleted': transaction.isDeleted,
+    };
   }
 }
 

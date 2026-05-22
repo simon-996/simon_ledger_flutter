@@ -16,4 +16,3 @@ class GalleryLauncher {
     await Gal.open();
   }
 }
-

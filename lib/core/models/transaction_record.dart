@@ -1,19 +1,12 @@
-import 'package:isar/isar.dart';
-
-part 'transaction_record.g.dart';
-
-@collection
 class TransactionRecord {
-  Id id = Isar.autoIncrement;
+  int id = 0;
 
-  @Index(unique: true, replace: true)
   late String uuid;
 
-  @Index()
   late String ledgerUuid;
 
   // Type: 0 for expense (支出), 1 for income (收入)
-  short type = 0;
+  int type = 0;
 
   late double amount;
 
@@ -25,7 +18,6 @@ class TransactionRecord {
 
   late String note;
 
-  @Index()
   late DateTime createdAt;
 
   bool isDeleted = false;

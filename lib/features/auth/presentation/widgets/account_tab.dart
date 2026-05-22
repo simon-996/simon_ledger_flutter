@@ -46,6 +46,9 @@ class _SignedInPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
+    final avatarText = avatar == null || avatar!.isEmpty
+        ? (nickname.isEmpty ? '?' : nickname.characters.first)
+        : avatar!;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -57,9 +60,7 @@ class _SignedInPanel extends ConsumerWidget {
                 radius: 28,
                 backgroundColor: colorScheme.primaryContainer,
                 child: Text(
-                  (avatar == null || avatar!.isEmpty)
-                      ? nickname.characters.first
-                      : avatar!,
+                  avatarText,
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
@@ -92,7 +93,11 @@ class _SignedInPanel extends ConsumerWidget {
         const SizedBox(height: 16),
         FilledButton.icon(
           onPressed: () async {
-            await ref.read(authRepositoryProvider).logout();
+            try {
+              await ref.read(authRepositoryProvider).logout();
+            } catch (_) {
+              await ref.read(tokenStoreProvider).clear();
+            }
             ref.invalidate(authTokenProvider);
             ref.invalidate(currentUserProvider);
             ref.invalidate(ledgerNotifierProvider);
@@ -226,56 +231,65 @@ class _CloudImportDialogState extends ConsumerState<_CloudImportDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('导入本地账本'),
-      content: SizedBox(
-        width: double.maxFinite,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Flexible(
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: widget.candidates.length,
-                itemBuilder: (context, index) {
-                  final candidate = widget.candidates[index];
-                  final ledger = candidate.ledger;
-                  return CheckboxListTile(
-                    value: _selectedLedgerUuids.contains(ledger.uuid),
-                    onChanged: _importing
-                        ? null
-                        : (selected) {
-                            setState(() {
-                              if (selected == true) {
-                                _selectedLedgerUuids.add(ledger.uuid);
-                              } else {
-                                _selectedLedgerUuids.remove(ledger.uuid);
-                              }
-                            });
-                          },
-                    title: Text(ledger.name),
-                    subtitle: Text('${candidate.transactionCount} 条流水'),
-                  );
-                },
+      content: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.58,
+        ),
+        child: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: widget.candidates.length,
+                  itemBuilder: (context, index) {
+                    final candidate = widget.candidates[index];
+                    final ledger = candidate.ledger;
+                    return CheckboxListTile(
+                      value: _selectedLedgerUuids.contains(ledger.uuid),
+                      onChanged: _importing
+                          ? null
+                          : (selected) {
+                              setState(() {
+                                if (selected == true) {
+                                  _selectedLedgerUuids.add(ledger.uuid);
+                                } else {
+                                  _selectedLedgerUuids.remove(ledger.uuid);
+                                }
+                              });
+                            },
+                      title: Text(
+                        ledger.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text('${candidate.transactionCount} 条流水'),
+                    );
+                  },
+                ),
               ),
-            ),
-            if (_progress != null) ...[
-              const SizedBox(height: 12),
-              LinearProgressIndicator(
-                value: _progress!.total == 0
-                    ? null
-                    : _progress!.done / _progress!.total,
-              ),
-              const SizedBox(height: 8),
-              Text(_progress!.message),
+              if (_progress != null) ...[
+                const SizedBox(height: 12),
+                LinearProgressIndicator(
+                  value: _progress!.total == 0
+                      ? null
+                      : _progress!.done / _progress!.total,
+                ),
+                const SizedBox(height: 8),
+                Text(_progress!.message),
+              ],
+              if (_errorText != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _errorText!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ],
             ],
-            if (_errorText != null) ...[
-              const SizedBox(height: 12),
-              Text(
-                _errorText!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ],
-          ],
+          ),
         ),
       ),
       actions: [
@@ -477,21 +491,35 @@ class _AuthPanelState extends ConsumerState<_AuthPanel> {
       if (_isRegister) {
         final email = _emailController.text.trim();
         final phone = _phoneController.text.trim();
+        final nickname = _nicknameController.text.trim();
+        if (nickname.isEmpty) {
+          throw const FormatException('请输入昵称');
+        }
+        if (email.isEmpty && phone.isEmpty) {
+          throw const FormatException('邮箱和手机号至少填写一个');
+        }
+        if (password.isEmpty) {
+          throw const FormatException('请输入密码');
+        }
         await authRepository.register(
           email: email.isEmpty ? null : email,
           phone: phone.isEmpty ? null : phone,
           password: password,
-          nickname: _nicknameController.text.trim(),
+          nickname: nickname,
         );
         await authRepository.login(
           account: email.isNotEmpty ? email : phone,
           password: password,
         );
       } else {
-        await authRepository.login(
-          account: _accountController.text.trim(),
-          password: password,
-        );
+        final account = _accountController.text.trim();
+        if (account.isEmpty) {
+          throw const FormatException('请输入邮箱或手机号');
+        }
+        if (password.isEmpty) {
+          throw const FormatException('请输入密码');
+        }
+        await authRepository.login(account: account, password: password);
       }
 
       ref.invalidate(authTokenProvider);
@@ -500,7 +528,11 @@ class _AuthPanelState extends ConsumerState<_AuthPanel> {
       ref.invalidate(ledgerStatsProvider);
     } catch (error) {
       if (!mounted) return;
-      setState(() => _errorText = error.toString());
+      setState(() {
+        _errorText = error is FormatException
+            ? error.message
+            : error.toString();
+      });
     } finally {
       if (mounted) {
         setState(() => _submitting = false);

@@ -213,7 +213,8 @@ class CloudImportService {
       ..name = map['name'].toString()
       ..baseCurrencyCode = map['baseCurrencyCode'].toString()
       ..exchangeRateToCNY =
-          (map['exchangeRateToCny'] as num?)?.toDouble() ?? 1.0;
+          (map['exchangeRateToCny'] as num?)?.toDouble() ?? 1.0
+      ..role = map['role']?.toString();
   }
 
   static Person _personFromJson(Object? json) {

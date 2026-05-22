@@ -383,7 +383,13 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
     final name = _nameController.text.trim();
     if (name.isEmpty) return;
 
-    final rate = double.tryParse(_rateController.text) ?? 1.0;
+    final rate = double.tryParse(_rateController.text);
+    if (rate == null || rate <= 0) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请输入大于 0 的有效汇率')));
+      return;
+    }
 
     Navigator.of(context).pop(
       CreateLedgerResult(

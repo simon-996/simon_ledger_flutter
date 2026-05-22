@@ -148,7 +148,7 @@
 - [x] 新增 `LedgerRepository`。
 - [x] 新增 `PersonRepository`。
 - [x] 新增 `TransactionRepository`。
-- [x] 新增本地 Repository 实现，包装现有 Isar。
+- [x] 新增本地 Repository 实现，包装本地存储。
 - [x] 新增远端 Repository 实现，调用后端 API。
 - [x] Provider 改为依赖 Repository，不直接依赖 `DatabaseService`。
 - [x] 未登录时保留本地账本模式。
@@ -190,9 +190,19 @@
 - [x] 防止已导入账本重复上传。
 - [x] 导入失败可重试。
 
-## 16. 验收
+## 16. Web 端适配
 
-说明：2026-05-22 已通过自动化检查：后端 `mvn test`、Flutter `flutter analyze`、Flutter `flutter test`。以下验收项需要连接真实后端服务和目标数据库后逐项确认。
+- [x] 移除 Flutter 共享模型对 Isar 生成代码的直接依赖。
+- [x] 将未登录本地模式切换为 `shared_preferences` 存储，兼容 web 构建。
+- [x] 移除 Flutter 项目中的 Isar 运行时和生成器依赖。
+- [x] 云端账本解析保留后端返回的成员角色字段。
+- [x] `flutter build web` 构建通过。
+
+说明：旧版 Isar 本地数据不会自动迁移到新的本地存储，如需保留历史本地数据，后续需要单独增加迁移入口。
+
+## 17. 验收
+
+说明：2026-05-22 已通过自动化检查：后端 `mvn test`、Flutter `flutter analyze`、Flutter `flutter test`、Flutter `flutter build web`。以下验收项需要连接真实后端服务和目标数据库后逐项确认。
 
 验收步骤见 `docs/backend-acceptance-checklist.md`。
 

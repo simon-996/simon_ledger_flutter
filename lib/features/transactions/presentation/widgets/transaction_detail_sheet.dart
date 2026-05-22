@@ -91,8 +91,7 @@ class TransactionDetailSheet extends ConsumerWidget {
                     tooltip: '编辑',
                     icon: const Icon(Icons.edit_outlined),
                     onPressed: () async {
-                      Navigator.pop(context);
-                      await showModalBottomSheet(
+                      final updated = await showModalBottomSheet<bool>(
                         context: context,
                         isScrollControlled: true,
                         useSafeArea: true,
@@ -102,6 +101,9 @@ class TransactionDetailSheet extends ConsumerWidget {
                           ledger: ledger,
                         ),
                       );
+                      if (updated == true && context.mounted) {
+                        Navigator.pop(context);
+                      }
                     },
                   ),
                   IconButton(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/di/providers.dart';
 import '../../../../core/models/ledger.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
@@ -26,11 +27,16 @@ class LedgerListTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final token = ref.watch(authTokenProvider).valueOrNull;
+    final isCloudMode = token != null && token.isValid;
+
     if (ledgers.isEmpty) {
       return AppEmptyState(
         icon: Icons.account_balance_wallet_outlined,
         title: '还没有账本',
-        message: '先创建一个账本，并设置默认币种。数据仅保存在本机。',
+        message: isCloudMode
+            ? '先创建一个云端账本，并设置默认币种。'
+            : '先创建一个账本，并设置默认币种。数据仅保存在本机。',
         action: FilledButton.icon(
           onPressed: onCreate,
           icon: const Icon(Icons.add_rounded),
@@ -49,6 +55,9 @@ class LedgerListTab extends ConsumerWidget {
       ),
       itemCount: ledgers.length,
       onReorderItem: (oldIndex, newIndex) {
+        if (isCloudMode) {
+          return;
+        }
         ref
             .read(ledgerNotifierProvider.notifier)
             .reorderLedgers(oldIndex, newIndex);
@@ -94,6 +103,7 @@ class LedgerListTab extends ConsumerWidget {
               index: index,
               onTap: () => onTap(ledger),
               onEdit: () => onEdit(ledger),
+              canReorder: !isCloudMode,
             ),
           ),
         );
@@ -134,6 +144,7 @@ class _LedgerCard extends StatelessWidget {
     required this.index,
     required this.onTap,
     required this.onEdit,
+    required this.canReorder,
   });
 
   final Ledger ledger;
@@ -143,6 +154,7 @@ class _LedgerCard extends StatelessWidget {
   final int index;
   final VoidCallback onTap;
   final VoidCallback onEdit;
+  final bool canReorder;
 
   @override
   Widget build(BuildContext context) {
@@ -213,21 +225,22 @@ class _LedgerCard extends StatelessWidget {
                       icon: const Icon(Icons.edit_outlined),
                       onPressed: onEdit,
                     ),
-                    Tooltip(
-                      message: '排序',
-                      child: ReorderableDragStartListener(
-                        index: index,
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Icon(
-                            Icons.drag_handle_rounded,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurfaceVariant,
+                    if (canReorder)
+                      Tooltip(
+                        message: '排序',
+                        child: ReorderableDragStartListener(
+                          index: index,
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Icon(
+                              Icons.drag_handle_rounded,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                            ),
                           ),
                         ),
                       ),
-                    ),
                   ],
                 ),
                 const SizedBox(height: 16),
