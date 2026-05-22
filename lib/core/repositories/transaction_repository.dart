@@ -59,22 +59,30 @@ class LocalTransactionRepository implements TransactionRepository {
 class RemoteTransactionRepository implements TransactionRepository {
   const RemoteTransactionRepository(this._apiClient);
 
+  static const int _pageSize = 100;
+
   final ApiClient _apiClient;
 
   @override
   Future<List<TransactionRecord>> getTransactionsForLedger(
     String ledgerUuid, {
     bool includeDeleted = false,
-  }) {
-    return _apiClient.get<List<TransactionRecord>>(
-      '/api/ledgers/$ledgerUuid/transactions',
-      queryParameters: {'page': 1, 'pageSize': 100},
-      fromJson: (json) {
-        final map = json! as Map<String, dynamic>;
-        final records = map['records'] as List<dynamic>? ?? [];
-        return records.map(_transactionFromJson).toList();
-      },
-    );
+  }) async {
+    final all = <TransactionRecord>[];
+    var page = 1;
+    var total = 0;
+
+    do {
+      final pageData = await _getTransactionPage(ledgerUuid, page);
+      total = pageData.total;
+      all.addAll(pageData.records);
+      if (pageData.records.isEmpty) {
+        break;
+      }
+      page += 1;
+    } while (all.length < total);
+
+    return all;
   }
 
   @override
@@ -141,6 +149,21 @@ class RemoteTransactionRepository implements TransactionRepository {
 
   static final Map<String, int> _versionByUuid = {};
 
+  Future<_TransactionPage> _getTransactionPage(String ledgerUuid, int page) {
+    return _apiClient.get<_TransactionPage>(
+      '/api/ledgers/$ledgerUuid/transactions',
+      queryParameters: {'page': page, 'pageSize': _pageSize},
+      fromJson: (json) {
+        final map = json! as Map<String, dynamic>;
+        final records = map['records'] as List<dynamic>? ?? [];
+        return _TransactionPage(
+          total: (map['total'] as num?)?.toInt() ?? records.length,
+          records: records.map(_transactionFromJson).toList(),
+        );
+      },
+    );
+  }
+
   static TransactionRecord _transactionFromJson(Object? json) {
     final map = json! as Map<String, dynamic>;
     final uuid = map['uuid'].toString();
@@ -160,4 +183,11 @@ class RemoteTransactionRepository implements TransactionRepository {
           DateTime.tryParse(map['happenedAt']?.toString() ?? '') ??
           DateTime.now();
   }
+}
+
+class _TransactionPage {
+  const _TransactionPage({required this.total, required this.records});
+
+  final int total;
+  final List<TransactionRecord> records;
 }
