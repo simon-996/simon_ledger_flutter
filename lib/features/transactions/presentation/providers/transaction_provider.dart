@@ -13,14 +13,14 @@ class TransactionNotifier extends _$TransactionNotifier {
   }
 
   Future<List<TransactionRecord>> _fetchTransactions() async {
-    final db = ref.read(databaseProvider);
-    return await db.getTransactionsForLedger(ledgerUuid);
+    final repository = ref.read(transactionRepositoryProvider);
+    return await repository.getTransactionsForLedger(ledgerUuid);
   }
 
   Future<void> addTransaction(TransactionRecord transaction) async {
-    final db = ref.read(databaseProvider);
-    await db.saveTransaction(transaction);
-    
+    final repository = ref.read(transactionRepositoryProvider);
+    await repository.saveTransaction(transaction);
+
     // Invalidate ledger stats so the UI updates
     ref.invalidate(ledgerStatsProvider);
     // Refresh local list
@@ -28,17 +28,17 @@ class TransactionNotifier extends _$TransactionNotifier {
   }
 
   Future<void> updateTransaction(TransactionRecord transaction) async {
-    final db = ref.read(databaseProvider);
-    await db.saveTransaction(transaction);
-    
+    final repository = ref.read(transactionRepositoryProvider);
+    await repository.saveTransaction(transaction);
+
     ref.invalidate(ledgerStatsProvider);
     ref.invalidateSelf();
   }
 
   Future<void> deleteTransaction(String uuid) async {
-    final db = ref.read(databaseProvider);
-    await db.deleteTransaction(uuid);
-    
+    final repository = ref.read(transactionRepositoryProvider);
+    await repository.deleteTransaction(ledgerUuid, uuid);
+
     ref.invalidate(ledgerStatsProvider);
     ref.invalidateSelf();
   }

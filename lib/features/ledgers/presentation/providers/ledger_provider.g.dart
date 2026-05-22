@@ -12,14 +12,14 @@ String _$ledgerNotifierHash() => r'5bc6a5f60b341a915dc880980224248bb454ad3d';
 @ProviderFor(LedgerNotifier)
 final ledgerNotifierProvider =
     AutoDisposeAsyncNotifierProvider<LedgerNotifier, List<Ledger>>.internal(
-  LedgerNotifier.new,
-  name: r'ledgerNotifierProvider',
-  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
-      ? null
-      : _$ledgerNotifierHash,
-  dependencies: null,
-  allTransitiveDependencies: null,
-);
+      LedgerNotifier.new,
+      name: r'ledgerNotifierProvider',
+      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+          ? null
+          : _$ledgerNotifierHash,
+      dependencies: null,
+      allTransitiveDependencies: null,
+    );
 
 typedef _$LedgerNotifier = AutoDisposeAsyncNotifier<List<Ledger>>;
 // ignore_for_file: type=lint

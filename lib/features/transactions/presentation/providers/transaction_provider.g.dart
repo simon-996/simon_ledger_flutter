@@ -34,9 +34,7 @@ abstract class _$TransactionNotifier
     extends BuildlessAutoDisposeAsyncNotifier<List<TransactionRecord>> {
   late final String ledgerUuid;
 
-  FutureOr<List<TransactionRecord>> build(
-    String ledgerUuid,
-  );
+  FutureOr<List<TransactionRecord>> build(String ledgerUuid);
 }
 
 /// See also [TransactionNotifier].
@@ -50,21 +48,15 @@ class TransactionNotifierFamily
   const TransactionNotifierFamily();
 
   /// See also [TransactionNotifier].
-  TransactionNotifierProvider call(
-    String ledgerUuid,
-  ) {
-    return TransactionNotifierProvider(
-      ledgerUuid,
-    );
+  TransactionNotifierProvider call(String ledgerUuid) {
+    return TransactionNotifierProvider(ledgerUuid);
   }
 
   @override
   TransactionNotifierProvider getProviderOverride(
     covariant TransactionNotifierProvider provider,
   ) {
-    return call(
-      provider.ledgerUuid,
-    );
+    return call(provider.ledgerUuid);
   }
 
   static const Iterable<ProviderOrFamily>? _dependencies = null;
@@ -83,24 +75,26 @@ class TransactionNotifierFamily
 }
 
 /// See also [TransactionNotifier].
-class TransactionNotifierProvider extends AutoDisposeAsyncNotifierProviderImpl<
-    TransactionNotifier, List<TransactionRecord>> {
+class TransactionNotifierProvider
+    extends
+        AutoDisposeAsyncNotifierProviderImpl<
+          TransactionNotifier,
+          List<TransactionRecord>
+        > {
   /// See also [TransactionNotifier].
-  TransactionNotifierProvider(
-    String ledgerUuid,
-  ) : this._internal(
-          () => TransactionNotifier()..ledgerUuid = ledgerUuid,
-          from: transactionNotifierProvider,
-          name: r'transactionNotifierProvider',
-          debugGetCreateSourceHash:
-              const bool.fromEnvironment('dart.vm.product')
-                  ? null
-                  : _$transactionNotifierHash,
-          dependencies: TransactionNotifierFamily._dependencies,
-          allTransitiveDependencies:
-              TransactionNotifierFamily._allTransitiveDependencies,
-          ledgerUuid: ledgerUuid,
-        );
+  TransactionNotifierProvider(String ledgerUuid)
+    : this._internal(
+        () => TransactionNotifier()..ledgerUuid = ledgerUuid,
+        from: transactionNotifierProvider,
+        name: r'transactionNotifierProvider',
+        debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+            ? null
+            : _$transactionNotifierHash,
+        dependencies: TransactionNotifierFamily._dependencies,
+        allTransitiveDependencies:
+            TransactionNotifierFamily._allTransitiveDependencies,
+        ledgerUuid: ledgerUuid,
+      );
 
   TransactionNotifierProvider._internal(
     super._createNotifier, {
@@ -118,9 +112,7 @@ class TransactionNotifierProvider extends AutoDisposeAsyncNotifierProviderImpl<
   FutureOr<List<TransactionRecord>> runNotifierBuild(
     covariant TransactionNotifier notifier,
   ) {
-    return notifier.build(
-      ledgerUuid,
-    );
+    return notifier.build(ledgerUuid);
   }
 
   @override
@@ -140,8 +132,11 @@ class TransactionNotifierProvider extends AutoDisposeAsyncNotifierProviderImpl<
   }
 
   @override
-  AutoDisposeAsyncNotifierProviderElement<TransactionNotifier,
-      List<TransactionRecord>> createElement() {
+  AutoDisposeAsyncNotifierProviderElement<
+    TransactionNotifier,
+    List<TransactionRecord>
+  >
+  createElement() {
     return _TransactionNotifierProviderElement(this);
   }
 
@@ -167,12 +162,17 @@ mixin TransactionNotifierRef
 }
 
 class _TransactionNotifierProviderElement
-    extends AutoDisposeAsyncNotifierProviderElement<TransactionNotifier,
-        List<TransactionRecord>> with TransactionNotifierRef {
+    extends
+        AutoDisposeAsyncNotifierProviderElement<
+          TransactionNotifier,
+          List<TransactionRecord>
+        >
+    with TransactionNotifierRef {
   _TransactionNotifierProviderElement(super.provider);
 
   @override
   String get ledgerUuid => (origin as TransactionNotifierProvider).ledgerUuid;
 }
+
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

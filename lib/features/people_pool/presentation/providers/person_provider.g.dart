@@ -33,9 +33,7 @@ abstract class _$PersonNotifier
     extends BuildlessAutoDisposeAsyncNotifier<List<Person>> {
   late final bool includeDeleted;
 
-  FutureOr<List<Person>> build({
-    bool includeDeleted = false,
-  });
+  FutureOr<List<Person>> build({bool includeDeleted = false});
 }
 
 /// See also [PersonNotifier].
@@ -48,21 +46,15 @@ class PersonNotifierFamily extends Family<AsyncValue<List<Person>>> {
   const PersonNotifierFamily();
 
   /// See also [PersonNotifier].
-  PersonNotifierProvider call({
-    bool includeDeleted = false,
-  }) {
-    return PersonNotifierProvider(
-      includeDeleted: includeDeleted,
-    );
+  PersonNotifierProvider call({bool includeDeleted = false}) {
+    return PersonNotifierProvider(includeDeleted: includeDeleted);
   }
 
   @override
   PersonNotifierProvider getProviderOverride(
     covariant PersonNotifierProvider provider,
   ) {
-    return call(
-      includeDeleted: provider.includeDeleted,
-    );
+    return call(includeDeleted: provider.includeDeleted);
   }
 
   static const Iterable<ProviderOrFamily>? _dependencies = null;
@@ -84,21 +76,19 @@ class PersonNotifierFamily extends Family<AsyncValue<List<Person>>> {
 class PersonNotifierProvider
     extends AutoDisposeAsyncNotifierProviderImpl<PersonNotifier, List<Person>> {
   /// See also [PersonNotifier].
-  PersonNotifierProvider({
-    bool includeDeleted = false,
-  }) : this._internal(
-          () => PersonNotifier()..includeDeleted = includeDeleted,
-          from: personNotifierProvider,
-          name: r'personNotifierProvider',
-          debugGetCreateSourceHash:
-              const bool.fromEnvironment('dart.vm.product')
-                  ? null
-                  : _$personNotifierHash,
-          dependencies: PersonNotifierFamily._dependencies,
-          allTransitiveDependencies:
-              PersonNotifierFamily._allTransitiveDependencies,
-          includeDeleted: includeDeleted,
-        );
+  PersonNotifierProvider({bool includeDeleted = false})
+    : this._internal(
+        () => PersonNotifier()..includeDeleted = includeDeleted,
+        from: personNotifierProvider,
+        name: r'personNotifierProvider',
+        debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+            ? null
+            : _$personNotifierHash,
+        dependencies: PersonNotifierFamily._dependencies,
+        allTransitiveDependencies:
+            PersonNotifierFamily._allTransitiveDependencies,
+        includeDeleted: includeDeleted,
+      );
 
   PersonNotifierProvider._internal(
     super._createNotifier, {
@@ -113,12 +103,8 @@ class PersonNotifierProvider
   final bool includeDeleted;
 
   @override
-  FutureOr<List<Person>> runNotifierBuild(
-    covariant PersonNotifier notifier,
-  ) {
-    return notifier.build(
-      includeDeleted: includeDeleted,
-    );
+  FutureOr<List<Person>> runNotifierBuild(covariant PersonNotifier notifier) {
+    return notifier.build(includeDeleted: includeDeleted);
   }
 
   @override
@@ -139,7 +125,7 @@ class PersonNotifierProvider
 
   @override
   AutoDisposeAsyncNotifierProviderElement<PersonNotifier, List<Person>>
-      createElement() {
+  createElement() {
     return _PersonNotifierProviderElement(this);
   }
 
@@ -164,12 +150,14 @@ mixin PersonNotifierRef on AutoDisposeAsyncNotifierProviderRef<List<Person>> {
 }
 
 class _PersonNotifierProviderElement
-    extends AutoDisposeAsyncNotifierProviderElement<PersonNotifier,
-        List<Person>> with PersonNotifierRef {
+    extends
+        AutoDisposeAsyncNotifierProviderElement<PersonNotifier, List<Person>>
+    with PersonNotifierRef {
   _PersonNotifierProviderElement(super.provider);
 
   @override
   bool get includeDeleted => (origin as PersonNotifierProvider).includeDeleted;
 }
+
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

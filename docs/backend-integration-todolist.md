@@ -144,15 +144,17 @@
 
 ## 12. Flutter Repository 抽象
 
-- [ ] 新增 `AuthRepository`。
-- [ ] 新增 `LedgerRepository`。
-- [ ] 新增 `PersonRepository`。
-- [ ] 新增 `TransactionRepository`。
-- [ ] 新增本地 Repository 实现，包装现有 Isar。
-- [ ] 新增远端 Repository 实现，调用后端 API。
-- [ ] Provider 改为依赖 Repository，不直接依赖 `DatabaseService`。
-- [ ] 未登录时保留本地账本模式。
-- [ ] 已登录时使用云端账本模式。
+- [x] 新增 `AuthRepository`。
+- [x] 新增 `LedgerRepository`。
+- [x] 新增 `PersonRepository`。
+- [x] 新增 `TransactionRepository`。
+- [x] 新增本地 Repository 实现，包装现有 Isar。
+- [x] 新增远端 Repository 实现，调用后端 API。
+- [x] Provider 改为依赖 Repository，不直接依赖 `DatabaseService`。
+- [x] 未登录时保留本地账本模式。
+- [x] 已登录时使用云端账本模式。
+
+说明：当前 Flutter 仍有全局人员池 UI，远端 `PersonRepository` 先支持读取，远端人员新增、编辑、删除需要后续改成账本维度人员工作流后启用。
 
 ## 13. Flutter 登录接入
 

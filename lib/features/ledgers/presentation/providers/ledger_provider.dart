@@ -12,25 +12,25 @@ class LedgerNotifier extends _$LedgerNotifier {
   }
 
   Future<List<Ledger>> _fetchLedgers() async {
-    final db = ref.read(databaseProvider);
-    return await db.getAllLedgers();
+    final repository = ref.read(ledgerRepositoryProvider);
+    return await repository.getAllLedgers();
   }
 
   Future<void> addLedger(Ledger ledger) async {
-    final db = ref.read(databaseProvider);
+    final repository = ref.read(ledgerRepositoryProvider);
     // Give it the highest sort order (put at the end)
     final currentLedgers = state.valueOrNull ?? [];
     if (currentLedgers.isNotEmpty) {
       ledger.sortOrder = currentLedgers.last.sortOrder + 1;
     }
-    await db.saveLedger(ledger);
+    await repository.saveLedger(ledger);
     // Refresh the state
     ref.invalidateSelf();
   }
 
   Future<void> updateLedger(Ledger ledger) async {
-    final db = ref.read(databaseProvider);
-    await db.saveLedger(ledger);
+    final repository = ref.read(ledgerRepositoryProvider);
+    await repository.saveLedger(ledger);
     // Refresh the state
     ref.invalidateSelf();
   }
@@ -53,15 +53,15 @@ class LedgerNotifier extends _$LedgerNotifier {
     state = AsyncValue.data(items);
 
     // Persist changes to database
-    final db = ref.read(databaseProvider);
+    final repository = ref.read(ledgerRepositoryProvider);
     for (final ledger in items) {
-      await db.saveLedger(ledger);
+      await repository.saveLedger(ledger);
     }
   }
 
   Future<void> deleteLedger(String uuid) async {
-    final db = ref.read(databaseProvider);
-    await db.deleteLedger(uuid);
+    final repository = ref.read(ledgerRepositoryProvider);
+    await repository.deleteLedger(uuid);
     // Refresh the state
     ref.invalidateSelf();
   }
