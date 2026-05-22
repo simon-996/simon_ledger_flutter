@@ -114,11 +114,11 @@
 
 ## 9. 统计接口
 
-- [ ] 实现账本汇总接口 `GET /api/ledgers/{ledgerUuid}/stats/summary`。
-- [ ] 实现分类统计接口 `GET /api/ledgers/{ledgerUuid}/stats/categories`。
-- [ ] 实现人员结余接口 `GET /api/ledgers/{ledgerUuid}/stats/people-balances`。
-- [ ] 统计逻辑按参与人平均分摊。
-- [ ] 统计排除软删除流水。
+- [x] 实现账本汇总接口 `GET /api/ledgers/{ledgerUuid}/stats/summary`。
+- [x] 实现分类统计接口 `GET /api/ledgers/{ledgerUuid}/stats/categories`。
+- [x] 实现人员结余接口 `GET /api/ledgers/{ledgerUuid}/stats/people-balances`。
+- [x] 统计逻辑按参与人平均分摊。
+- [x] 统计排除软删除流水。
 
 ## 10. 幂等和同步基础
 
