@@ -74,21 +74,12 @@ class RemoteLedgerRepository implements LedgerRepository {
       return;
     }
 
-    try {
-      await _apiClient.put<Ledger>(
-        '/api/ledgers/${ledger.uuid}',
-        data: data,
-        idempotencyKey: DateTime.now().microsecondsSinceEpoch.toString(),
-        fromJson: _ledgerFromJson,
-      );
-    } catch (_) {
-      await _apiClient.post<Ledger>(
-        '/api/ledgers',
-        data: data,
-        idempotencyKey: ledger.uuid,
-        fromJson: _ledgerFromJson,
-      );
-    }
+    await _apiClient.put<Ledger>(
+      '/api/ledgers/${ledger.uuid}',
+      data: data,
+      idempotencyKey: 'update-ledger-${ledger.uuid}',
+      fromJson: _ledgerFromJson,
+    );
   }
 
   bool _looksLikeRemoteUuid(String uuid) {

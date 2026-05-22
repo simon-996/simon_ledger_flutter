@@ -76,6 +76,12 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
       return;
     }
 
+    final oldAmount = widget.transaction.amount;
+    final oldType = widget.transaction.type;
+    final oldCategory = widget.transaction.category;
+    final oldNote = widget.transaction.note;
+    final oldPersonUuids = List<String>.from(widget.transaction.personUuids);
+
     widget.transaction.amount = amount;
     widget.transaction.type = _transactionType;
     widget.transaction.category = _selectedCategory;
@@ -87,6 +93,11 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
           .read(transactionNotifierProvider(widget.ledger.uuid).notifier)
           .updateTransaction(widget.transaction);
     } catch (e) {
+      widget.transaction.amount = oldAmount;
+      widget.transaction.type = oldType;
+      widget.transaction.category = oldCategory;
+      widget.transaction.note = oldNote;
+      widget.transaction.personUuids = oldPersonUuids;
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,

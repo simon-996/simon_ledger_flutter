@@ -168,6 +168,11 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     if (!mounted || result == null) return;
 
+    final oldName = ledger.name;
+    final oldBaseCurrencyCode = ledger.baseCurrencyCode;
+    final oldExchangeRateToCNY = ledger.exchangeRateToCNY;
+    final oldPersonUuids = List<String>.from(ledger.personUuids);
+
     ledger.name = result.name;
     ledger.baseCurrencyCode = result.baseCurrencyCode;
     ledger.exchangeRateToCNY = result.exchangeRateToCNY;
@@ -176,6 +181,10 @@ class _HomePageState extends ConsumerState<HomePage> {
     try {
       await ref.read(ledgerNotifierProvider.notifier).updateLedger(ledger);
     } catch (e) {
+      ledger.name = oldName;
+      ledger.baseCurrencyCode = oldBaseCurrencyCode;
+      ledger.exchangeRateToCNY = oldExchangeRateToCNY;
+      ledger.personUuids = oldPersonUuids;
       _showWriteError(e);
     }
   }
