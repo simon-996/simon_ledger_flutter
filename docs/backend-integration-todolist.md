@@ -103,14 +103,14 @@
 
 ## 8. 成员和邀请
 
-- [ ] 实现成员列表接口 `GET /api/ledgers/{ledgerUuid}/members`。
-- [ ] 实现修改成员角色接口 `PUT /api/ledgers/{ledgerUuid}/members/{memberUuid}/role`。
-- [ ] 实现移除成员接口 `DELETE /api/ledgers/{ledgerUuid}/members/{memberUuid}`。
-- [ ] 实现创建邀请接口 `POST /api/ledgers/{ledgerUuid}/invites`。
-- [ ] 实现查询邀请接口 `GET /api/invites/{code}`。
-- [ ] 实现加入账本接口 `POST /api/invites/{code}/join`。
-- [ ] 邀请码支持过期时间。
-- [ ] 邀请码支持默认角色。
+- [x] 实现成员列表接口 `GET /api/ledgers/{ledgerUuid}/members`。
+- [x] 实现修改成员角色接口 `PUT /api/ledgers/{ledgerUuid}/members/{memberUuid}/role`。
+- [x] 实现移除成员接口 `DELETE /api/ledgers/{ledgerUuid}/members/{memberUuid}`。
+- [x] 实现创建邀请接口 `POST /api/ledgers/{ledgerUuid}/invites`。
+- [x] 实现查询邀请接口 `GET /api/invites/{code}`。
+- [x] 实现加入账本接口 `POST /api/invites/{code}/join`。
+- [x] 邀请码支持过期时间。
+- [x] 邀请码支持默认角色。
 
 ## 9. 统计接口
 
