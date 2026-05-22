@@ -86,7 +86,7 @@ class RemotePersonRepository implements PersonRepository {
       await _apiClient.put<Person>(
         '/api/ledgers/$ledgerUuid/people/${person.uuid}',
         data: data,
-        idempotencyKey: 'update-person-${person.uuid}',
+        idempotencyKey: _operationKey('update-person', person.uuid),
         fromJson: _personFromJson,
       );
       return;
@@ -117,6 +117,10 @@ class RemotePersonRepository implements PersonRepository {
 
   bool _looksLikeRemoteUuid(String uuid) {
     return RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(uuid);
+  }
+
+  String _operationKey(String prefix, String uuid) {
+    return '$prefix-$uuid-${DateTime.now().microsecondsSinceEpoch}';
   }
 
   static Person _personFromJson(Object? json) {

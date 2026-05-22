@@ -65,25 +65,34 @@ class RemoteLedgerRepository implements LedgerRepository {
     };
 
     if (!_looksLikeRemoteUuid(ledger.uuid)) {
-      await _apiClient.post<Ledger>(
+      final saved = await _apiClient.post<Ledger>(
         '/api/ledgers',
         data: data,
-        idempotencyKey: DateTime.now().microsecondsSinceEpoch.toString(),
+        idempotencyKey: ledger.uuid,
         fromJson: _ledgerFromJson,
       );
+      ledger
+        ..uuid = saved.uuid
+        ..name = saved.name
+        ..baseCurrencyCode = saved.baseCurrencyCode
+        ..exchangeRateToCNY = saved.exchangeRateToCNY;
       return;
     }
 
     await _apiClient.put<Ledger>(
       '/api/ledgers/${ledger.uuid}',
       data: data,
-      idempotencyKey: 'update-ledger-${ledger.uuid}',
+      idempotencyKey: _operationKey('update-ledger', ledger.uuid),
       fromJson: _ledgerFromJson,
     );
   }
 
   bool _looksLikeRemoteUuid(String uuid) {
     return RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(uuid);
+  }
+
+  String _operationKey(String prefix, String uuid) {
+    return '$prefix-$uuid-${DateTime.now().microsecondsSinceEpoch}';
   }
 
   @override
