@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/models/person.dart';
+import '../../../../core/models/person_lookup.dart';
 import '../../../../core/models/ledger.dart';
 import '../../../../core/models/transaction_record.dart';
 import '../../../../core/widgets/app_components.dart';
@@ -32,6 +33,7 @@ class TransactionDetailSheet extends ConsumerWidget {
     final splitAmount = transaction.personUuids.isNotEmpty
         ? transaction.amount / transaction.personUuids.length
         : transaction.amount;
+    final personMap = peopleByUuid(peoplePool);
 
     return SafeArea(
       top: false,
@@ -189,12 +191,7 @@ class TransactionDetailSheet extends ConsumerWidget {
                       ),
                       const SizedBox(height: 10),
                       ...transaction.personUuids.map((pid) {
-                        final person = peoplePool.firstWhere(
-                          (p) => p.uuid == pid,
-                          orElse: () => Person()
-                            ..uuid = ''
-                            ..name = '未知',
-                        );
+                        final person = personOrFallback(personMap, pid);
 
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 8),

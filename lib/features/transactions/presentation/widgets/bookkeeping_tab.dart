@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/models/ledger.dart';
 import '../../../../core/models/person.dart';
+import '../../../../core/models/person_lookup.dart';
 import '../../../../core/models/transaction_record.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
@@ -250,13 +251,9 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
       return;
     }
 
+    final personMap = peopleByUuid(peoplePool);
     final selectedPeople = _selectedPersonIds.map((pid) {
-      return peoplePool.firstWhere(
-        (p) => p.uuid == pid,
-        orElse: () => Person()
-          ..uuid = ''
-          ..name = '未知',
-      );
+      return personOrFallback(personMap, pid);
     }).toList();
 
     final record = TransactionRecord()
@@ -483,6 +480,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                           return const SizedBox.shrink();
                         }
 
+                        final personMap = peopleByUuid(peoplePool);
                         return AppSectionCard(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -515,11 +513,9 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                                 spacing: 8,
                                 runSpacing: 8,
                                 children: selectedLedger.personUuids.map((pid) {
-                                  final person = peoplePool.firstWhere(
-                                    (p) => p.uuid == pid,
-                                    orElse: () => Person()
-                                      ..uuid = ''
-                                      ..name = '未知',
+                                  final person = personOrFallback(
+                                    personMap,
+                                    pid,
                                   );
                                   final isSelected = _selectedPersonIds
                                       .contains(pid);

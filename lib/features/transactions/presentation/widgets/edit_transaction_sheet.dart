@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/models/transaction_record.dart';
-import '../../../../core/models/person.dart';
+import '../../../../core/models/person_lookup.dart';
 import '../../../../core/models/ledger.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
@@ -239,6 +239,7 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                           if (widget.ledger.personUuids.isEmpty) {
                             return const SizedBox.shrink();
                           }
+                          final personMap = peopleByUuid(peoplePool);
                           return AppSectionCard(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -256,11 +257,9 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                                   children: widget.ledger.personUuids.map((
                                     pid,
                                   ) {
-                                    final person = peoplePool.firstWhere(
-                                      (p) => p.uuid == pid,
-                                      orElse: () => Person()
-                                        ..uuid = ''
-                                        ..name = '未知',
+                                    final person = personOrFallback(
+                                      personMap,
+                                      pid,
                                     );
                                     final isSelected = _selectedPersonIds
                                         .contains(pid);

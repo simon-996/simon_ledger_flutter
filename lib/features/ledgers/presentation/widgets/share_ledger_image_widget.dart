@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/models/ledger.dart';
 import '../../../../core/models/person.dart';
+import '../../../../core/models/person_lookup.dart';
 import '../../../../core/models/transaction_record.dart';
 
 class ShareLedgerImageWidget extends StatelessWidget {
@@ -24,8 +25,13 @@ class ShareLedgerImageWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final summary = summaryTransactions ?? transactions;
-    final totalExpense = summary.where((t) => t.type == 0).fold(0.0, (sum, t) => sum + t.amount);
-    final totalIncome = summary.where((t) => t.type == 1).fold(0.0, (sum, t) => sum + t.amount);
+    final personMap = peopleByUuid(peoplePool);
+    final totalExpense = summary
+        .where((t) => t.type == 0)
+        .fold(0.0, (sum, t) => sum + t.amount);
+    final totalIncome = summary
+        .where((t) => t.type == 1)
+        .fold(0.0, (sum, t) => sum + t.amount);
     final balance = totalIncome - totalExpense;
     final Map<String, double> personBalances = {};
     for (final t in summary) {
@@ -41,10 +47,7 @@ class ShareLedgerImageWidget extends StatelessWidget {
       }
     }
     final peopleInImage = personBalances.keys.map((pid) {
-      return peoplePool.firstWhere(
-        (p) => p.uuid == pid,
-        orElse: () => Person()..uuid = pid..name = '未知'..avatar = '👤',
-      );
+      return personOrFallback(personMap, pid);
     }).toList();
 
     return Container(
@@ -93,8 +96,16 @@ class ShareLedgerImageWidget extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _buildSummaryItem('总收入', totalIncome, const Color(0xFF10B981)),
-                    _buildSummaryItem('总支出', totalExpense, const Color(0xFFEF4444)),
+                    _buildSummaryItem(
+                      '总收入',
+                      totalIncome,
+                      const Color(0xFF10B981),
+                    ),
+                    _buildSummaryItem(
+                      '总支出',
+                      totalExpense,
+                      const Color(0xFFEF4444),
+                    ),
                   ],
                 ),
               ],
@@ -117,7 +128,10 @@ class ShareLedgerImageWidget extends StatelessWidget {
                   final isPositive = pBalance >= 0;
                   return Container(
                     width: 100,
-                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 8,
+                      horizontal: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF9FAFB),
                       borderRadius: BorderRadius.circular(12),
@@ -131,7 +145,10 @@ class ShareLedgerImageWidget extends StatelessWidget {
                         Text(
                           p.name,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 11, color: Color(0xFF4B5563)),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFF4B5563),
+                          ),
                         ),
                         const SizedBox(height: 2),
                         Text(
@@ -139,7 +156,9 @@ class ShareLedgerImageWidget extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
-                            color: isPositive ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                            color: isPositive
+                                ? const Color(0xFF10B981)
+                                : const Color(0xFFEF4444),
                           ),
                         ),
                       ],
@@ -157,14 +176,19 @@ class ShareLedgerImageWidget extends StatelessWidget {
             ),
             child: Column(
               children: transactions.map((t) {
-                final dateStr = '${t.createdAt.year}-${t.createdAt.month.toString().padLeft(2, '0')}-${t.createdAt.day.toString().padLeft(2, '0')} ${t.createdAt.hour.toString().padLeft(2, '0')}:${t.createdAt.minute.toString().padLeft(2, '0')}';
-                final peopleAvatars = t.personUuids.map((pid) {
-                  final person = peoplePool.firstWhere((p) => p.uuid == pid, orElse: () => Person()..uuid = ''..name = '未知'..avatar = '👤');
-                  return person.avatar;
-                }).join('');
+                final dateStr =
+                    '${t.createdAt.year}-${t.createdAt.month.toString().padLeft(2, '0')}-${t.createdAt.day.toString().padLeft(2, '0')} ${t.createdAt.hour.toString().padLeft(2, '0')}:${t.createdAt.minute.toString().padLeft(2, '0')}';
+                final peopleAvatars = avatarsForPeople(
+                  personMap,
+                  t.personUuids,
+                  fallbackAvatar: '👤',
+                );
 
                 return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   decoration: const BoxDecoration(
                     border: Border(
                       bottom: BorderSide(color: Color(0xFFF3F4F6), width: 1),
@@ -181,13 +205,19 @@ class ShareLedgerImageWidget extends StatelessWidget {
                               children: [
                                 Text(
                                   t.category,
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
                                     peopleAvatars,
-                                    style: const TextStyle(fontSize: 14, color: Color(0xFF4B5563)),
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      color: Color(0xFF4B5563),
+                                    ),
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
@@ -196,13 +226,20 @@ class ShareLedgerImageWidget extends StatelessWidget {
                             const SizedBox(height: 4),
                             Text(
                               dateStr,
-                              style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF9CA3AF),
+                              ),
                             ),
                             if (t.note.isNotEmpty) ...[
                               const SizedBox(height: 2),
                               Text(
                                 t.note,
-                                style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280), fontStyle: FontStyle.italic),
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: Color(0xFF6B7280),
+                                  fontStyle: FontStyle.italic,
+                                ),
                               ),
                             ],
                           ],
@@ -214,7 +251,9 @@ class ShareLedgerImageWidget extends StatelessWidget {
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
-                          color: t.type == 0 ? const Color(0xFFEF4444) : const Color(0xFF10B981),
+                          color: t.type == 0
+                              ? const Color(0xFFEF4444)
+                              : const Color(0xFF10B981),
                         ),
                       ),
                     ],
