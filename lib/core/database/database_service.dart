@@ -113,6 +113,24 @@ class DatabaseService {
         .findAll();
   }
 
+  Future<List<TransactionRecord>> getTransactionsForLedgers(
+    List<String> ledgerUuids, {
+    bool includeDeleted = false,
+  }) async {
+    if (ledgerUuids.isEmpty) return [];
+
+    final query = isar.transactionRecords.filter().anyOf(
+      ledgerUuids,
+      (q, ledgerUuid) => q.ledgerUuidEqualTo(ledgerUuid),
+    );
+
+    if (includeDeleted) {
+      return await query.findAll();
+    }
+
+    return await query.isDeletedEqualTo(false).findAll();
+  }
+
   Future<void> saveTransaction(TransactionRecord transaction) async {
     await isar.writeTxn(() async {
       await isar.transactionRecords.put(transaction);
