@@ -90,16 +90,16 @@
 
 ## 7. 流水接口
 
-- [ ] 实现流水列表接口 `GET /api/ledgers/{ledgerUuid}/transactions`。
-- [ ] 支持流水列表查询参数：`startAt`、`endAt`、`type`、`category`、`personUuid`、`page`、`pageSize`。
-- [ ] 实现新增流水接口 `POST /api/ledgers/{ledgerUuid}/transactions`。
-- [ ] 新增流水必须传 `clientOperationId`。
-- [ ] 实现流水详情接口 `GET /api/ledgers/{ledgerUuid}/transactions/{transactionUuid}`。
-- [ ] 实现编辑流水接口 `PUT /api/ledgers/{ledgerUuid}/transactions/{transactionUuid}`。
-- [ ] 编辑流水校验 `version`。
-- [ ] 实现删除流水接口 `DELETE /api/ledgers/{ledgerUuid}/transactions/{transactionUuid}`。
-- [ ] 删除流水校验 `version`。
-- [ ] 版本冲突返回 `409001`。
+- [x] 实现流水列表接口 `GET /api/ledgers/{ledgerUuid}/transactions`。
+- [x] 支持流水列表查询参数：`startAt`、`endAt`、`type`、`category`、`personUuid`、`page`、`pageSize`。
+- [x] 实现新增流水接口 `POST /api/ledgers/{ledgerUuid}/transactions`。
+- [x] 新增流水必须传 `clientOperationId`。
+- [x] 实现流水详情接口 `GET /api/ledgers/{ledgerUuid}/transactions/{transactionUuid}`。
+- [x] 实现编辑流水接口 `PUT /api/ledgers/{ledgerUuid}/transactions/{transactionUuid}`。
+- [x] 编辑流水校验 `version`。
+- [x] 实现删除流水接口 `DELETE /api/ledgers/{ledgerUuid}/transactions/{transactionUuid}`。
+- [x] 删除流水校验 `version`。
+- [x] 版本冲突返回 `409001`。
 
 ## 8. 成员和邀请
 
