@@ -45,6 +45,13 @@ final ledgerRepositoryProvider = Provider<LedgerRepository>((ref) {
 });
 
 final personRepositoryProvider = Provider<PersonRepository>((ref) {
+  final token = ref.watch(authTokenProvider).valueOrNull;
+  if (token != null && token.isValid) {
+    return RemotePersonRepository(
+      apiClient: ref.watch(apiClientProvider),
+      ledgerRepository: ref.watch(ledgerRepositoryProvider),
+    );
+  }
   return LocalPersonRepository(ref.watch(databaseProvider));
 });
 

@@ -37,12 +37,23 @@ class RemoteLedgerRepository implements LedgerRepository {
   final ApiClient _apiClient;
 
   @override
-  Future<List<Ledger>> getAllLedgers({bool includeDeleted = false}) {
-    return _apiClient.get<List<Ledger>>(
+  Future<List<Ledger>> getAllLedgers({bool includeDeleted = false}) async {
+    final ledgers = await _apiClient.get<List<Ledger>>(
       '/api/ledgers',
       fromJson: (json) =>
           (json! as List<dynamic>).map(_ledgerFromJson).toList(),
     );
+    for (final ledger in ledgers) {
+      ledger.personUuids = await _apiClient.get<List<String>>(
+        '/api/ledgers/${ledger.uuid}/people',
+        fromJson: (json) => (json! as List<dynamic>)
+            .map(
+              (person) => (person as Map<String, dynamic>)['uuid'].toString(),
+            )
+            .toList(),
+      );
+    }
+    return ledgers;
   }
 
   @override
@@ -53,7 +64,7 @@ class RemoteLedgerRepository implements LedgerRepository {
       'exchangeRateToCny': ledger.exchangeRateToCNY,
     };
 
-    if (ledger.uuid.isEmpty) {
+    if (!_looksLikeRemoteUuid(ledger.uuid)) {
       await _apiClient.post<Ledger>(
         '/api/ledgers',
         data: data,
@@ -78,6 +89,10 @@ class RemoteLedgerRepository implements LedgerRepository {
         fromJson: _ledgerFromJson,
       );
     }
+  }
+
+  bool _looksLikeRemoteUuid(String uuid) {
+    return RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(uuid);
   }
 
   @override

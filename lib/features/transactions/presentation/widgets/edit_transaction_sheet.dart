@@ -82,9 +82,17 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
     widget.transaction.note = _noteController.text.trim();
     widget.transaction.personUuids = _selectedPersonIds.toList();
 
-    await ref
-        .read(transactionNotifierProvider(widget.ledger.uuid).notifier)
-        .updateTransaction(widget.transaction);
+    try {
+      await ref
+          .read(transactionNotifierProvider(widget.ledger.uuid).notifier)
+          .updateTransaction(widget.transaction);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('保存失败，请重试：$e')));
+      return;
+    }
 
     if (mounted) {
       Navigator.of(context).pop(true); // Return true to indicate success
@@ -96,7 +104,10 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final maxHeight = MediaQuery.sizeOf(context).height * 0.86;
     final peopleAsyncValue = ref.watch(
-      personNotifierProvider(includeDeleted: true),
+      personNotifierProvider(
+        includeDeleted: true,
+        ledgerUuid: widget.ledger.uuid,
+      ),
     );
 
     return AnimatedPadding(

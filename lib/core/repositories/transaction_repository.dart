@@ -107,10 +107,21 @@ class RemoteTransactionRepository implements TransactionRepository {
       'personUuids': transaction.personUuids,
     };
 
-    await _apiClient.post<TransactionRecord>(
-      '/api/ledgers/${transaction.ledgerUuid}/transactions',
-      data: data,
-      idempotencyKey: transaction.uuid,
+    final version = _versionByUuid[transaction.uuid];
+    if (version == null) {
+      await _apiClient.post<TransactionRecord>(
+        '/api/ledgers/${transaction.ledgerUuid}/transactions',
+        data: data,
+        idempotencyKey: transaction.uuid,
+        fromJson: _transactionFromJson,
+      );
+      return;
+    }
+
+    await _apiClient.put<TransactionRecord>(
+      '/api/ledgers/${transaction.ledgerUuid}/transactions/${transaction.uuid}',
+      data: {...data, 'version': version},
+      idempotencyKey: 'update-transaction-${transaction.uuid}-$version',
       fromJson: _transactionFromJson,
     );
   }

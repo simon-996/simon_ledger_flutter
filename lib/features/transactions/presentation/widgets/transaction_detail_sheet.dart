@@ -133,12 +133,21 @@ class TransactionDetailSheet extends ConsumerWidget {
                       );
 
                       if (confirm == true && context.mounted) {
+                        final messenger = ScaffoldMessenger.of(context);
                         Navigator.pop(context);
-                        ref
-                            .read(
-                              transactionNotifierProvider(ledger.uuid).notifier,
-                            )
-                            .deleteTransaction(transaction.uuid);
+                        try {
+                          await ref
+                              .read(
+                                transactionNotifierProvider(
+                                  ledger.uuid,
+                                ).notifier,
+                              )
+                              .deleteTransaction(transaction.uuid);
+                        } catch (e) {
+                          messenger.showSnackBar(
+                            SnackBar(content: Text('删除失败，请重试：$e')),
+                          );
+                        }
                       }
                     },
                   ),

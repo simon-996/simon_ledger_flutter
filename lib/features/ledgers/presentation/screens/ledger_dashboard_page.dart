@@ -185,7 +185,10 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
       transactionNotifierProvider(widget.ledger.uuid),
     );
     final peopleAsyncValue = ref.watch(
-      personNotifierProvider(includeDeleted: true),
+      personNotifierProvider(
+        includeDeleted: true,
+        ledgerUuid: widget.ledger.uuid,
+      ),
     );
 
     return Scaffold(

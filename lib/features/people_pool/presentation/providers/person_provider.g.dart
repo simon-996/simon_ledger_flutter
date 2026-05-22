@@ -6,7 +6,7 @@ part of 'person_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$personNotifierHash() => r'c48a4a95b47f2a71ca106f225f99ace2eeb4a41e';
+String _$personNotifierHash() => r'e268b9f3350bbc029998c66b5a2cfce0a6ce3faf';
 
 /// Copied from Dart SDK
 class _SystemHash {
@@ -32,8 +32,12 @@ class _SystemHash {
 abstract class _$PersonNotifier
     extends BuildlessAutoDisposeAsyncNotifier<List<Person>> {
   late final bool includeDeleted;
+  late final String? ledgerUuid;
 
-  FutureOr<List<Person>> build({bool includeDeleted = false});
+  FutureOr<List<Person>> build({
+    bool includeDeleted = false,
+    String? ledgerUuid,
+  });
 }
 
 /// See also [PersonNotifier].
@@ -46,15 +50,24 @@ class PersonNotifierFamily extends Family<AsyncValue<List<Person>>> {
   const PersonNotifierFamily();
 
   /// See also [PersonNotifier].
-  PersonNotifierProvider call({bool includeDeleted = false}) {
-    return PersonNotifierProvider(includeDeleted: includeDeleted);
+  PersonNotifierProvider call({
+    bool includeDeleted = false,
+    String? ledgerUuid,
+  }) {
+    return PersonNotifierProvider(
+      includeDeleted: includeDeleted,
+      ledgerUuid: ledgerUuid,
+    );
   }
 
   @override
   PersonNotifierProvider getProviderOverride(
     covariant PersonNotifierProvider provider,
   ) {
-    return call(includeDeleted: provider.includeDeleted);
+    return call(
+      includeDeleted: provider.includeDeleted,
+      ledgerUuid: provider.ledgerUuid,
+    );
   }
 
   static const Iterable<ProviderOrFamily>? _dependencies = null;
@@ -76,9 +89,11 @@ class PersonNotifierFamily extends Family<AsyncValue<List<Person>>> {
 class PersonNotifierProvider
     extends AutoDisposeAsyncNotifierProviderImpl<PersonNotifier, List<Person>> {
   /// See also [PersonNotifier].
-  PersonNotifierProvider({bool includeDeleted = false})
+  PersonNotifierProvider({bool includeDeleted = false, String? ledgerUuid})
     : this._internal(
-        () => PersonNotifier()..includeDeleted = includeDeleted,
+        () => PersonNotifier()
+          ..includeDeleted = includeDeleted
+          ..ledgerUuid = ledgerUuid,
         from: personNotifierProvider,
         name: r'personNotifierProvider',
         debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
@@ -88,6 +103,7 @@ class PersonNotifierProvider
         allTransitiveDependencies:
             PersonNotifierFamily._allTransitiveDependencies,
         includeDeleted: includeDeleted,
+        ledgerUuid: ledgerUuid,
       );
 
   PersonNotifierProvider._internal(
@@ -98,13 +114,18 @@ class PersonNotifierProvider
     required super.debugGetCreateSourceHash,
     required super.from,
     required this.includeDeleted,
+    required this.ledgerUuid,
   }) : super.internal();
 
   final bool includeDeleted;
+  final String? ledgerUuid;
 
   @override
   FutureOr<List<Person>> runNotifierBuild(covariant PersonNotifier notifier) {
-    return notifier.build(includeDeleted: includeDeleted);
+    return notifier.build(
+      includeDeleted: includeDeleted,
+      ledgerUuid: ledgerUuid,
+    );
   }
 
   @override
@@ -112,13 +133,16 @@ class PersonNotifierProvider
     return ProviderOverride(
       origin: this,
       override: PersonNotifierProvider._internal(
-        () => create()..includeDeleted = includeDeleted,
+        () => create()
+          ..includeDeleted = includeDeleted
+          ..ledgerUuid = ledgerUuid,
         from: from,
         name: null,
         dependencies: null,
         allTransitiveDependencies: null,
         debugGetCreateSourceHash: null,
         includeDeleted: includeDeleted,
+        ledgerUuid: ledgerUuid,
       ),
     );
   }
@@ -132,13 +156,15 @@ class PersonNotifierProvider
   @override
   bool operator ==(Object other) {
     return other is PersonNotifierProvider &&
-        other.includeDeleted == includeDeleted;
+        other.includeDeleted == includeDeleted &&
+        other.ledgerUuid == ledgerUuid;
   }
 
   @override
   int get hashCode {
     var hash = _SystemHash.combine(0, runtimeType.hashCode);
     hash = _SystemHash.combine(hash, includeDeleted.hashCode);
+    hash = _SystemHash.combine(hash, ledgerUuid.hashCode);
 
     return _SystemHash.finish(hash);
   }
@@ -147,6 +173,9 @@ class PersonNotifierProvider
 mixin PersonNotifierRef on AutoDisposeAsyncNotifierProviderRef<List<Person>> {
   /// The parameter `includeDeleted` of this provider.
   bool get includeDeleted;
+
+  /// The parameter `ledgerUuid` of this provider.
+  String? get ledgerUuid;
 }
 
 class _PersonNotifierProviderElement
@@ -157,6 +186,8 @@ class _PersonNotifierProviderElement
 
   @override
   bool get includeDeleted => (origin as PersonNotifierProvider).includeDeleted;
+  @override
+  String? get ledgerUuid => (origin as PersonNotifierProvider).ledgerUuid;
 }
 
 // ignore_for_file: type=lint

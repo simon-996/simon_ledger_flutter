@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/di/providers.dart';
 import '../../../../core/models/ledger.dart';
 import '../../../../core/models/person.dart';
 import '../../../../core/widgets/app_components.dart';
@@ -62,32 +63,42 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
   }
 
   Future<void> _addNewPerson() async {
+    final ledgerUuid = _personLedgerUuid;
     final result = await showDialog<Person>(
       context: context,
       builder: (context) => const PersonEditDialog(),
     );
 
     if (result != null && mounted) {
-      await ref
-          .read(personNotifierProvider().notifier)
-          .addOrUpdatePerson(result);
+      try {
+        await ref
+            .read(personNotifierProvider(ledgerUuid: ledgerUuid).notifier)
+            .addOrUpdatePerson(result);
 
-      setState(() {
-        _selectedPersonIds.add(result.uuid);
-      });
+        setState(() {
+          _selectedPersonIds.add(result.uuid);
+        });
+      } catch (e) {
+        _showWriteError(e);
+      }
     }
   }
 
   Future<void> _editPerson(Person person) async {
+    final ledgerUuid = _personLedgerUuid;
     final result = await showDialog<Person>(
       context: context,
       builder: (context) => PersonEditDialog(person: person),
     );
 
     if (result != null && mounted) {
-      await ref
-          .read(personNotifierProvider().notifier)
-          .addOrUpdatePerson(result);
+      try {
+        await ref
+            .read(personNotifierProvider(ledgerUuid: ledgerUuid).notifier)
+            .addOrUpdatePerson(result);
+      } catch (e) {
+        _showWriteError(e);
+      }
     }
   }
 
@@ -114,13 +125,28 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
     );
 
     if (confirm == true && mounted) {
-      await ref
-          .read(personNotifierProvider().notifier)
-          .deletePerson(person.uuid);
-      setState(() {
-        _selectedPersonIds.remove(person.uuid);
-      });
+      try {
+        await ref
+            .read(
+              personNotifierProvider(ledgerUuid: _personLedgerUuid).notifier,
+            )
+            .deletePerson(person.uuid);
+        setState(() {
+          _selectedPersonIds.remove(person.uuid);
+        });
+      } catch (e) {
+        _showWriteError(e);
+      }
     }
+  }
+
+  String? get _personLedgerUuid => widget.existingLedger?.uuid;
+
+  void _showWriteError(Object error) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('操作失败，请重试：$error')));
   }
 
   void _showPersonOptions(Person person) {
@@ -163,9 +189,18 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final canSubmit = _nameController.text.trim().isNotEmpty;
     final maxHeight = MediaQuery.sizeOf(context).height * 0.86;
-    final peopleAsyncValue = ref.watch(
-      personNotifierProvider(includeDeleted: false),
-    );
+    final token = ref.watch(authTokenProvider).valueOrNull;
+    final isCloudMode = token != null && token.isValid;
+    final personLedgerUuid = isCloudMode ? widget.existingLedger?.uuid : null;
+    final canManagePeople = !isCloudMode || personLedgerUuid != null;
+    final peopleAsyncValue = canManagePeople
+        ? ref.watch(
+            personNotifierProvider(
+              includeDeleted: false,
+              ledgerUuid: personLedgerUuid,
+            ),
+          )
+        : null;
 
     return AnimatedPadding(
       duration: const Duration(milliseconds: 150),
@@ -250,7 +285,9 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
                             AppSectionHeader(
                               title: '账本人员',
                               trailing: TextButton.icon(
-                                onPressed: _addNewPerson,
+                                onPressed: canManagePeople
+                                    ? _addNewPerson
+                                    : null,
                                 icon: const Icon(
                                   Icons.person_add_alt_1_rounded,
                                   size: 18,
@@ -259,64 +296,70 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
                               ),
                             ),
                             const SizedBox(height: 10),
-                            peopleAsyncValue.when(
-                              loading: () => const Center(
-                                child: CircularProgressIndicator(),
-                              ),
-                              error: (e, st) => Text('加载人员失败: $e'),
-                              data: (peoplePool) {
-                                if (widget.existingLedger == null &&
-                                    _selectedPersonIds.isEmpty &&
-                                    peoplePool.isNotEmpty) {
-                                  WidgetsBinding.instance.addPostFrameCallback((
-                                    _,
-                                  ) {
-                                    if (!mounted) return;
-                                    final self = peoplePool.firstWhere(
-                                      (p) => p.name == '自己',
-                                      orElse: () => peoplePool.first,
-                                    );
-                                    setState(
-                                      () => _selectedPersonIds.add(self.uuid),
-                                    );
-                                  });
-                                }
+                            if (!canManagePeople)
+                              const Text('云端账本创建后，可再次编辑账本人员。')
+                            else
+                              peopleAsyncValue!.when(
+                                loading: () => const Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                                error: (e, st) => Text('加载人员失败: $e'),
+                                data: (peoplePool) {
+                                  if (widget.existingLedger == null &&
+                                      _selectedPersonIds.isEmpty &&
+                                      peoplePool.isNotEmpty) {
+                                    WidgetsBinding.instance
+                                        .addPostFrameCallback((_) {
+                                          if (!mounted) return;
+                                          final self = peoplePool.firstWhere(
+                                            (p) => p.name == '自己',
+                                            orElse: () => peoplePool.first,
+                                          );
+                                          setState(
+                                            () => _selectedPersonIds.add(
+                                              self.uuid,
+                                            ),
+                                          );
+                                        });
+                                  }
 
-                                return Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: peoplePool.map((person) {
-                                    final isSelected = _selectedPersonIds
-                                        .contains(person.uuid);
-                                    return GestureDetector(
-                                      onLongPress: () =>
-                                          _showPersonOptions(person),
-                                      child: FilterChip(
-                                        avatar: Text(
-                                          person.avatar,
-                                          style: const TextStyle(fontSize: 16),
+                                  return Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: peoplePool.map((person) {
+                                      final isSelected = _selectedPersonIds
+                                          .contains(person.uuid);
+                                      return GestureDetector(
+                                        onLongPress: () =>
+                                            _showPersonOptions(person),
+                                        child: FilterChip(
+                                          avatar: Text(
+                                            person.avatar,
+                                            style: const TextStyle(
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                          label: Text(person.name),
+                                          selected: isSelected,
+                                          onSelected: (selected) {
+                                            setState(() {
+                                              if (selected) {
+                                                _selectedPersonIds.add(
+                                                  person.uuid,
+                                                );
+                                              } else {
+                                                _selectedPersonIds.remove(
+                                                  person.uuid,
+                                                );
+                                              }
+                                            });
+                                          },
                                         ),
-                                        label: Text(person.name),
-                                        selected: isSelected,
-                                        onSelected: (selected) {
-                                          setState(() {
-                                            if (selected) {
-                                              _selectedPersonIds.add(
-                                                person.uuid,
-                                              );
-                                            } else {
-                                              _selectedPersonIds.remove(
-                                                person.uuid,
-                                              );
-                                            }
-                                          });
-                                        },
-                                      ),
-                                    );
-                                  }).toList(),
-                                );
-                              },
-                            ),
+                                      );
+                                    }).toList(),
+                                  );
+                                },
+                              ),
                           ],
                         ),
                       ),

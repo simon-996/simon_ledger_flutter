@@ -168,15 +168,15 @@
 
 ## 14. Flutter 云账本接入
 
-- [ ] 云端账本列表接入 `GET /api/ledgers`。
-- [ ] 云端创建账本接入 `POST /api/ledgers`。
-- [ ] 云端编辑账本接入 `PUT /api/ledgers/{ledgerUuid}`。
-- [ ] 云端删除账本接入 `DELETE /api/ledgers/{ledgerUuid}`。
-- [ ] 云端参与人列表接入。
-- [ ] 云端新增、编辑、删除参与人接入。
-- [ ] 云端流水列表接入。
-- [ ] 云端新增、编辑、删除流水接入。
-- [ ] 写操作失败时提示用户重试。
+- [x] 云端账本列表接入 `GET /api/ledgers`。
+- [x] 云端创建账本接入 `POST /api/ledgers`。
+- [x] 云端编辑账本接入 `PUT /api/ledgers/{ledgerUuid}`。
+- [x] 云端删除账本接入 `DELETE /api/ledgers/{ledgerUuid}`。
+- [x] 云端参与人列表接入。
+- [x] 云端新增、编辑、删除参与人接入。
+- [x] 云端流水列表接入。
+- [x] 云端新增、编辑、删除流水接入。
+- [x] 写操作失败时提示用户重试。
 
 ## 15. 本地数据导入云端
 

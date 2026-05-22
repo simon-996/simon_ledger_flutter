@@ -150,8 +150,11 @@ class _HomePageState extends ConsumerState<HomePage> {
       ..exchangeRateToCNY = result.exchangeRateToCNY
       ..personUuids = result.personIds;
 
-    // 直接通过 Provider 操作，不再依赖全局 dbService，且 UI 会自动更新
-    await ref.read(ledgerNotifierProvider.notifier).addLedger(newLedger);
+    try {
+      await ref.read(ledgerNotifierProvider.notifier).addLedger(newLedger);
+    } catch (e) {
+      _showWriteError(e);
+    }
   }
 
   void _editLedger(Ledger ledger) async {
@@ -170,18 +173,33 @@ class _HomePageState extends ConsumerState<HomePage> {
     ledger.exchangeRateToCNY = result.exchangeRateToCNY;
     ledger.personUuids = result.personIds;
 
-    await ref.read(ledgerNotifierProvider.notifier).updateLedger(ledger);
+    try {
+      await ref.read(ledgerNotifierProvider.notifier).updateLedger(ledger);
+    } catch (e) {
+      _showWriteError(e);
+    }
   }
 
   void _deleteLedger(Ledger ledger) async {
-    await ref.read(ledgerNotifierProvider.notifier).deleteLedger(ledger.uuid);
+    try {
+      await ref.read(ledgerNotifierProvider.notifier).deleteLedger(ledger.uuid);
 
-    await LastSelectedLedgerPreference.clearIfMatches(ledger.uuid);
+      await LastSelectedLedgerPreference.clearIfMatches(ledger.uuid);
+    } catch (e) {
+      _showWriteError(e);
+    }
   }
 
   void _openLedger(Ledger ledger) {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => LedgerDashboardPage(ledger: ledger)),
     );
+  }
+
+  void _showWriteError(Object error) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('操作失败，请重试：$error')));
   }
 }

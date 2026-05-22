@@ -7,14 +7,20 @@ part 'person_provider.g.dart';
 @riverpod
 class PersonNotifier extends _$PersonNotifier {
   @override
-  Future<List<Person>> build({bool includeDeleted = false}) async {
+  Future<List<Person>> build({
+    bool includeDeleted = false,
+    String? ledgerUuid,
+  }) async {
     final repository = ref.read(personRepositoryProvider);
-    return await repository.getAllPeople(includeDeleted: includeDeleted);
+    return await repository.getAllPeople(
+      includeDeleted: includeDeleted,
+      ledgerUuid: ledgerUuid,
+    );
   }
 
   Future<void> addOrUpdatePerson(Person person) async {
     final repository = ref.read(personRepositoryProvider);
-    await repository.savePerson(person);
+    await repository.savePerson(person, ledgerUuid: ledgerUuid);
     // Invalidate both true and false variants of the provider
     // Since Riverpod caches parameters separately
     ref.invalidate(personNotifierProvider);
@@ -22,7 +28,7 @@ class PersonNotifier extends _$PersonNotifier {
 
   Future<void> deletePerson(String uuid) async {
     final repository = ref.read(personRepositoryProvider);
-    await repository.deletePerson(uuid);
+    await repository.deletePerson(uuid, ledgerUuid: ledgerUuid);
     // Invalidate both true and false variants
     ref.invalidate(personNotifierProvider);
   }

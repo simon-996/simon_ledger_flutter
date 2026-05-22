@@ -262,9 +262,17 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
       ..note = _noteController.text.trim()
       ..createdAt = DateTime.now();
 
-    await ref
-        .read(transactionNotifierProvider(ledgerId).notifier)
-        .addTransaction(record);
+    try {
+      await ref
+          .read(transactionNotifierProvider(ledgerId).notifier)
+          .addTransaction(record);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('保存失败，请重试：$e')));
+      return;
+    }
 
     if (mounted) {
       _showSuccessAnimation(amount, currency, category, selectedPeople);
@@ -284,10 +292,13 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
       );
     }
 
-    final peopleAsyncValue = ref.watch(
-      personNotifierProvider(includeDeleted: true),
-    );
     final selectedLedger = _selectedLedger;
+    final peopleAsyncValue = ref.watch(
+      personNotifierProvider(
+        includeDeleted: true,
+        ledgerUuid: selectedLedger?.uuid,
+      ),
+    );
     final colorScheme = Theme.of(context).colorScheme;
 
     return Column(
