@@ -81,12 +81,12 @@
 
 ## 6. 参与人接口
 
-- [ ] 实现参与人列表接口 `GET /api/ledgers/{ledgerUuid}/people`。
-- [ ] 实现新增参与人接口 `POST /api/ledgers/{ledgerUuid}/people`。
-- [ ] 实现编辑参与人接口 `PUT /api/ledgers/{ledgerUuid}/people/{personUuid}`。
-- [ ] 实现删除参与人接口 `DELETE /api/ledgers/{ledgerUuid}/people/{personUuid}`。
-- [ ] 删除参与人使用软删除。
-- [ ] 历史流水仍可展示已删除参与人名称。
+- [x] 实现参与人列表接口 `GET /api/ledgers/{ledgerUuid}/people`。
+- [x] 实现新增参与人接口 `POST /api/ledgers/{ledgerUuid}/people`。
+- [x] 实现编辑参与人接口 `PUT /api/ledgers/{ledgerUuid}/people/{personUuid}`。
+- [x] 实现删除参与人接口 `DELETE /api/ledgers/{ledgerUuid}/people/{personUuid}`。
+- [x] 删除参与人使用软删除。
+- [x] 历史流水仍可展示已删除参与人名称。
 
 ## 7. 流水接口
 
