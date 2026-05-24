@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/models/ledger.dart';
 import '../../../../core/models/person_lookup.dart';
+import '../../../../core/models/person_transaction_stats.dart';
 import '../../../../core/models/transaction_record.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
@@ -250,17 +251,10 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
               final sortedTransactions = List<TransactionRecord>.from(filtered)
                 ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-              final personBalances = <String, double>{};
-              for (final t in sortedTransactions) {
-                if (t.personUuids.isEmpty) continue;
-                final splitAmount = t.amount / t.personUuids.length;
-                for (final pid in t.personUuids) {
-                  personBalances[pid] ??= 0.0;
-                  personBalances[pid] = t.type == 0
-                      ? personBalances[pid]! - splitAmount
-                      : personBalances[pid]! + splitAmount;
-                }
-              }
+              final personStats = calculatePersonTransactionStats(
+                sortedTransactions,
+              );
+              final personBalances = personStats.personBalances;
 
               return CustomScrollView(
                 slivers: [
@@ -346,7 +340,7 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                             Padding(
                               padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
                               child: Text(
-                                '人员结余',
+                                _transactionType == 0 ? '人员承担' : '人员收入',
                                 style: Theme.of(context).textTheme.titleMedium,
                               ),
                             ),
@@ -380,6 +374,71 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                                 },
                               ),
                             ),
+                            if (personStats.settlements.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  12,
+                                  16,
+                                  0,
+                                ),
+                                child: AppSectionCard(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      Text(
+                                        '代付结算',
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.titleMedium,
+                                      ),
+                                      const SizedBox(height: 10),
+                                      ...personStats.settlements.take(5).map((
+                                        settlement,
+                                      ) {
+                                        final from = personOrFallback(
+                                          personMap,
+                                          settlement.fromPersonUuid,
+                                        );
+                                        final to = personOrFallback(
+                                          personMap,
+                                          settlement.toPersonUuid,
+                                        );
+                                        return Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 8,
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  '${from.avatar} ${from.name} -> ${to.avatar} ${to.name}',
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                settlement.amount
+                                                    .toStringAsFixed(2),
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .titleSmall
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                    ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      }),
+                                    ],
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       );

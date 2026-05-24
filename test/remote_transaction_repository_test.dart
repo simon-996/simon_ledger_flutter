@@ -31,6 +31,7 @@ void main() {
         'tx-2',
         'tx-3',
       ]);
+      expect(transactions.first.payerPersonUuid, 'person-1');
       expect(apiClient.requestedPages, [1, 2]);
     });
   });
@@ -41,6 +42,7 @@ Map<String, Object?> _transactionJson(String uuid) {
     'uuid': uuid,
     'ledgerUuid': 'ledger-1',
     'type': 0,
+    'payerPersonUuid': 'person-1',
     'amount': 12.5,
     'currencyCode': 'CNY',
     'category': '餐饮',

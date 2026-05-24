@@ -149,6 +149,8 @@ class CloudImportService {
     final personUuids = <String>{
       ...localLedger.personUuids,
       for (final transaction in transactions) ...transaction.personUuids,
+      for (final transaction in transactions)
+        if (transaction.payerPersonUuid != null) transaction.payerPersonUuid!,
     };
     final personUuidMap = <String, String>{};
 
@@ -187,6 +189,9 @@ class CloudImportService {
         '/api/ledgers/$remoteLedgerUuid/transactions',
         data: {
           'type': transaction.type,
+          'payerPersonUuid': transaction.payerPersonUuid == null
+              ? null
+              : personUuidMap[transaction.payerPersonUuid],
           'amount': transaction.amount,
           'currencyCode': transaction.currencyCode,
           'category': transaction.category,
@@ -231,6 +236,7 @@ class CloudImportService {
       ..uuid = map['uuid'].toString()
       ..ledgerUuid = map['ledgerUuid'].toString()
       ..type = (map['type'] as num?)?.toInt() ?? 0
+      ..payerPersonUuid = map['payerPersonUuid']?.toString()
       ..amount = (map['amount'] as num?)?.toDouble() ?? 0
       ..currencyCode = map['currencyCode'].toString()
       ..category = map['category'].toString()

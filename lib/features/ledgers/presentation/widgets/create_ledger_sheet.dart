@@ -13,12 +13,14 @@ class CreateLedgerResult {
     required this.baseCurrencyCode,
     required this.exchangeRateToCNY,
     required this.personIds,
+    required this.includeSelf,
   });
 
   final String name;
   final String baseCurrencyCode;
   final double exchangeRateToCNY;
   final List<String> personIds;
+  final bool includeSelf;
 }
 
 class CreateLedgerSheet extends ConsumerStatefulWidget {
@@ -35,6 +37,7 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
   late final TextEditingController _rateController;
   final FocusNode _nameFocus = FocusNode();
   late String _baseCurrencyCode;
+  late bool _includeSelf;
 
   final Set<String> _selectedPersonIds = {};
 
@@ -48,6 +51,7 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
     _rateController = TextEditingController(
       text: widget.existingLedger?.exchangeRateToCNY.toString() ?? '1.0',
     );
+    _includeSelf = widget.existingLedger == null;
 
     if (widget.existingLedger != null) {
       _selectedPersonIds.addAll(widget.existingLedger!.personUuids);
@@ -193,6 +197,7 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
     final isCloudMode = token != null && token.isValid;
     final personLedgerUuid = isCloudMode ? widget.existingLedger?.uuid : null;
     final canManagePeople = !isCloudMode || personLedgerUuid != null;
+    final localProfile = ref.watch(localProfileProvider).valueOrNull;
     final peopleAsyncValue = canManagePeople
         ? ref.watch(
             personNotifierProvider(
@@ -296,6 +301,23 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
                               ),
                             ),
                             const SizedBox(height: 10),
+                            if (widget.existingLedger == null) ...[
+                              SwitchListTile(
+                                contentPadding: EdgeInsets.zero,
+                                secondary: const Icon(
+                                  Icons.person_add_alt_1_rounded,
+                                ),
+                                title: Text(
+                                  '加入${localProfile?.normalizedNickname ?? '本人'}',
+                                ),
+                                subtitle: const Text('创建后自动把本地身份加入账本'),
+                                value: _includeSelf,
+                                onChanged: (value) {
+                                  setState(() => _includeSelf = value);
+                                },
+                              ),
+                              const SizedBox(height: 8),
+                            ],
                             if (!canManagePeople)
                               const Text('云端账本创建后，可再次编辑账本人员。')
                             else
@@ -307,6 +329,7 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
                                 data: (peoplePool) {
                                   if (widget.existingLedger == null &&
                                       _selectedPersonIds.isEmpty &&
+                                      !_includeSelf &&
                                       peoplePool.isNotEmpty) {
                                     WidgetsBinding.instance
                                         .addPostFrameCallback((_) {
@@ -397,6 +420,7 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
         baseCurrencyCode: _baseCurrencyCode,
         exchangeRateToCNY: rate,
         personIds: _selectedPersonIds.toList(),
+        includeSelf: _includeSelf,
       ),
     );
   }

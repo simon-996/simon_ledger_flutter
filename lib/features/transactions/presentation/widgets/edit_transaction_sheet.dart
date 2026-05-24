@@ -28,6 +28,7 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
 
   late int _transactionType;
   late String _selectedCategory;
+  String? _payerPersonUuid;
   final Set<String> _selectedPersonIds = {};
 
   final List<String> _expenseCategories = [
@@ -49,6 +50,7 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
     );
     _noteController = TextEditingController(text: widget.transaction.note);
     _transactionType = widget.transaction.type;
+    _payerPersonUuid = widget.transaction.payerPersonUuid;
     _selectedCategory = widget.transaction.category;
     _selectedPersonIds.addAll(widget.transaction.personUuids);
   }
@@ -78,12 +80,16 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
 
     final oldAmount = widget.transaction.amount;
     final oldType = widget.transaction.type;
+    final oldPayerPersonUuid = widget.transaction.payerPersonUuid;
     final oldCategory = widget.transaction.category;
     final oldNote = widget.transaction.note;
     final oldPersonUuids = List<String>.from(widget.transaction.personUuids);
 
     widget.transaction.amount = amount;
     widget.transaction.type = _transactionType;
+    widget.transaction.payerPersonUuid = _transactionType == 0
+        ? _payerPersonUuid
+        : null;
     widget.transaction.category = _selectedCategory;
     widget.transaction.note = _noteController.text.trim();
     widget.transaction.personUuids = _selectedPersonIds.toList();
@@ -95,6 +101,7 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
     } catch (e) {
       widget.transaction.amount = oldAmount;
       widget.transaction.type = oldType;
+      widget.transaction.payerPersonUuid = oldPayerPersonUuid;
       widget.transaction.category = oldCategory;
       widget.transaction.note = oldNote;
       widget.transaction.personUuids = oldPersonUuids;
@@ -191,6 +198,9 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                                 onSelectionChanged: (Set<int> newSelection) {
                                   setState(() {
                                     _transactionType = newSelection.first;
+                                    if (_transactionType == 1) {
+                                      _payerPersonUuid = null;
+                                    }
                                     _selectedCategory = _transactionType == 0
                                         ? _expenseCategories.first
                                         : _incomeCategories.first;
@@ -267,12 +277,59 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 Text(
-                                  '参与人员',
+                                  _transactionType == 0 ? '使用人员' : '参与人员',
                                   style: Theme.of(
                                     context,
                                   ).textTheme.titleMedium,
                                 ),
                                 const SizedBox(height: 10),
+                                if (_transactionType == 0) ...[
+                                  SegmentedButton<bool>(
+                                    showSelectedIcon: false,
+                                    segments: const [
+                                      ButtonSegment(
+                                        value: false,
+                                        icon: Icon(
+                                          Icons.account_balance_wallet_outlined,
+                                        ),
+                                        label: Text('共同钱包'),
+                                      ),
+                                      ButtonSegment(
+                                        value: true,
+                                        icon: Icon(
+                                          Icons.person_outline_rounded,
+                                        ),
+                                        label: Text('某人代付'),
+                                      ),
+                                    ],
+                                    selected: {_payerPersonUuid != null},
+                                    onSelectionChanged: (selection) {
+                                      setState(() {
+                                        if (selection.first) {
+                                          _payerPersonUuid ??=
+                                              _selectedPersonIds.isNotEmpty
+                                              ? _selectedPersonIds.first
+                                              : widget.ledger.personUuids.first;
+                                        } else {
+                                          _payerPersonUuid = null;
+                                        }
+                                      });
+                                    },
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    _payerPersonUuid == null
+                                        ? '使用人员将平均分摊该支出金额。'
+                                        : '付款人先垫付，总额由使用人员平均分摊。',
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.onSurfaceVariant,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                ],
                                 Wrap(
                                   spacing: 8,
                                   runSpacing: 8,
@@ -301,6 +358,39 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                                     );
                                   }).toList(),
                                 ),
+                                if (_transactionType == 0 &&
+                                    _payerPersonUuid != null) ...[
+                                  const SizedBox(height: 14),
+                                  Text(
+                                    '付款人',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleSmall,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: widget.ledger.personUuids.map((
+                                      pid,
+                                    ) {
+                                      final person = personOrFallback(
+                                        personMap,
+                                        pid,
+                                      );
+                                      return ChoiceChip(
+                                        avatar: Text(person.avatar),
+                                        label: Text(person.name),
+                                        selected: _payerPersonUuid == pid,
+                                        onSelected: (_) {
+                                          setState(() {
+                                            _payerPersonUuid = pid;
+                                          });
+                                        },
+                                      );
+                                    }).toList(),
+                                  ),
+                                ],
                               ],
                             ),
                           );

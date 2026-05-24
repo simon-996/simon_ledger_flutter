@@ -66,6 +66,8 @@ abstract class AuthRepository {
   Future<void> logout();
 
   Future<AuthUser> me();
+
+  Future<AuthUser> updateProfile({required String nickname, String? avatar});
 }
 
 class RemoteAuthRepository implements AuthRepository {
@@ -126,6 +128,15 @@ class RemoteAuthRepository implements AuthRepository {
   Future<AuthUser> me() {
     return _apiClient.get<AuthUser>(
       '/api/auth/me',
+      fromJson: AuthUser.fromJson,
+    );
+  }
+
+  @override
+  Future<AuthUser> updateProfile({required String nickname, String? avatar}) {
+    return _apiClient.put<AuthUser>(
+      '/api/auth/me',
+      data: {'nickname': nickname, 'avatar': avatar},
       fromJson: AuthUser.fromJson,
     );
   }

@@ -6,6 +6,7 @@ import '../../../../core/common/gallery_launcher.dart';
 import '../../../../core/models/ledger.dart';
 import '../../../../core/models/person.dart';
 import '../../../../core/models/person_lookup.dart';
+import '../../../../core/models/person_transaction_stats.dart';
 import '../../../../core/models/transaction_record.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
@@ -283,19 +284,8 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
               .fold(0.0, (sum, t) => sum + t.amount);
           final balance = totalIncome - totalExpense;
 
-          final Map<String, double> personBalances = {};
-          for (final t in transactions) {
-            if (t.personUuids.isEmpty) continue;
-            final splitAmount = t.amount / t.personUuids.length;
-            for (final pid in t.personUuids) {
-              personBalances[pid] ??= 0.0;
-              if (t.type == 0) {
-                personBalances[pid] = personBalances[pid]! - splitAmount;
-              } else {
-                personBalances[pid] = personBalances[pid]! + splitAmount;
-              }
-            }
-          }
+          final personStats = calculatePersonTransactionStats(transactions);
+          final personBalances = personStats.personBalances;
 
           final colorScheme = Theme.of(context).colorScheme;
 
@@ -443,6 +433,70 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                                     },
                                   ),
                                 ),
+                                if (personStats.settlements.isNotEmpty) ...[
+                                  const SizedBox(height: 12),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                    ),
+                                    child: AppSectionCard(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          Text(
+                                            '代付结算',
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.titleMedium,
+                                          ),
+                                          const SizedBox(height: 10),
+                                          ...personStats.settlements.take(5).map((
+                                            settlement,
+                                          ) {
+                                            final from = personOrFallback(
+                                              personMap,
+                                              settlement.fromPersonUuid,
+                                            );
+                                            final to = personOrFallback(
+                                              personMap,
+                                              settlement.toPersonUuid,
+                                            );
+                                            return Padding(
+                                              padding: const EdgeInsets.only(
+                                                bottom: 8,
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: Text(
+                                                      '${from.avatar} ${from.name} -> ${to.avatar} ${to.name}',
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Text(
+                                                    settlement.amount
+                                                        .toStringAsFixed(2),
+                                                    style: Theme.of(context)
+                                                        .textTheme
+                                                        .titleSmall
+                                                        ?.copyWith(
+                                                          fontWeight:
+                                                              FontWeight.w800,
+                                                        ),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                          }),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
                                 const SizedBox(height: 12),
                               ],
                             ),

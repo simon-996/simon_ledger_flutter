@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/di/providers.dart';
+import '../../../../core/models/local_profile.dart';
 import '../../../../core/services/cloud_import_service.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../ledgers/presentation/providers/ledger_provider.dart';
@@ -89,6 +90,16 @@ class _SignedInPanel extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 16),
+        _AccountProfileCard(
+          nickname: nickname,
+          avatar: avatar,
+          onSaved: () {
+            ref.invalidate(currentUserProvider);
+          },
+        ),
+        const SizedBox(height: 16),
+        const _LocalProfileCard(),
+        const SizedBox(height: 16),
         const _CloudImportCard(),
         const SizedBox(height: 16),
         FilledButton.icon(
@@ -108,6 +119,198 @@ class _SignedInPanel extends ConsumerWidget {
         ),
       ],
     );
+  }
+}
+
+class _AccountProfileCard extends ConsumerWidget {
+  const _AccountProfileCard({
+    required this.nickname,
+    required this.avatar,
+    required this.onSaved,
+  });
+
+  final String nickname;
+  final String? avatar;
+  final VoidCallback onSaved;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final avatarText = avatar == null || avatar!.isEmpty
+        ? (nickname.isEmpty ? '?' : nickname.characters.first)
+        : avatar!;
+
+    return AppSectionCard(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => _editProfile(context, ref),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AppSectionHeader(
+                title: '账号昵称和头像',
+                trailing: TextButton.icon(
+                  onPressed: () => _editProfile(context, ref),
+                  icon: const Icon(Icons.edit_rounded, size: 18),
+                  label: const Text('修改'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 26,
+                    backgroundColor: colorScheme.primaryContainer,
+                    child: Text(
+                      avatarText,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      nickname,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _editProfile(BuildContext context, WidgetRef ref) async {
+    final result = await showDialog<_AccountProfileEditResult>(
+      context: context,
+      builder: (context) =>
+          _AccountProfileDialog(nickname: nickname, avatar: avatar),
+    );
+    if (result == null) return;
+
+    try {
+      await ref
+          .read(authRepositoryProvider)
+          .updateProfile(nickname: result.nickname, avatar: result.avatar);
+      onSaved();
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('保存失败，请重试：$error')));
+    }
+  }
+}
+
+class _AccountProfileEditResult {
+  const _AccountProfileEditResult({
+    required this.nickname,
+    required this.avatar,
+  });
+
+  final String nickname;
+  final String avatar;
+}
+
+class _AccountProfileDialog extends StatefulWidget {
+  const _AccountProfileDialog({required this.nickname, this.avatar});
+
+  final String nickname;
+  final String? avatar;
+
+  @override
+  State<_AccountProfileDialog> createState() => _AccountProfileDialogState();
+}
+
+class _AccountProfileDialogState extends State<_AccountProfileDialog> {
+  static const _avatars = ['👤', '🙂', '👛', '🏠', '⭐'];
+
+  late final TextEditingController _nicknameController;
+  late String _avatar;
+
+  @override
+  void initState() {
+    super.initState();
+    _nicknameController = TextEditingController(text: widget.nickname);
+    _avatar = widget.avatar == null || widget.avatar!.isEmpty
+        ? _avatars.first
+        : widget.avatar!;
+  }
+
+  @override
+  void dispose() {
+    _nicknameController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('账号资料'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _nicknameController,
+              autofocus: true,
+              textInputAction: TextInputAction.done,
+              decoration: const InputDecoration(
+                labelText: '昵称',
+                prefixIcon: Icon(Icons.badge_outlined),
+              ),
+              onSubmitted: (_) => _submit(),
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _avatars.map((avatar) {
+                return ChoiceChip(
+                  label: Text(avatar, style: const TextStyle(fontSize: 18)),
+                  selected: _avatar == avatar,
+                  onSelected: (_) => setState(() => _avatar = avatar),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('保存')),
+      ],
+    );
+  }
+
+  void _submit() {
+    final nickname = _nicknameController.text.trim();
+    if (nickname.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请输入昵称')));
+      return;
+    }
+
+    Navigator.of(
+      context,
+    ).pop(_AccountProfileEditResult(nickname: nickname, avatar: _avatar));
   }
 }
 
@@ -201,6 +404,186 @@ class _CloudImportCardState extends ConsumerState<_CloudImportCard> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('本地账本导入完成')));
+  }
+}
+
+class _LocalProfileCard extends ConsumerWidget {
+  const _LocalProfileCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final profileAsync = ref.watch(localProfileProvider);
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return AppSectionCard(
+      child: profileAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, stackTrace) => Text('本地资料加载失败：$error'),
+        data: (profile) => InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () => _editProfile(context, ref, profile),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                AppSectionHeader(
+                  title: '本地昵称和头像',
+                  trailing: TextButton.icon(
+                    onPressed: () => _editProfile(context, ref, profile),
+                    icon: const Icon(Icons.edit_rounded, size: 18),
+                    label: const Text('修改'),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 26,
+                      backgroundColor: colorScheme.secondaryContainer,
+                      child: Icon(
+                        profile.iconData,
+                        color: colorScheme.onSecondaryContainer,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            profile.normalizedNickname,
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w800),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '未登录时用于创建账本和默认加入本人',
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(color: colorScheme.onSurfaceVariant),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _editProfile(
+    BuildContext context,
+    WidgetRef ref,
+    LocalProfile profile,
+  ) async {
+    final result = await showDialog<LocalProfile>(
+      context: context,
+      builder: (context) => _LocalProfileDialog(profile: profile),
+    );
+    if (result == null) return;
+
+    await ref.read(localProfileStoreProvider).save(result);
+    ref.invalidate(localProfileProvider);
+  }
+}
+
+class _LocalProfileDialog extends StatefulWidget {
+  const _LocalProfileDialog({required this.profile});
+
+  final LocalProfile profile;
+
+  @override
+  State<_LocalProfileDialog> createState() => _LocalProfileDialogState();
+}
+
+class _LocalProfileDialogState extends State<_LocalProfileDialog> {
+  static const _avatarIcons = ['person', 'face', 'wallet', 'home', 'star'];
+
+  late final TextEditingController _nicknameController;
+  late String _avatarIcon;
+
+  @override
+  void initState() {
+    super.initState();
+    _nicknameController = TextEditingController(
+      text: widget.profile.normalizedNickname,
+    );
+    _avatarIcon = widget.profile.avatarIcon;
+  }
+
+  @override
+  void dispose() {
+    _nicknameController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('本地身份'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _nicknameController,
+              autofocus: true,
+              textInputAction: TextInputAction.done,
+              decoration: const InputDecoration(
+                labelText: '昵称',
+                prefixIcon: Icon(Icons.badge_outlined),
+              ),
+              onSubmitted: (_) => _submit(),
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _avatarIcons.map((icon) {
+                final profile = LocalProfile(nickname: '', avatarIcon: icon);
+                return ChoiceChip(
+                  avatar: Icon(profile.iconData, size: 18),
+                  label: const SizedBox.shrink(),
+                  showCheckmark: false,
+                  selected: _avatarIcon == icon,
+                  onSelected: (_) => setState(() => _avatarIcon = icon),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('保存')),
+      ],
+    );
+  }
+
+  void _submit() {
+    final nickname = _nicknameController.text.trim();
+    if (nickname.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请输入昵称')));
+      return;
+    }
+
+    Navigator.of(
+      context,
+    ).pop(LocalProfile(nickname: nickname, avatarIcon: _avatarIcon));
   }
 }
 
@@ -358,6 +741,7 @@ class _AuthPanelState extends ConsumerState<_AuthPanel> {
   bool _isRegister = false;
   bool _submitting = false;
   String? _errorText;
+  bool _appliedLocalProfile = false;
 
   @override
   void initState() {
@@ -382,6 +766,8 @@ class _AuthPanelState extends ConsumerState<_AuthPanel> {
     return ListView(
       padding: EdgeInsets.fromLTRB(16, 16, 16, bottomInset + 16),
       children: [
+        const _LocalProfileCard(),
+        const SizedBox(height: 16),
         SegmentedButton<bool>(
           showSelectedIcon: false,
           segments: const [
@@ -396,6 +782,9 @@ class _AuthPanelState extends ConsumerState<_AuthPanel> {
                     _isRegister = value.first;
                     _errorText = null;
                   });
+                  if (_isRegister) {
+                    _applyLocalProfileToRegister();
+                  }
                 },
         ),
         const SizedBox(height: 16),
@@ -489,9 +878,12 @@ class _AuthPanelState extends ConsumerState<_AuthPanel> {
       final authRepository = ref.read(authRepositoryProvider);
       final password = _passwordController.text.trim();
       if (_isRegister) {
+        final localProfile = await ref.read(localProfileProvider.future);
         final email = _emailController.text.trim();
         final phone = _phoneController.text.trim();
-        final nickname = _nicknameController.text.trim();
+        final nickname = _nicknameController.text.trim().isEmpty
+            ? localProfile.normalizedNickname
+            : _nicknameController.text.trim();
         if (nickname.isEmpty) {
           throw const FormatException('请输入昵称');
         }
@@ -506,6 +898,7 @@ class _AuthPanelState extends ConsumerState<_AuthPanel> {
           phone: phone.isEmpty ? null : phone,
           password: password,
           nickname: nickname,
+          avatar: localProfile.personAvatar,
         );
         await authRepository.login(
           account: email.isNotEmpty ? email : phone,
@@ -538,5 +931,15 @@ class _AuthPanelState extends ConsumerState<_AuthPanel> {
         setState(() => _submitting = false);
       }
     }
+  }
+
+  Future<void> _applyLocalProfileToRegister() async {
+    if (_appliedLocalProfile || _nicknameController.text.trim().isNotEmpty) {
+      return;
+    }
+    final profile = await ref.read(localProfileProvider.future);
+    if (!mounted || !_isRegister) return;
+    _appliedLocalProfile = true;
+    _nicknameController.text = profile.normalizedNickname;
   }
 }

@@ -25,6 +25,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
   String? _selectedCategory;
   final Set<String> _selectedPersonIds = {};
   String? _selectedCurrency;
+  String? _payerPersonUuid;
   int _transactionType = 0;
 
   final _amountController = TextEditingController();
@@ -59,6 +60,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
       setState(() {
         _selectedLedgerUuid = null;
         _selectedCurrency = null;
+        _payerPersonUuid = null;
         _selectedPersonIds.clear();
       });
       return;
@@ -66,6 +68,9 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
 
     setState(() {
       _selectedCurrency = currentLedger.baseCurrencyCode;
+      if (!currentLedger.personUuids.contains(_payerPersonUuid)) {
+        _payerPersonUuid = null;
+      }
       _selectedPersonIds.retainWhere(currentLedger.personUuids.contains);
       if (_selectedPersonIds.isEmpty && currentLedger.personUuids.isNotEmpty) {
         _selectedPersonIds.add(currentLedger.personUuids.first);
@@ -104,12 +109,16 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     _selectedLedgerUuid = ledgerUuid;
     final ledger = widget.ledgers.firstWhere((l) => l.uuid == ledgerUuid);
     _selectedCurrency = ledger.baseCurrencyCode;
+    if (!ledger.personUuids.contains(_payerPersonUuid)) {
+      _payerPersonUuid = null;
+    }
     _selectedPersonIds.retainWhere(ledger.personUuids.contains);
     if (_selectedPersonIds.isEmpty && ledger.personUuids.isNotEmpty) {
       _selectedPersonIds.add(ledger.personUuids.first);
     }
     if (ledger.personUuids.isEmpty) {
       _selectedPersonIds.clear();
+      _payerPersonUuid = null;
     }
 
     LastSelectedLedgerPreference.setUuid(ledgerUuid);
@@ -255,6 +264,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
       ..uuid = DateTime.now().microsecondsSinceEpoch.toString()
       ..ledgerUuid = ledgerId
       ..type = _transactionType
+      ..payerPersonUuid = _transactionType == 0 ? _payerPersonUuid : null
       ..amount = amount
       ..currencyCode = currency
       ..category = category
@@ -370,6 +380,9 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                             onSelectionChanged: (Set<int> newSelection) {
                               setState(() {
                                 _transactionType = newSelection.first;
+                                if (_transactionType == 1) {
+                                  _payerPersonUuid = null;
+                                }
                                 _selectedCategory = _currentCategories.first;
                               });
                             },
@@ -492,7 +505,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               AppSectionHeader(
-                                title: '参与人员',
+                                title: _transactionType == 0 ? '使用人员' : '参与人员',
                                 trailing: TextButton(
                                   onPressed: () {
                                     setState(() {
@@ -515,6 +528,51 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                                 ),
                               ),
                               const SizedBox(height: 10),
+                              if (_transactionType == 0) ...[
+                                SegmentedButton<bool>(
+                                  showSelectedIcon: false,
+                                  segments: const [
+                                    ButtonSegment(
+                                      value: false,
+                                      icon: Icon(
+                                        Icons.account_balance_wallet_outlined,
+                                      ),
+                                      label: Text('共同钱包'),
+                                    ),
+                                    ButtonSegment(
+                                      value: true,
+                                      icon: Icon(Icons.person_outline_rounded),
+                                      label: Text('某人代付'),
+                                    ),
+                                  ],
+                                  selected: {_payerPersonUuid != null},
+                                  onSelectionChanged: (selection) {
+                                    setState(() {
+                                      if (selection.first) {
+                                        _payerPersonUuid ??=
+                                            _selectedPersonIds.isNotEmpty
+                                            ? _selectedPersonIds.first
+                                            : selectedLedger.personUuids.first;
+                                      } else {
+                                        _payerPersonUuid = null;
+                                      }
+                                    });
+                                  },
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  _payerPersonUuid == null
+                                      ? '使用人员将平均分摊该支出金额。'
+                                      : '付款人先垫付，总额由使用人员平均分摊。',
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
+                                      ),
+                                ),
+                                const SizedBox(height: 10),
+                              ],
                               Wrap(
                                 spacing: 8,
                                 runSpacing: 8,
@@ -541,6 +599,37 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                                   );
                                 }).toList(),
                               ),
+                              if (_transactionType == 0 &&
+                                  _payerPersonUuid != null) ...[
+                                const SizedBox(height: 14),
+                                Text(
+                                  '付款人',
+                                  style: Theme.of(context).textTheme.titleSmall,
+                                ),
+                                const SizedBox(height: 8),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: selectedLedger.personUuids.map((
+                                    pid,
+                                  ) {
+                                    final person = personOrFallback(
+                                      personMap,
+                                      pid,
+                                    );
+                                    return ChoiceChip(
+                                      avatar: Text(person.avatar),
+                                      label: Text(person.name),
+                                      selected: _payerPersonUuid == pid,
+                                      onSelected: (_) {
+                                        setState(() {
+                                          _payerPersonUuid = pid;
+                                        });
+                                      },
+                                    );
+                                  }).toList(),
+                                ),
+                              ],
                             ],
                           ),
                         );

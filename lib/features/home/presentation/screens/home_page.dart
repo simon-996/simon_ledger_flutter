@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/di/providers.dart';
 import '../../../../core/models/ledger.dart';
+import '../../../../core/models/person.dart';
 import '../../../../core/preferences/last_selected_ledger_preference.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../auth/presentation/widgets/account_tab.dart';
@@ -10,6 +12,7 @@ import '../../../ledgers/presentation/widgets/create_ledger_sheet.dart';
 import '../../../ledgers/presentation/screens/ledger_dashboard_page.dart';
 import '../../../ledgers/presentation/providers/ledger_provider.dart';
 import '../../../ledgers/presentation/providers/ledger_stats_provider.dart';
+import '../../../people_pool/presentation/providers/person_provider.dart';
 import '../../../statistics/presentation/widgets/statistics_tab.dart';
 
 class HomePage extends ConsumerStatefulWidget {
@@ -161,6 +164,15 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     try {
       await ref.read(ledgerNotifierProvider.notifier).addLedger(newLedger);
+      if (result.includeSelf) {
+        final selfPersonUuid = await _ensureSelfPerson(newLedger.uuid);
+        if (!newLedger.personUuids.contains(selfPersonUuid)) {
+          newLedger.personUuids = [...newLedger.personUuids, selfPersonUuid];
+          await ref
+              .read(ledgerNotifierProvider.notifier)
+              .updateLedger(newLedger);
+        }
+      }
     } catch (e) {
       _showWriteError(e);
     }
@@ -212,6 +224,31 @@ class _HomePageState extends ConsumerState<HomePage> {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => LedgerDashboardPage(ledger: ledger)),
     );
+  }
+
+  Future<String> _ensureSelfPerson(String ledgerUuid) async {
+    final profile = await ref.read(localProfileProvider.future);
+    final token = await ref.read(authTokenProvider.future);
+    final isCloudMode = token != null && token.isValid;
+    final personRepository = ref.read(personRepositoryProvider);
+    final ledgerScope = isCloudMode ? ledgerUuid : null;
+    final people = await personRepository.getAllPeople(ledgerUuid: ledgerScope);
+    final nickname = profile.normalizedNickname;
+    final existing = people
+        .where((person) => person.name.trim() == nickname && !person.isDeleted)
+        .firstOrNull;
+
+    if (existing != null) {
+      return existing.uuid;
+    }
+
+    final person = Person()
+      ..uuid = 'self-${DateTime.now().microsecondsSinceEpoch}'
+      ..name = nickname
+      ..avatar = profile.personAvatar;
+    await personRepository.savePerson(person, ledgerUuid: ledgerScope);
+    ref.invalidate(personNotifierProvider);
+    return person.uuid;
   }
 
   void _showWriteError(Object error) {

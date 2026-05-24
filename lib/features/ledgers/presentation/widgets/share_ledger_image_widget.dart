@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/models/ledger.dart';
 import '../../../../core/models/person.dart';
 import '../../../../core/models/person_lookup.dart';
+import '../../../../core/models/person_transaction_stats.dart';
 import '../../../../core/models/transaction_record.dart';
 
 class ShareLedgerImageWidget extends StatelessWidget {
@@ -33,19 +34,9 @@ class ShareLedgerImageWidget extends StatelessWidget {
         .where((t) => t.type == 1)
         .fold(0.0, (sum, t) => sum + t.amount);
     final balance = totalIncome - totalExpense;
-    final Map<String, double> personBalances = {};
-    for (final t in summary) {
-      if (t.personUuids.isEmpty) continue;
-      final splitAmount = t.amount / t.personUuids.length;
-      for (final pid in t.personUuids) {
-        personBalances[pid] ??= 0.0;
-        if (t.type == 0) {
-          personBalances[pid] = personBalances[pid]! - splitAmount;
-        } else {
-          personBalances[pid] = personBalances[pid]! + splitAmount;
-        }
-      }
-    }
+    final personBalances = calculatePersonTransactionStats(
+      summary,
+    ).personBalances;
     final peopleInImage = personBalances.keys.map((pid) {
       return personOrFallback(personMap, pid);
     }).toList();

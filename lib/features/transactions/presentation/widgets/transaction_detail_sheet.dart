@@ -34,6 +34,9 @@ class TransactionDetailSheet extends ConsumerWidget {
         ? transaction.amount / transaction.personUuids.length
         : transaction.amount;
     final personMap = peopleByUuid(peoplePool);
+    final payer = transaction.payerPersonUuid == null
+        ? null
+        : personOrFallback(personMap, transaction.payerPersonUuid!);
 
     return SafeArea(
       top: false,
@@ -181,6 +184,22 @@ class TransactionDetailSheet extends ConsumerWidget {
                               '分类',
                               transaction.category,
                             ),
+                            if (transaction.type == 0) ...[
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 10),
+                                child: Divider(height: 1),
+                              ),
+                              _buildDetailRow(
+                                context,
+                                payer == null
+                                    ? Icons.account_balance_wallet_outlined
+                                    : Icons.person_outline_rounded,
+                                '支出方式',
+                                payer == null
+                                    ? '共同钱包'
+                                    : '${payer.avatar} ${payer.name} 代付',
+                              ),
+                            ],
                             if (transaction.note.isNotEmpty) ...[
                               const Padding(
                                 padding: EdgeInsets.symmetric(vertical: 10),
@@ -198,7 +217,8 @@ class TransactionDetailSheet extends ConsumerWidget {
                       ),
                       const SizedBox(height: 16),
                       AppSectionHeader(
-                        title: '参与人员 (${transaction.personUuids.length}人)',
+                        title:
+                            '${transaction.type == 0 ? '使用人员' : '参与人员'} (${transaction.personUuids.length}人)',
                       ),
                       const SizedBox(height: 10),
                       ...transaction.personUuids.map((pid) {

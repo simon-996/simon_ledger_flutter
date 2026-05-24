@@ -106,6 +106,7 @@ class RemoteTransactionRepository implements TransactionRepository {
   Future<void> saveTransaction(TransactionRecord transaction) async {
     final data = {
       'type': transaction.type,
+      'payerPersonUuid': transaction.payerPersonUuid,
       'amount': transaction.amount,
       'currencyCode': transaction.currencyCode,
       'category': transaction.category,
@@ -172,6 +173,7 @@ class RemoteTransactionRepository implements TransactionRepository {
       ..uuid = uuid
       ..ledgerUuid = map['ledgerUuid'].toString()
       ..type = (map['type'] as num?)?.toInt() ?? 0
+      ..payerPersonUuid = map['payerPersonUuid']?.toString()
       ..amount = (map['amount'] as num?)?.toDouble() ?? 0
       ..currencyCode = map['currencyCode'].toString()
       ..category = map['category'].toString()

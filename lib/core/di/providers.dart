@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../database/database_service.dart';
+import '../models/local_profile.dart';
 import '../network/api_client.dart';
 import '../network/token_store.dart';
+import '../preferences/local_profile_store.dart';
 import '../repositories/auth_repository.dart';
 import '../repositories/ledger_repository.dart';
 import '../repositories/person_repository.dart';
@@ -20,6 +22,14 @@ final databaseProvider = Provider<DatabaseService>((ref) {
 
 final tokenStoreProvider = Provider<TokenStore>((ref) {
   return TokenStore();
+});
+
+final localProfileStoreProvider = Provider<LocalProfileStore>((ref) {
+  return const LocalProfileStore();
+});
+
+final localProfileProvider = FutureProvider<LocalProfile>((ref) {
+  return ref.watch(localProfileStoreProvider).read();
 });
 
 final apiClientProvider = Provider<ApiClient>((ref) {

@@ -37,6 +37,7 @@ void main() {
           ..uuid = 'tx-older'
           ..ledgerUuid = 'ledger-1'
           ..type = 0
+          ..payerPersonUuid = 'p1'
           ..amount = 12
           ..currencyCode = 'CNY'
           ..category = '餐饮'
@@ -59,6 +60,7 @@ void main() {
       final transactions = await database.getTransactionsForLedger('ledger-1');
 
       expect(ledgers.single.name, '家庭账本');
+      expect(transactions.last.payerPersonUuid, 'p1');
       expect(transactions.map((transaction) => transaction.uuid), [
         'tx-newer',
         'tx-older',

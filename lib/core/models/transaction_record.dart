@@ -8,6 +8,10 @@ class TransactionRecord {
   // Type: 0 for expense (支出), 1 for income (收入)
   int type = 0;
 
+  // Null means the transaction uses the shared ledger pool. For expense only,
+  // a non-null value means this person paid for the selected participants.
+  String? payerPersonUuid;
+
   late double amount;
 
   late String currencyCode;

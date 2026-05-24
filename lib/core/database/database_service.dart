@@ -285,6 +285,7 @@ class DatabaseService {
       ..uuid = json['uuid']?.toString() ?? ''
       ..ledgerUuid = json['ledgerUuid']?.toString() ?? ''
       ..type = (json['type'] as num?)?.toInt() ?? 0
+      ..payerPersonUuid = json['payerPersonUuid']?.toString()
       ..amount = (json['amount'] as num?)?.toDouble() ?? 0
       ..currencyCode = json['currencyCode']?.toString() ?? 'CNY'
       ..category = json['category']?.toString() ?? ''
@@ -306,6 +307,7 @@ class DatabaseService {
       'uuid': transaction.uuid,
       'ledgerUuid': transaction.ledgerUuid,
       'type': transaction.type,
+      'payerPersonUuid': transaction.payerPersonUuid,
       'amount': transaction.amount,
       'currencyCode': transaction.currencyCode,
       'category': transaction.category,
