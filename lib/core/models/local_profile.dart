@@ -1,11 +1,11 @@
-import 'package:flutter/material.dart';
+import '../config/avatar_config.dart';
 
 class LocalProfile {
   const LocalProfile({required this.nickname, required this.avatarIcon});
 
   static const defaultProfile = LocalProfile(
     nickname: '我',
-    avatarIcon: 'person',
+    avatarIcon: AvatarConfig.defaultKey,
   );
 
   final String nickname;
@@ -16,25 +16,7 @@ class LocalProfile {
     return value.isEmpty ? defaultProfile.nickname : value;
   }
 
-  String get personAvatar {
-    return switch (avatarIcon) {
-      'face' => '🙂',
-      'wallet' => '👛',
-      'home' => '🏠',
-      'star' => '⭐',
-      _ => '👤',
-    };
-  }
-
-  IconData get iconData {
-    return switch (avatarIcon) {
-      'face' => Icons.face_rounded,
-      'wallet' => Icons.account_balance_wallet_rounded,
-      'home' => Icons.home_rounded,
-      'star' => Icons.star_rounded,
-      _ => Icons.person_rounded,
-    };
-  }
+  String get personAvatar => AvatarConfig.avatarForKey(avatarIcon);
 
   LocalProfile copyWith({String? nickname, String? avatarIcon}) {
     return LocalProfile(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/config/avatar_config.dart';
 import '../../../../core/di/providers.dart';
 import '../../../../core/models/local_profile.dart';
 import '../../../../core/services/cloud_import_service.dart';
@@ -235,8 +236,6 @@ class _AccountProfileDialog extends StatefulWidget {
 }
 
 class _AccountProfileDialogState extends State<_AccountProfileDialog> {
-  static const _avatars = ['👤', '🙂', '👛', '🏠', '⭐'];
-
   late final TextEditingController _nicknameController;
   late String _avatar;
 
@@ -244,9 +243,7 @@ class _AccountProfileDialogState extends State<_AccountProfileDialog> {
   void initState() {
     super.initState();
     _nicknameController = TextEditingController(text: widget.nickname);
-    _avatar = widget.avatar == null || widget.avatar!.isEmpty
-        ? _avatars.first
-        : widget.avatar!;
+    _avatar = AvatarConfig.normalizeAvatar(widget.avatar ?? '');
   }
 
   @override
@@ -278,7 +275,7 @@ class _AccountProfileDialogState extends State<_AccountProfileDialog> {
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: _avatars.map((avatar) {
+              children: AvatarConfig.avatars.map((avatar) {
                 return ChoiceChip(
                   label: Text(avatar, style: const TextStyle(fontSize: 18)),
                   selected: _avatar == avatar,
@@ -441,9 +438,10 @@ class _LocalProfileCard extends ConsumerWidget {
                     CircleAvatar(
                       radius: 26,
                       backgroundColor: colorScheme.secondaryContainer,
-                      child: Icon(
-                        profile.iconData,
-                        color: colorScheme.onSecondaryContainer,
+                      child: Text(
+                        profile.personAvatar,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(color: colorScheme.onSecondaryContainer),
                       ),
                     ),
                     const SizedBox(width: 14),
@@ -505,8 +503,6 @@ class _LocalProfileDialog extends StatefulWidget {
 }
 
 class _LocalProfileDialogState extends State<_LocalProfileDialog> {
-  static const _avatarIcons = ['person', 'face', 'wallet', 'home', 'star'];
-
   late final TextEditingController _nicknameController;
   late String _avatarIcon;
 
@@ -516,7 +512,7 @@ class _LocalProfileDialogState extends State<_LocalProfileDialog> {
     _nicknameController = TextEditingController(
       text: widget.profile.normalizedNickname,
     );
-    _avatarIcon = widget.profile.avatarIcon;
+    _avatarIcon = AvatarConfig.normalizeKey(widget.profile.avatarIcon);
   }
 
   @override
@@ -548,14 +544,15 @@ class _LocalProfileDialogState extends State<_LocalProfileDialog> {
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: _avatarIcons.map((icon) {
-                final profile = LocalProfile(nickname: '', avatarIcon: icon);
+              children: AvatarConfig.options.map((option) {
                 return ChoiceChip(
-                  avatar: Icon(profile.iconData, size: 18),
-                  label: const SizedBox.shrink(),
+                  label: Text(
+                    option.avatar,
+                    style: const TextStyle(fontSize: 18),
+                  ),
                   showCheckmark: false,
-                  selected: _avatarIcon == icon,
-                  onSelected: (_) => setState(() => _avatarIcon = icon),
+                  selected: _avatarIcon == option.key,
+                  onSelected: (_) => setState(() => _avatarIcon = option.key),
                 );
               }).toList(),
             ),

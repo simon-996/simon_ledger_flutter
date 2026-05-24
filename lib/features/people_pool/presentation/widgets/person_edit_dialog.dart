@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../../core/config/avatar_config.dart';
 import '../../../../core/models/person.dart';
 
 class PersonEditDialog extends StatefulWidget {
@@ -14,33 +16,11 @@ class _PersonEditDialogState extends State<PersonEditDialog> {
   late final TextEditingController _nameController;
   late String _selectedAvatar;
 
-  final List<String> _avatars = [
-    '🧑',
-    '😎',
-    '👨‍💻',
-    '👩‍💻',
-    '🐱',
-    '🐶',
-    '🦊',
-    '🐻',
-    '🐼',
-    '🐯',
-    '🦁',
-    '🐷',
-    '🐸',
-    '🐵',
-    '🦝',
-    '🦐',
-    '🦇',
-    '🐌',
-    '🐜',
-  ];
-
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.person?.name ?? '');
-    _selectedAvatar = widget.person?.avatar ?? _avatars.first;
+    _selectedAvatar = AvatarConfig.normalizeAvatar(widget.person?.avatar ?? '');
   }
 
   @override
@@ -72,7 +52,7 @@ class _PersonEditDialogState extends State<PersonEditDialog> {
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: _avatars.map((avatar) {
+              children: AvatarConfig.avatars.map((avatar) {
                 final isSelected = avatar == _selectedAvatar;
                 return GestureDetector(
                   onTap: () => setState(() => _selectedAvatar = avatar),
