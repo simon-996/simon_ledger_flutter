@@ -8,11 +8,8 @@ part 'ledger_provider.g.dart';
 class LedgerNotifier extends _$LedgerNotifier {
   @override
   Future<List<Ledger>> build() async {
-    return _fetchLedgers();
-  }
-
-  Future<List<Ledger>> _fetchLedgers() async {
-    final repository = ref.read(ledgerRepositoryProvider);
+    await ref.watch(authTokenProvider.future);
+    final repository = ref.watch(ledgerRepositoryProvider);
     return await repository.getAllLedgers();
   }
 
@@ -61,8 +58,21 @@ class LedgerNotifier extends _$LedgerNotifier {
 
   Future<void> deleteLedger(String uuid) async {
     final repository = ref.read(ledgerRepositoryProvider);
-    await repository.deleteLedger(uuid);
-    // Refresh the state
-    ref.invalidateSelf();
+    final previousLedgers = state.valueOrNull;
+    if (previousLedgers != null) {
+      state = AsyncValue.data(
+        previousLedgers.where((ledger) => ledger.uuid != uuid).toList(),
+      );
+    }
+
+    try {
+      await repository.deleteLedger(uuid);
+      ref.invalidateSelf();
+    } catch (_) {
+      if (previousLedgers != null) {
+        state = AsyncValue.data(previousLedgers);
+      }
+      rethrow;
+    }
   }
 }

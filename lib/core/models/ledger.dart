@@ -19,7 +19,13 @@ class Ledger {
 
   String? role;
 
-  String get displayCode => 'Simon-$uuid';
+  String get displayCode {
+    final normalizedUuid = uuid.trim();
+    final suffix = normalizedUuid.length <= 8
+        ? normalizedUuid
+        : normalizedUuid.substring(normalizedUuid.length - 8);
+    return 'Simon-$suffix';
+  }
 
   String get displayNameWithCode => '$name · $displayCode';
 }
