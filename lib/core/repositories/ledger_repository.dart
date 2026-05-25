@@ -43,21 +43,23 @@ class RemoteLedgerRepository implements LedgerRepository {
       fromJson: (json) =>
           (json! as List<dynamic>).map(_ledgerFromJson).toList(),
     );
-    for (final ledger in ledgers) {
-      try {
-        ledger.personUuids = await _apiClient.get<List<String>>(
-          '/api/ledgers/${ledger.uuid}/people',
-          fromJson: (json) => (json! as List<dynamic>)
-              .map(
-                (person) =>
-                    (person as Map<String, dynamic>)['uuid'].toString(),
-              )
-              .toList(),
-        );
-      } catch (_) {
-        ledger.personUuids = const [];
-      }
-    }
+    await Future.wait(
+      ledgers.map((ledger) async {
+        try {
+          ledger.personUuids = await _apiClient.get<List<String>>(
+            '/api/ledgers/${ledger.uuid}/people',
+            fromJson: (json) => (json! as List<dynamic>)
+                .map(
+                  (person) =>
+                      (person as Map<String, dynamic>)['uuid'].toString(),
+                )
+                .toList(),
+          );
+        } catch (_) {
+          ledger.personUuids = const [];
+        }
+      }),
+    );
     return ledgers;
   }
 
