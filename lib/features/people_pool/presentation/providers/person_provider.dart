@@ -11,7 +11,8 @@ class PersonNotifier extends _$PersonNotifier {
     bool includeDeleted = false,
     String? ledgerUuid,
   }) async {
-    final repository = ref.read(personRepositoryProvider);
+    await ref.watch(authTokenProvider.future);
+    final repository = ref.watch(personRepositoryProvider);
     return await repository.getAllPeople(
       includeDeleted: includeDeleted,
       ledgerUuid: ledgerUuid,

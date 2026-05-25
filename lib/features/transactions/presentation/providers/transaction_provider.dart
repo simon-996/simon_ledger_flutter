@@ -9,11 +9,8 @@ part 'transaction_provider.g.dart';
 class TransactionNotifier extends _$TransactionNotifier {
   @override
   Future<List<TransactionRecord>> build(String ledgerUuid) async {
-    return _fetchTransactions();
-  }
-
-  Future<List<TransactionRecord>> _fetchTransactions() async {
-    final repository = ref.read(transactionRepositoryProvider);
+    await ref.watch(authTokenProvider.future);
+    final repository = ref.watch(transactionRepositoryProvider);
     return await repository.getTransactionsForLedger(ledgerUuid);
   }
 
