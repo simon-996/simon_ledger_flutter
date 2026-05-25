@@ -116,7 +116,9 @@ class LedgerListTab extends ConsumerWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('删除账本'),
-        content: Text('确定要删除账本“${ledger.name}”吗？\n删除后无法恢复。'),
+        content: Text(
+          '确定要删除账本“${ledger.name}”吗？\n${ledger.displayCode}\n删除后无法恢复。',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -205,7 +207,18 @@ class _LedgerCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 3),
+                          Text(
+                            ledger.displayCode,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                          const SizedBox(height: 7),
                           Wrap(
                             spacing: 8,
                             runSpacing: 6,

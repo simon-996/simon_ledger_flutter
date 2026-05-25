@@ -166,7 +166,7 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                           .map(
                             (l) => DropdownMenuItem(
                               value: l.uuid,
-                              child: Text(l.name),
+                              child: _LedgerDropdownItem(ledger: l),
                             ),
                           )
                           .toList(),
@@ -664,6 +664,34 @@ class _CategoryBreakdownTile extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _LedgerDropdownItem extends StatelessWidget {
+  const _LedgerDropdownItem({required this.ledger});
+
+  final Ledger ledger;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(ledger.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+        Text(
+          ledger.displayCode,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 }

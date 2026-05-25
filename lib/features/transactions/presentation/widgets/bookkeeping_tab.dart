@@ -327,7 +327,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
               children: [
                 AppAnimatedEntry(
                   child: _QuickEntryHeader(
-                    ledgerName: selectedLedger?.name,
+                    ledger: selectedLedger,
                     currencyCode: _selectedCurrency,
                     isIncome: _transactionType == 1,
                   ),
@@ -353,7 +353,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                                 .map(
                                   (l) => DropdownMenuItem(
                                     value: l.uuid,
-                                    child: Text(l.name),
+                                    child: _LedgerDropdownItem(ledger: l),
                                   ),
                                 )
                                 .toList(),
@@ -702,12 +702,12 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
 
 class _QuickEntryHeader extends StatelessWidget {
   const _QuickEntryHeader({
-    required this.ledgerName,
+    required this.ledger,
     required this.currencyCode,
     required this.isIncome,
   });
 
-  final String? ledgerName;
+  final Ledger? ledger;
   final String? currencyCode;
   final bool isIncome;
 
@@ -742,20 +742,60 @@ class _QuickEntryHeader extends StatelessWidget {
                 Text('快速记账', style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 4),
                 Text(
-                  ledgerName == null
+                  ledger == null
                       ? '请选择账本'
-                      : '$ledgerName · ${currencyCode ?? 'CNY'}',
+                      : '${ledger!.name} · ${currencyCode ?? 'CNY'}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: colorScheme.onSurfaceVariant,
                   ),
                 ),
+                if (ledger != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    ledger!.displayCode,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _LedgerDropdownItem extends StatelessWidget {
+  const _LedgerDropdownItem({required this.ledger});
+
+  final Ledger ledger;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(ledger.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+        Text(
+          ledger.displayCode,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 }

@@ -18,4 +18,8 @@ class Ledger {
   bool isDeleted = false; // Soft delete flag
 
   String? role;
+
+  String get displayCode => 'Simon-$uuid';
+
+  String get displayNameWithCode => '$name · $displayCode';
 }

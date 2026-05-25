@@ -240,9 +240,30 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Text(
-                      widget.existingLedger == null ? '新建账本' : '编辑账本',
-                      style: Theme.of(context).textTheme.titleLarge,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          widget.existingLedger == null ? '新建账本' : '编辑账本',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        if (widget.existingLedger != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            widget.existingLedger!.displayCode,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ],

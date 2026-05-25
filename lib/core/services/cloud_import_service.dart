@@ -85,7 +85,7 @@ class CloudImportService {
       final step = index + 1;
       onProgress?.call(
         CloudImportProgress(
-          message: '正在导入 ${ledger.name}',
+          message: '正在导入 ${ledger.displayNameWithCode}',
           done: index,
           total: selectedLedgers.length,
         ),
@@ -97,7 +97,7 @@ class CloudImportService {
       if (existingRemoteUuid != null) {
         onProgress?.call(
           CloudImportProgress(
-            message: '${ledger.name} 已导入，已跳过',
+            message: '${ledger.displayNameWithCode} 已导入，已跳过',
             done: step,
             total: selectedLedgers.length,
           ),
@@ -120,7 +120,7 @@ class CloudImportService {
       await prefs.setString(_importedLedgerKey(ledger.uuid), remoteLedger.uuid);
       onProgress?.call(
         CloudImportProgress(
-          message: '${ledger.name} 导入完成',
+          message: '${ledger.displayNameWithCode} 导入完成',
           done: step,
           total: selectedLedgers.length,
         ),

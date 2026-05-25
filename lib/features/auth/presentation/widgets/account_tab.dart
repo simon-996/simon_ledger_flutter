@@ -617,7 +617,11 @@ class _CloudImportDialogState extends ConsumerState<_CloudImportDialog> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      subtitle: Text('${candidate.transactionCount} 条流水'),
+                      subtitle: Text(
+                        '${candidate.transactionCount} 条流水 · ${ledger.displayCode}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     );
                   },
                 ),

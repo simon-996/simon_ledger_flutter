@@ -170,6 +170,16 @@ class TransactionDetailSheet extends ConsumerWidget {
                           children: [
                             _buildDetailRow(
                               context,
+                              Icons.book_outlined,
+                              '账本',
+                              ledger.displayNameWithCode,
+                            ),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 10),
+                              child: Divider(height: 1),
+                            ),
+                            _buildDetailRow(
+                              context,
                               Icons.access_time_rounded,
                               '时间',
                               dateStr,

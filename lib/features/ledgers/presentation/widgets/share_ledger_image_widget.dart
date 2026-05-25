@@ -60,10 +60,21 @@ class ShareLedgerImageWidget extends StatelessWidget {
               children: [
                 Text(
                   ledger.name,
+                  textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                     color: Color(0xFF1F2937),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  ledger.displayCode,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF6B7280),
                   ),
                 ),
                 const SizedBox(height: 8),

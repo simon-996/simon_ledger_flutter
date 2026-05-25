@@ -194,12 +194,12 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          _isSelectionMode
-              ? '已选择 ${_selectedTransactionUuids.length} 项'
-              : widget.ledger.name,
-          overflow: TextOverflow.ellipsis,
-        ),
+        title: _isSelectionMode
+            ? Text(
+                '已选择 ${_selectedTransactionUuids.length} 项',
+                overflow: TextOverflow.ellipsis,
+              )
+            : _LedgerAppBarTitle(ledger: widget.ledger),
         leading: _isSelectionMode
             ? IconButton(
                 tooltip: '退出选择',
@@ -600,6 +600,40 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
           );
         },
       ),
+    );
+  }
+}
+
+class _LedgerAppBarTitle extends StatelessWidget {
+  const _LedgerAppBarTitle({required this.ledger});
+
+  final Ledger ledger;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          ledger.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: textTheme.titleLarge,
+        ),
+        Text(
+          ledger.displayCode,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: textTheme.labelSmall?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 }
