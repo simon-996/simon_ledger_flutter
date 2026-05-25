@@ -81,7 +81,11 @@ class RemotePersonRepository implements PersonRepository {
       throw ArgumentError('Remote person writes require ledgerUuid.');
     }
 
-    final data = {'name': person.name, 'avatar': person.avatar};
+    final data = {
+      'name': person.name,
+      'avatar': person.avatar,
+      'linkedUserUuid': person.linkedUserUuid,
+    };
     if (_looksLikeRemoteUuid(person.uuid)) {
       await _apiClient.put<Person>(
         '/api/ledgers/$ledgerUuid/people/${person.uuid}',
@@ -101,7 +105,8 @@ class RemotePersonRepository implements PersonRepository {
     person
       ..uuid = saved.uuid
       ..name = saved.name
-      ..avatar = saved.avatar;
+      ..avatar = saved.avatar
+      ..linkedUserUuid = saved.linkedUserUuid;
   }
 
   @override
@@ -128,6 +133,7 @@ class RemotePersonRepository implements PersonRepository {
     return Person()
       ..uuid = map['uuid'].toString()
       ..name = map['name'].toString()
-      ..avatar = map['avatar']?.toString() ?? '';
+      ..avatar = map['avatar']?.toString() ?? ''
+      ..linkedUserUuid = map['linkedUserUuid']?.toString();
   }
 }

@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:simon_ledger_flutter/core/database/database_service.dart';
 import 'package:simon_ledger_flutter/core/network/api_client.dart';
 import 'package:simon_ledger_flutter/core/network/token_store.dart';
 import 'package:simon_ledger_flutter/core/repositories/transaction_repository.dart';
@@ -6,6 +8,7 @@ import 'package:simon_ledger_flutter/core/repositories/transaction_repository.da
 void main() {
   group('RemoteTransactionRepository', () {
     test('loads all transaction pages for a ledger', () async {
+      SharedPreferences.setMockInitialValues({});
       final apiClient = _FakeApiClient([
         {
           'page': 1,
@@ -20,7 +23,10 @@ void main() {
           'records': [_transactionJson('tx-3')],
         },
       ]);
-      final repository = RemoteTransactionRepository(apiClient);
+      final repository = RemoteTransactionRepository(
+        apiClient: apiClient,
+        database: DatabaseService(),
+      );
 
       final transactions = await repository.getTransactionsForLedger(
         'ledger-1',

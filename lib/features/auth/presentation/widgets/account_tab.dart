@@ -5,9 +5,11 @@ import '../../../../core/config/avatar_config.dart';
 import '../../../../core/di/providers.dart';
 import '../../../../core/models/local_profile.dart';
 import '../../../../core/services/cloud_import_service.dart';
+import '../../../../core/services/profile_sync_service.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../ledgers/presentation/providers/ledger_provider.dart';
 import '../../../ledgers/presentation/providers/ledger_stats_provider.dart';
+import '../../../people_pool/presentation/providers/person_provider.dart';
 import '../providers/auth_provider.dart';
 
 class AccountTab extends ConsumerWidget {
@@ -15,19 +17,22 @@ class AccountTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final tokenAsync = ref.watch(authTokenProvider);
     final userAsync = ref.watch(currentUserProvider);
 
-    return userAsync.when(
+    return tokenAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, stackTrace) => _AuthPanel(errorText: '$error'),
-      data: (user) {
-        if (user == null) {
+      data: (token) {
+        final isSignedIn = token != null && token.isValid;
+        if (!isSignedIn) {
           return const _AuthPanel();
         }
+
+        final user = userAsync.valueOrNull;
         return _SignedInPanel(
-          nickname: user.nickname,
-          account: user.email ?? user.phone ?? user.uuid,
-          avatar: user.avatar,
+          account: user?.email ?? user?.phone ?? user?.uuid,
+          syncingProfile: userAsync.isLoading,
         );
       },
     );
@@ -35,71 +40,21 @@ class AccountTab extends ConsumerWidget {
 }
 
 class _SignedInPanel extends ConsumerWidget {
-  const _SignedInPanel({
-    required this.nickname,
-    required this.account,
-    this.avatar,
-  });
+  const _SignedInPanel({this.account, required this.syncingProfile});
 
-  final String nickname;
-  final String account;
-  final String? avatar;
+  final String? account;
+  final bool syncingProfile;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final avatarText = avatar == null || avatar!.isEmpty
-        ? (nickname.isEmpty ? '?' : nickname.characters.first)
-        : avatar!;
-
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        AppSectionCard(
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 28,
-                backgroundColor: colorScheme.primaryContainer,
-                child: Text(
-                  avatarText,
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      nickname,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      account,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+        _UnifiedProfileCard(
+          isSignedIn: true,
+          account: account,
+          syncingProfile: syncingProfile,
         ),
-        const SizedBox(height: 16),
-        _AccountProfileCard(
-          nickname: nickname,
-          avatar: avatar,
-          onSaved: () {
-            ref.invalidate(currentUserProvider);
-          },
-        ),
-        const SizedBox(height: 16),
-        const _LocalProfileCard(),
         const SizedBox(height: 16),
         const _CloudImportCard(),
         const SizedBox(height: 16),
@@ -123,127 +78,319 @@ class _SignedInPanel extends ConsumerWidget {
   }
 }
 
-class _AccountProfileCard extends ConsumerWidget {
-  const _AccountProfileCard({
-    required this.nickname,
-    required this.avatar,
-    required this.onSaved,
+class _UnifiedProfileCard extends ConsumerStatefulWidget {
+  const _UnifiedProfileCard({
+    required this.isSignedIn,
+    this.account,
+    this.syncingProfile = false,
   });
 
-  final String nickname;
-  final String? avatar;
-  final VoidCallback onSaved;
+  final bool isSignedIn;
+  final String? account;
+  final bool syncingProfile;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_UnifiedProfileCard> createState() =>
+      _UnifiedProfileCardState();
+}
+
+class _UnifiedProfileCardState extends ConsumerState<_UnifiedProfileCard> {
+  int _syncingRequests = 0;
+  bool _skipNextSyncedNotice = false;
+
+  bool get _syncing => _syncingRequests > 0;
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen<AsyncValue<LocalProfile>>(localProfileProvider, (
+      previous,
+      next,
+    ) {
+      final wasPending = previous?.valueOrNull?.pendingSync ?? false;
+      final isPending = next.valueOrNull?.pendingSync ?? false;
+      if (!widget.isSignedIn || !wasPending || isPending) {
+        return;
+      }
+
+      if (_skipNextSyncedNotice) {
+        _skipNextSyncedNotice = false;
+        return;
+      }
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('账户资料已同步')));
+      });
+    });
+
+    final profileAsync = ref.watch(localProfileProvider);
     final colorScheme = Theme.of(context).colorScheme;
-    final avatarText = avatar == null || avatar!.isEmpty
-        ? (nickname.isEmpty ? '?' : nickname.characters.first)
-        : avatar!;
 
     return AppSectionCard(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: () => _editProfile(context, ref),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              AppSectionHeader(
-                title: '账号昵称和头像',
-                trailing: TextButton.icon(
-                  onPressed: () => _editProfile(context, ref),
-                  icon: const Icon(Icons.edit_rounded, size: 18),
-                  label: const Text('修改'),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
+      child: profileAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, stackTrace) => Text('账户资料加载失败：$error'),
+        data: (profile) {
+          final syncing =
+              _syncing || (widget.syncingProfile && profile.pendingSync);
+
+          return InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: () => _editProfile(profile),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  CircleAvatar(
-                    radius: 26,
-                    backgroundColor: colorScheme.primaryContainer,
-                    child: Text(
-                      avatarText,
-                      style: Theme.of(context).textTheme.titleMedium,
+                  AppSectionHeader(
+                    title: '账户昵称和头像',
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (syncing) ...[
+                          const SizedBox.square(
+                            dimension: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+                        TextButton.icon(
+                          onPressed: () => _editProfile(profile),
+                          icon: const Icon(Icons.edit_rounded, size: 18),
+                          label: const Text('修改'),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Text(
-                      nickname,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 28,
+                        backgroundColor: colorScheme.primaryContainer,
+                        child: Text(
+                          profile.personAvatar,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
                       ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              profile.normalizedNickname,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w800),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              widget.account ??
+                                  (widget.isSignedIn ? '已登录' : '未登录本地使用'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ],
+                  ),
+                  if (syncing || profile.pendingSync) ...[
+                    const SizedBox(height: 12),
+                    _ProfileSyncBanner(
+                      syncing: syncing,
+                      errorText: profile.syncError,
+                      onRetry: widget.isSignedIn && !syncing
+                          ? _retrySyncProfile
+                          : null,
                     ),
-                  ),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
+                  ],
                 ],
               ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }
 
-  Future<void> _editProfile(BuildContext context, WidgetRef ref) async {
-    final result = await showDialog<_AccountProfileEditResult>(
+  Future<void> _editProfile(LocalProfile profile) async {
+    final result = await showDialog<LocalProfile>(
       context: context,
-      builder: (context) =>
-          _AccountProfileDialog(nickname: nickname, avatar: avatar),
+      builder: (context) => _ProfileDialog(profile: profile),
     );
     if (result == null) return;
 
+    if (widget.isSignedIn) {
+      _beginSync();
+    }
+
     try {
-      await ref
-          .read(authRepositoryProvider)
-          .updateProfile(nickname: result.nickname, avatar: result.avatar);
-      onSaved();
+      final syncResult = await ref
+          .read(profileSyncServiceProvider)
+          .saveProfile(result, onLocalSaved: _refreshProfileDependents);
+      if (!mounted) return;
+      _showSyncResult(syncResult);
     } catch (error) {
-      if (!context.mounted) return;
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('保存失败，请重试：$error')));
+      ).showSnackBar(SnackBar(content: Text('账户资料保存失败：$error')));
+    } finally {
+      if (widget.isSignedIn) {
+        _endSync();
+      }
+    }
+  }
+
+  Future<void> _retrySyncProfile() async {
+    _beginSync();
+
+    try {
+      final syncResult = await ref
+          .read(profileSyncServiceProvider)
+          .syncPendingProfile();
+      if (syncResult.status == ProfileSyncStatus.synced) {
+        _skipNextSyncedNotice = true;
+      }
+      _refreshProfileDependents();
+      if (!mounted) return;
+      _showSyncResult(syncResult);
+    } finally {
+      _endSync();
+    }
+  }
+
+  void _beginSync() {
+    if (!mounted) return;
+    setState(() => _syncingRequests += 1);
+  }
+
+  void _endSync() {
+    if (!mounted) return;
+    setState(() {
+      if (_syncingRequests > 0) {
+        _syncingRequests -= 1;
+      }
+    });
+  }
+
+  void _refreshProfileDependents() {
+    ref.invalidate(localProfileProvider);
+    ref.invalidate(currentUserProvider);
+    ref.invalidate(personNotifierProvider);
+    ref.invalidate(ledgerNotifierProvider);
+    ref.invalidate(ledgerStatsProvider);
+  }
+
+  void _showSyncResult(ProfileSyncResult result) {
+    final messenger = ScaffoldMessenger.of(context);
+    switch (result.status) {
+      case ProfileSyncStatus.synced:
+        messenger.showSnackBar(const SnackBar(content: Text('账户资料已同步')));
+      case ProfileSyncStatus.queued:
+        messenger.showSnackBar(
+          const SnackBar(content: Text('账户资料已保存，联网后会继续同步')),
+        );
+      case ProfileSyncStatus.localOnly:
+        messenger.showSnackBar(const SnackBar(content: Text('账户资料已保存')));
+      case ProfileSyncStatus.skipped:
+        messenger.showSnackBar(const SnackBar(content: Text('暂无需要同步的资料')));
+      case ProfileSyncStatus.stale:
+        break;
     }
   }
 }
 
-class _AccountProfileEditResult {
-  const _AccountProfileEditResult({
-    required this.nickname,
-    required this.avatar,
+class _ProfileSyncBanner extends StatelessWidget {
+  const _ProfileSyncBanner({
+    required this.syncing,
+    required this.errorText,
+    required this.onRetry,
   });
 
-  final String nickname;
-  final String avatar;
-}
-
-class _AccountProfileDialog extends StatefulWidget {
-  const _AccountProfileDialog({required this.nickname, this.avatar});
-
-  final String nickname;
-  final String? avatar;
+  final bool syncing;
+  final String? errorText;
+  final VoidCallback? onRetry;
 
   @override
-  State<_AccountProfileDialog> createState() => _AccountProfileDialogState();
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colorScheme.tertiaryContainer,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (syncing)
+            const SizedBox.square(
+              dimension: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else
+            Icon(
+              Icons.cloud_off_outlined,
+              color: colorScheme.onTertiaryContainer,
+            ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              syncing
+                  ? '正在同步账户资料...'
+                  : errorText == null || errorText!.isEmpty
+                  ? '账户资料已在本地保存，尚未同步到云端。'
+                  : '账户资料已在本地保存，尚未同步到云端：$errorText',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onTertiaryContainer,
+              ),
+            ),
+          ),
+          if (!syncing && onRetry != null) ...[
+            const SizedBox(width: 8),
+            TextButton(onPressed: onRetry, child: const Text('重试')),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
-class _AccountProfileDialogState extends State<_AccountProfileDialog> {
+class _ProfileDialog extends StatefulWidget {
+  const _ProfileDialog({required this.profile});
+
+  final LocalProfile profile;
+
+  @override
+  State<_ProfileDialog> createState() => _ProfileDialogState();
+}
+
+class _ProfileDialogState extends State<_ProfileDialog> {
   late final TextEditingController _nicknameController;
-  late String _avatar;
+  late String _avatarIcon;
 
   @override
   void initState() {
     super.initState();
-    _nicknameController = TextEditingController(text: widget.nickname);
-    _avatar = AvatarConfig.normalizeAvatar(widget.avatar ?? '');
+    _nicknameController = TextEditingController(
+      text: widget.profile.normalizedNickname,
+    );
+    _avatarIcon = AvatarConfig.normalizeKey(widget.profile.avatarIcon);
   }
 
   @override
@@ -255,7 +402,7 @@ class _AccountProfileDialogState extends State<_AccountProfileDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('账号资料'),
+      title: const Text('账户资料'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -275,11 +422,15 @@ class _AccountProfileDialogState extends State<_AccountProfileDialog> {
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: AvatarConfig.avatars.map((avatar) {
+              children: AvatarConfig.options.map((option) {
                 return ChoiceChip(
-                  label: Text(avatar, style: const TextStyle(fontSize: 18)),
-                  selected: _avatar == avatar,
-                  onSelected: (_) => setState(() => _avatar = avatar),
+                  label: Text(
+                    option.avatar,
+                    style: const TextStyle(fontSize: 18),
+                  ),
+                  showCheckmark: false,
+                  selected: _avatarIcon == option.key,
+                  onSelected: (_) => setState(() => _avatarIcon = option.key),
                 );
               }).toList(),
             ),
@@ -307,7 +458,7 @@ class _AccountProfileDialogState extends State<_AccountProfileDialog> {
 
     Navigator.of(
       context,
-    ).pop(_AccountProfileEditResult(nickname: nickname, avatar: _avatar));
+    ).pop(LocalProfile(nickname: nickname, avatarIcon: _avatarIcon));
   }
 }
 
@@ -401,186 +552,6 @@ class _CloudImportCardState extends ConsumerState<_CloudImportCard> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('本地账本导入完成')));
-  }
-}
-
-class _LocalProfileCard extends ConsumerWidget {
-  const _LocalProfileCard();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final profileAsync = ref.watch(localProfileProvider);
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return AppSectionCard(
-      child: profileAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => Text('本地资料加载失败：$error'),
-        data: (profile) => InkWell(
-          borderRadius: BorderRadius.circular(18),
-          onTap: () => _editProfile(context, ref, profile),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 2),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                AppSectionHeader(
-                  title: '本地昵称和头像',
-                  trailing: TextButton.icon(
-                    onPressed: () => _editProfile(context, ref, profile),
-                    icon: const Icon(Icons.edit_rounded, size: 18),
-                    label: const Text('修改'),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 26,
-                      backgroundColor: colorScheme.secondaryContainer,
-                      child: Text(
-                        profile.personAvatar,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(color: colorScheme.onSecondaryContainer),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            profile.normalizedNickname,
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w800),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '未登录时用于创建账本和默认加入本人',
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(color: colorScheme.onSurfaceVariant),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Icon(
-                      Icons.chevron_right_rounded,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _editProfile(
-    BuildContext context,
-    WidgetRef ref,
-    LocalProfile profile,
-  ) async {
-    final result = await showDialog<LocalProfile>(
-      context: context,
-      builder: (context) => _LocalProfileDialog(profile: profile),
-    );
-    if (result == null) return;
-
-    await ref.read(localProfileStoreProvider).save(result);
-    ref.invalidate(localProfileProvider);
-  }
-}
-
-class _LocalProfileDialog extends StatefulWidget {
-  const _LocalProfileDialog({required this.profile});
-
-  final LocalProfile profile;
-
-  @override
-  State<_LocalProfileDialog> createState() => _LocalProfileDialogState();
-}
-
-class _LocalProfileDialogState extends State<_LocalProfileDialog> {
-  late final TextEditingController _nicknameController;
-  late String _avatarIcon;
-
-  @override
-  void initState() {
-    super.initState();
-    _nicknameController = TextEditingController(
-      text: widget.profile.normalizedNickname,
-    );
-    _avatarIcon = AvatarConfig.normalizeKey(widget.profile.avatarIcon);
-  }
-
-  @override
-  void dispose() {
-    _nicknameController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('本地身份'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-              controller: _nicknameController,
-              autofocus: true,
-              textInputAction: TextInputAction.done,
-              decoration: const InputDecoration(
-                labelText: '昵称',
-                prefixIcon: Icon(Icons.badge_outlined),
-              ),
-              onSubmitted: (_) => _submit(),
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: AvatarConfig.options.map((option) {
-                return ChoiceChip(
-                  label: Text(
-                    option.avatar,
-                    style: const TextStyle(fontSize: 18),
-                  ),
-                  showCheckmark: false,
-                  selected: _avatarIcon == option.key,
-                  onSelected: (_) => setState(() => _avatarIcon = option.key),
-                );
-              }).toList(),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('取消'),
-        ),
-        FilledButton(onPressed: _submit, child: const Text('保存')),
-      ],
-    );
-  }
-
-  void _submit() {
-    final nickname = _nicknameController.text.trim();
-    if (nickname.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('请输入昵称')));
-      return;
-    }
-
-    Navigator.of(
-      context,
-    ).pop(LocalProfile(nickname: nickname, avatarIcon: _avatarIcon));
   }
 }
 
@@ -763,7 +734,7 @@ class _AuthPanelState extends ConsumerState<_AuthPanel> {
     return ListView(
       padding: EdgeInsets.fromLTRB(16, 16, 16, bottomInset + 16),
       children: [
-        const _LocalProfileCard(),
+        const _UnifiedProfileCard(isSignedIn: false),
         const SizedBox(height: 16),
         SegmentedButton<bool>(
           showSelectedIcon: false,

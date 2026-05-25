@@ -5,6 +5,7 @@ import '../../../../core/models/ledger.dart';
 import '../../../../core/models/person.dart';
 import '../../../../core/preferences/last_selected_ledger_preference.dart';
 import '../../../../core/widgets/app_components.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../auth/presentation/widgets/account_tab.dart';
 import '../../../transactions/presentation/widgets/bookkeeping_tab.dart';
 import '../../../ledgers/presentation/widgets/ledger_list_tab.dart';
@@ -232,20 +233,36 @@ class _HomePageState extends ConsumerState<HomePage> {
     final isCloudMode = token != null && token.isValid;
     final personRepository = ref.read(personRepositoryProvider);
     final ledgerScope = isCloudMode ? ledgerUuid : null;
+    final user = isCloudMode
+        ? await ref.read(currentUserProvider.future)
+        : null;
     final people = await personRepository.getAllPeople(ledgerUuid: ledgerScope);
     final nickname = profile.normalizedNickname;
-    final existing = people
-        .where((person) => person.name.trim() == nickname && !person.isDeleted)
-        .firstOrNull;
+    final existing = people.where((person) {
+      if (person.isDeleted) {
+        return false;
+      }
+
+      if (isCloudMode && user != null) {
+        return person.linkedUserUuid == user.uuid;
+      }
+
+      return person.uuid == 'self' ||
+          person.uuid == 'p1' ||
+          person.name.trim() == nickname;
+    }).firstOrNull;
 
     if (existing != null) {
       return existing.uuid;
     }
 
     final person = Person()
-      ..uuid = 'self-${DateTime.now().microsecondsSinceEpoch}'
+      ..uuid = isCloudMode
+          ? 'self-${DateTime.now().microsecondsSinceEpoch}'
+          : 'self'
       ..name = nickname
-      ..avatar = profile.personAvatar;
+      ..avatar = profile.personAvatar
+      ..linkedUserUuid = user?.uuid;
     await personRepository.savePerson(person, ledgerUuid: ledgerScope);
     ref.invalidate(personNotifierProvider);
     return person.uuid;

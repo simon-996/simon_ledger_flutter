@@ -19,7 +19,7 @@ void main() {
       final people = await database.getAllPeople();
 
       expect(people, hasLength(1));
-      expect(people.single.uuid, 'p1');
+      expect(people.single.uuid, 'self');
       expect(people.single.name, '自己');
     });
 

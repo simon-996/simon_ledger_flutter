@@ -7,5 +7,7 @@ class Person {
 
   String avatar = '🧑';
 
+  String? linkedUserUuid;
+
   bool isDeleted = false; // Soft delete flag
 }

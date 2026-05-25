@@ -20,7 +20,7 @@ class DatabaseService {
     await _writePeople([
       Person()
         ..id = 1
-        ..uuid = 'p1'
+        ..uuid = 'self'
         ..name = '自己'
         ..avatar = '😎',
     ]);
@@ -236,6 +236,7 @@ class DatabaseService {
       ..uuid = json['uuid']?.toString() ?? ''
       ..name = json['name']?.toString() ?? ''
       ..avatar = json['avatar']?.toString() ?? '🧑'
+      ..linkedUserUuid = json['linkedUserUuid']?.toString()
       ..isDeleted = json['isDeleted'] == true;
   }
 
@@ -245,6 +246,7 @@ class DatabaseService {
       'uuid': person.uuid,
       'name': person.name,
       'avatar': person.avatar,
+      'linkedUserUuid': person.linkedUserUuid,
       'isDeleted': person.isDeleted,
     };
   }
@@ -286,6 +288,8 @@ class DatabaseService {
       ..ledgerUuid = json['ledgerUuid']?.toString() ?? ''
       ..type = (json['type'] as num?)?.toInt() ?? 0
       ..payerPersonUuid = json['payerPersonUuid']?.toString()
+      ..clientOperationId = json['clientOperationId']?.toString()
+      ..version = (json['version'] as num?)?.toInt()
       ..amount = (json['amount'] as num?)?.toDouble() ?? 0
       ..currencyCode = json['currencyCode']?.toString() ?? 'CNY'
       ..category = json['category']?.toString() ?? ''
@@ -296,6 +300,8 @@ class DatabaseService {
       ..createdAt =
           DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
           DateTime.now()
+      ..pendingSync = json['pendingSync'] == true
+      ..syncError = json['syncError']?.toString()
       ..isDeleted = json['isDeleted'] == true;
   }
 
@@ -308,12 +314,16 @@ class DatabaseService {
       'ledgerUuid': transaction.ledgerUuid,
       'type': transaction.type,
       'payerPersonUuid': transaction.payerPersonUuid,
+      'clientOperationId': transaction.clientOperationId,
+      'version': transaction.version,
       'amount': transaction.amount,
       'currencyCode': transaction.currencyCode,
       'category': transaction.category,
       'personUuids': transaction.personUuids,
       'note': transaction.note,
       'createdAt': transaction.createdAt.toIso8601String(),
+      'pendingSync': transaction.pendingSync,
+      'syncError': transaction.syncError,
       'isDeleted': transaction.isDeleted,
     };
   }

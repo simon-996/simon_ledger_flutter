@@ -21,6 +21,11 @@ class TransactionNotifier extends _$TransactionNotifier {
     final repository = ref.read(transactionRepositoryProvider);
     await repository.saveTransaction(transaction);
 
+    final current = state.valueOrNull;
+    if (current != null) {
+      state = AsyncValue.data([transaction, ...current]);
+    }
+
     // Invalidate ledger stats so the UI updates
     ref.invalidate(ledgerStatsProvider);
     // Refresh local list

@@ -12,6 +12,10 @@ class TransactionRecord {
   // a non-null value means this person paid for the selected participants.
   String? payerPersonUuid;
 
+  String? clientOperationId;
+
+  int? version;
+
   late double amount;
 
   late String currencyCode;
@@ -23,6 +27,10 @@ class TransactionRecord {
   late String note;
 
   late DateTime createdAt;
+
+  bool pendingSync = false;
+
+  String? syncError;
 
   bool isDeleted = false;
 }

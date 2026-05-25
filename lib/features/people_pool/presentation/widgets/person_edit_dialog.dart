@@ -104,7 +104,8 @@ class _PersonEditDialogState extends State<PersonEditDialog> {
                             widget.person?.uuid ??
                             DateTime.now().microsecondsSinceEpoch.toString()
                         ..name = name
-                        ..avatar = _selectedAvatar,
+                        ..avatar = _selectedAvatar
+                        ..linkedUserUuid = widget.person?.linkedUserUuid,
                     );
                   }
                 }

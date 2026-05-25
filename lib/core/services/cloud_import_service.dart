@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../database/database_service.dart';
@@ -133,7 +136,7 @@ class CloudImportService {
         'baseCurrencyCode': ledger.baseCurrencyCode,
         'exchangeRateToCny': ledger.exchangeRateToCNY,
       },
-      idempotencyKey: 'import-ledger-${ledger.uuid}',
+      idempotencyKey: _importKey('ledger', ledger.uuid),
       fromJson: _ledgerFromJson,
     );
   }
@@ -159,7 +162,7 @@ class CloudImportService {
       final remotePerson = await _apiClient.post<Person>(
         '/api/ledgers/$remoteLedgerUuid/people',
         data: {'name': person.name, 'avatar': person.avatar},
-        idempotencyKey: 'import-person-${localLedger.uuid}-$personUuid',
+        idempotencyKey: _importKey('person', localLedger.uuid, personUuid),
         fromJson: _personFromJson,
       );
       personUuidMap[personUuid] = remotePerson.uuid;
@@ -197,11 +200,18 @@ class CloudImportService {
           'category': transaction.category,
           'note': transaction.note,
           'happenedAt': transaction.createdAt.toIso8601String(),
-          'clientOperationId': 'import-${transaction.uuid}',
+          'clientOperationId': _importKey(
+            'tx',
+            localLedger.uuid,
+            transaction.uuid,
+          ),
           'personUuids': remotePersonUuids,
         },
-        idempotencyKey:
-            'import-transaction-${localLedger.uuid}-${transaction.uuid}',
+        idempotencyKey: _importKey(
+          'transaction',
+          localLedger.uuid,
+          transaction.uuid,
+        ),
         fromJson: _transactionFromJson,
       );
     }
@@ -209,6 +219,12 @@ class CloudImportService {
 
   String _importedLedgerKey(String ledgerUuid) {
     return 'cloud_import.ledger.$ledgerUuid';
+  }
+
+  String _importKey(String prefix, String first, [String? second]) {
+    final value = second == null ? first : '$first:$second';
+    final digest = sha1.convert(utf8.encode(value)).toString();
+    return 'import-$prefix-$digest';
   }
 
   static Ledger _ledgerFromJson(Object? json) {

@@ -9,6 +9,7 @@ import '../repositories/ledger_repository.dart';
 import '../repositories/person_repository.dart';
 import '../repositories/transaction_repository.dart';
 import '../services/cloud_import_service.dart';
+import '../services/profile_sync_service.dart';
 
 /// Provides the global instance of DatabaseService.
 /// This acts as our base Dependency Injection for the database layer.
@@ -69,7 +70,10 @@ final personRepositoryProvider = Provider<PersonRepository>((ref) {
 final transactionRepositoryProvider = Provider<TransactionRepository>((ref) {
   final token = ref.watch(authTokenProvider).valueOrNull;
   if (token != null && token.isValid) {
-    return RemoteTransactionRepository(ref.watch(apiClientProvider));
+    return RemoteTransactionRepository(
+      apiClient: ref.watch(apiClientProvider),
+      database: ref.watch(databaseProvider),
+    );
   }
   return LocalTransactionRepository(ref.watch(databaseProvider));
 });
@@ -78,5 +82,14 @@ final cloudImportServiceProvider = Provider<CloudImportService>((ref) {
   return CloudImportService(
     database: ref.watch(databaseProvider),
     apiClient: ref.watch(apiClientProvider),
+  );
+});
+
+final profileSyncServiceProvider = Provider<ProfileSyncService>((ref) {
+  return ProfileSyncService(
+    localProfileStore: ref.watch(localProfileStoreProvider),
+    tokenStore: ref.watch(tokenStoreProvider),
+    authRepository: ref.watch(authRepositoryProvider),
+    database: ref.watch(databaseProvider),
   );
 });
