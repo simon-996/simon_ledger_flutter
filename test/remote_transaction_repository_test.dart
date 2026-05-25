@@ -65,6 +65,55 @@ void main() {
       ]);
       expect(apiClient.postPaths, isEmpty);
     });
+
+    test('deletes remote transaction locally before sync', () async {
+      SharedPreferences.setMockInitialValues({});
+      final apiClient = _FakeApiClient([]);
+      final database = DatabaseService();
+      final repository = RemoteTransactionRepository(
+        apiClient: apiClient,
+        database: database,
+      );
+      final transaction = _syncedTransaction();
+      await database.saveTransaction(transaction);
+
+      await repository.deleteTransaction('ledger-1', transaction.uuid);
+
+      expect(await database.getTransactionsForLedger('ledger-1'), isEmpty);
+      final deleted = await database.getTransactionsForLedger(
+        'ledger-1',
+        includeDeleted: true,
+      );
+      expect(deleted.single.isDeleted, isTrue);
+      expect(deleted.single.pendingSync, isTrue);
+      expect(apiClient.deletePaths, isEmpty);
+    });
+
+    test('syncs pending remote transaction deletion', () async {
+      SharedPreferences.setMockInitialValues({});
+      final apiClient = _FakeApiClient([]);
+      final database = DatabaseService();
+      final repository = RemoteTransactionRepository(
+        apiClient: apiClient,
+        database: database,
+      );
+      final transaction = _syncedTransaction()
+        ..isDeleted = true
+        ..pendingSync = true;
+      await database.saveTransaction(transaction);
+
+      await repository.syncPendingTransactions('ledger-1');
+
+      expect(apiClient.deletePaths, [
+        '/api/ledgers/ledger-1/transactions/1234567890abcdef1234567890abcdef',
+      ]);
+      final deleted = await database.getTransactionsForLedger(
+        'ledger-1',
+        includeDeleted: true,
+      );
+      expect(deleted.single.isDeleted, isTrue);
+      expect(deleted.single.pendingSync, isFalse);
+    });
   });
 }
 
@@ -82,6 +131,14 @@ TransactionRecord _transaction() {
     ..note = ''
     ..personUuids = ['person-1']
     ..createdAt = DateTime(2026, 5, 22, 12);
+}
+
+TransactionRecord _syncedTransaction() {
+  return _transaction()
+    ..uuid = '1234567890abcdef1234567890abcdef'
+    ..clientOperationId = 'client-op-1'
+    ..version = 3
+    ..pendingSync = false;
 }
 
 Map<String, Object?> _transactionJson(String uuid) {
@@ -107,6 +164,7 @@ class _FakeApiClient extends ApiClient {
   final List<int> requestedPages = [];
   final List<String> postPaths = [];
   final List<String> putPaths = [];
+  final List<String> deletePaths = [];
 
   @override
   Future<T> get<T>(
@@ -138,5 +196,14 @@ class _FakeApiClient extends ApiClient {
   }) async {
     putPaths.add(path);
     return fromJson!(_transactionJson(path.split('/').last));
+  }
+
+  @override
+  Future<void> deleteVoid(
+    String path, {
+    Object? data,
+    String? idempotencyKey,
+  }) async {
+    deletePaths.add(path);
   }
 }

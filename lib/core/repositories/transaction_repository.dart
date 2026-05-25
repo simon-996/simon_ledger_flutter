@@ -140,16 +140,18 @@ class RemoteTransactionRepository implements TransactionRepository {
       includeDeleted: true,
     );
     final pending = transactions
-        .where(
-          (transaction) => transaction.pendingSync && !transaction.isDeleted,
-        )
+        .where((transaction) => transaction.pendingSync)
         .toList();
     var synced = 0;
     Object? firstError;
 
     for (final transaction in pending) {
       try {
-        await _uploadPendingTransaction(transaction);
+        if (transaction.isDeleted) {
+          await _deletePendingTransaction(transaction);
+        } else {
+          await _uploadPendingTransaction(transaction);
+        }
         synced += 1;
       } catch (error) {
         firstError ??= error;
@@ -202,15 +204,40 @@ class RemoteTransactionRepository implements TransactionRepository {
 
   @override
   Future<void> deleteTransaction(String ledgerUuid, String uuid) async {
-    final transaction = await _apiClient.get<TransactionRecord>(
-      '/api/ledgers/$ledgerUuid/transactions/$uuid',
-      fromJson: _transactionFromJson,
+    final transactions = await _db.getTransactionsForLedger(
+      ledgerUuid,
+      includeDeleted: true,
     );
+    final transaction = transactions
+        .where((transaction) => transaction.uuid == uuid)
+        .firstOrNull;
+    if (transaction == null) {
+      return;
+    }
+
+    transaction
+      ..isDeleted = true
+      ..pendingSync = _looksLikeRemoteUuid(transaction.uuid)
+      ..syncError = null;
+    await _db.saveTransaction(transaction);
+  }
+
+  Future<void> _deletePendingTransaction(TransactionRecord transaction) async {
+    final remoteUuid =
+        _remoteUuidByOperationId[transaction.clientOperationId] ??
+        (_looksLikeRemoteUuid(transaction.uuid) ? transaction.uuid : null);
+    final version = transaction.version ?? _versionByUuid[transaction.uuid];
+    if (remoteUuid == null || version == null) {
+      await _saveDeletedTransaction(transaction);
+      return;
+    }
+
     await _apiClient.deleteVoid(
-      '/api/ledgers/$ledgerUuid/transactions/$uuid',
-      data: {'version': _versionByUuid[transaction.uuid] ?? 1},
-      idempotencyKey: 'delete-transaction-$uuid',
+      '/api/ledgers/${transaction.ledgerUuid}/transactions/$remoteUuid',
+      data: {'version': version},
+      idempotencyKey: 'delete-transaction-$remoteUuid-$version',
     );
+    await _saveDeletedTransaction(transaction);
   }
 
   static final Map<String, int> _versionByUuid = {};
@@ -261,6 +288,15 @@ class RemoteTransactionRepository implements TransactionRepository {
     await _db.saveTransaction(
       remote
         ..clientOperationId = local.clientOperationId
+        ..pendingSync = false
+        ..syncError = null,
+    );
+  }
+
+  Future<void> _saveDeletedTransaction(TransactionRecord transaction) {
+    return _db.saveTransaction(
+      transaction
+        ..isDeleted = true
         ..pendingSync = false
         ..syncError = null,
     );
