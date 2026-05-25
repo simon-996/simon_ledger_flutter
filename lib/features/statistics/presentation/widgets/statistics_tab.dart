@@ -170,6 +170,9 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                             ),
                           )
                           .toList(),
+                      selectedItemBuilder: (context) => widget.ledgers
+                          .map((l) => _SelectedLedgerText(ledger: l))
+                          .toList(),
                       onChanged: (val) {
                         if (val != null) {
                           setState(() => _selectedLedgerUuid = val);
@@ -692,6 +695,21 @@ class _LedgerDropdownItem extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _SelectedLedgerText extends StatelessWidget {
+  const _SelectedLedgerText({required this.ledger});
+
+  final Ledger ledger;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      ledger.displayNameWithCode,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
     );
   }
 }
