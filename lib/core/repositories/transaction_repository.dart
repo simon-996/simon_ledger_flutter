@@ -176,7 +176,9 @@ class RemoteTransactionRepository implements TransactionRepository {
       'personUuids': transaction.personUuids,
     };
 
-    final remoteUuid = _remoteUuidByOperationId[transaction.clientOperationId];
+    final remoteUuid =
+        _remoteUuidByOperationId[transaction.clientOperationId] ??
+        (_looksLikeRemoteUuid(transaction.uuid) ? transaction.uuid : null);
     final version = transaction.version ?? _versionByUuid[transaction.uuid];
     if (remoteUuid == null || version == null) {
       final saved = await _apiClient.post<TransactionRecord>(
@@ -213,6 +215,10 @@ class RemoteTransactionRepository implements TransactionRepository {
 
   static final Map<String, int> _versionByUuid = {};
   static final Map<String, String> _remoteUuidByOperationId = {};
+
+  static bool _looksLikeRemoteUuid(String uuid) {
+    return RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(uuid);
+  }
 
   Future<List<TransactionRecord>> _fetchRemoteTransactions(
     String ledgerUuid,

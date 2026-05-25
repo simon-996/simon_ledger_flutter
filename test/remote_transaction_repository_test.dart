@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simon_ledger_flutter/core/database/database_service.dart';
+import 'package:simon_ledger_flutter/core/models/transaction_record.dart';
 import 'package:simon_ledger_flutter/core/network/api_client.dart';
 import 'package:simon_ledger_flutter/core/network/token_store.dart';
 import 'package:simon_ledger_flutter/core/repositories/transaction_repository.dart';
@@ -40,7 +41,47 @@ void main() {
       expect(transactions.first.payerPersonUuid, 'person-1');
       expect(apiClient.requestedPages, [1, 2]);
     });
+
+    test('updates synced remote transaction after restart', () async {
+      SharedPreferences.setMockInitialValues({});
+      final apiClient = _FakeApiClient([]);
+      final database = DatabaseService();
+      final repository = RemoteTransactionRepository(
+        apiClient: apiClient,
+        database: database,
+      );
+      final transaction = _transaction()
+        ..uuid = '1234567890abcdef1234567890abcdef'
+        ..clientOperationId = 'client-op-1'
+        ..version = 3
+        ..amount = 18.5
+        ..pendingSync = true;
+
+      await database.saveTransaction(transaction);
+      await repository.syncPendingTransactions('ledger-1');
+
+      expect(apiClient.putPaths, [
+        '/api/ledgers/ledger-1/transactions/1234567890abcdef1234567890abcdef',
+      ]);
+      expect(apiClient.postPaths, isEmpty);
+    });
   });
+}
+
+TransactionRecord _transaction() {
+  return TransactionRecord()
+    ..uuid = 'local-tx-1'
+    ..ledgerUuid = 'ledger-1'
+    ..type = 0
+    ..payerPersonUuid = 'person-1'
+    ..clientOperationId = 'client-op-1'
+    ..version = 1
+    ..amount = 12.5
+    ..currencyCode = 'CNY'
+    ..category = '餐饮'
+    ..note = ''
+    ..personUuids = ['person-1']
+    ..createdAt = DateTime(2026, 5, 22, 12);
 }
 
 Map<String, Object?> _transactionJson(String uuid) {
@@ -64,6 +105,8 @@ class _FakeApiClient extends ApiClient {
 
   final List<Map<String, Object?>> _pages;
   final List<int> requestedPages = [];
+  final List<String> postPaths = [];
+  final List<String> putPaths = [];
 
   @override
   Future<T> get<T>(
@@ -73,5 +116,27 @@ class _FakeApiClient extends ApiClient {
   }) async {
     requestedPages.add(queryParameters?['page'] as int);
     return fromJson!(_pages.removeAt(0));
+  }
+
+  @override
+  Future<T> post<T>(
+    String path, {
+    Object? data,
+    String? idempotencyKey,
+    T Function(Object? json)? fromJson,
+  }) async {
+    postPaths.add(path);
+    return fromJson!(_transactionJson('posted-tx'));
+  }
+
+  @override
+  Future<T> put<T>(
+    String path, {
+    Object? data,
+    String? idempotencyKey,
+    T Function(Object? json)? fromJson,
+  }) async {
+    putPaths.add(path);
+    return fromJson!(_transactionJson(path.split('/').last));
   }
 }
