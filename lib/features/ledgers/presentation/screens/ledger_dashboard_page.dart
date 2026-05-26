@@ -563,6 +563,8 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                                   amount:
                                       '${t.type == 0 ? '-' : '+'} ${t.currencyCode} ${t.amount.toStringAsFixed(2)}',
                                   isExpense: t.type == 0,
+                                  syncStatus: _syncStatusFor(t),
+                                  syncError: t.syncError,
                                   onLongPress: () {
                                     if (!_isSelectionMode) {
                                       _toggleSelectionMode();
@@ -601,6 +603,17 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
         },
       ),
     );
+  }
+
+  TransactionSyncStatus? _syncStatusFor(TransactionRecord transaction) {
+    if (!transaction.pendingSync) {
+      return null;
+    }
+    final error = transaction.syncError;
+    if (error != null && error.isNotEmpty) {
+      return TransactionSyncStatus.failed;
+    }
+    return TransactionSyncStatus.pending;
   }
 }
 

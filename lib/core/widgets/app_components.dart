@@ -374,6 +374,8 @@ class AppTransactionTile extends StatelessWidget {
     this.note,
     this.leading,
     this.selected = false,
+    this.syncStatus,
+    this.syncError,
     this.onTap,
     this.onLongPress,
   });
@@ -386,6 +388,8 @@ class AppTransactionTile extends StatelessWidget {
   final String? note;
   final Widget? leading;
   final bool selected;
+  final TransactionSyncStatus? syncStatus;
+  final String? syncError;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
@@ -443,11 +447,25 @@ class AppTransactionTile extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      date,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            date,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: colorScheme.onSurfaceVariant),
+                          ),
+                        ),
+                        if (syncStatus != null) ...[
+                          const SizedBox(width: 8),
+                          _TransactionSyncChip(
+                            status: syncStatus!,
+                            errorText: syncError,
+                          ),
+                        ],
+                      ],
                     ),
                     if (hasNote) ...[
                       const SizedBox(height: 4),
@@ -481,6 +499,55 @@ class AppTransactionTile extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+enum TransactionSyncStatus { pending, failed }
+
+class _TransactionSyncChip extends StatelessWidget {
+  const _TransactionSyncChip({required this.status, this.errorText});
+
+  final TransactionSyncStatus status;
+  final String? errorText;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final failed = status == TransactionSyncStatus.failed;
+    final color = failed ? colorScheme.error : colorScheme.tertiary;
+
+    return Tooltip(
+      message: failed && errorText != null && errorText!.isNotEmpty
+          ? '同步失败：$errorText'
+          : failed
+          ? '同步失败，稍后会重试'
+          : '待同步，联网后会自动上传',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              failed ? Icons.error_outline_rounded : Icons.cloud_sync_outlined,
+              size: 12,
+              color: color,
+            ),
+            const SizedBox(width: 3),
+            Text(
+              failed ? '失败' : '待同步',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
         ),
       ),
     );
