@@ -327,6 +327,9 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
               children: [
                 AppAnimatedEntry(
                   child: _QuickEntryHeader(
+                    key: ValueKey(
+                      'quick-header-${selectedLedger?.uuid}-$_transactionType',
+                    ),
                     ledger: selectedLedger,
                     currencyCode: _selectedCurrency,
                     isIncome: _transactionType == 1,
@@ -455,15 +458,18 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        AppSectionHeader(
-                          title: '分类',
-                          trailing: Icon(
-                            _transactionType == 0
-                                ? Icons.trending_down_rounded
-                                : Icons.trending_up_rounded,
-                            color: _transactionType == 0
-                                ? colorScheme.error
-                                : colorScheme.primary,
+                        AppAnimatedSwitcher(
+                          child: AppSectionHeader(
+                            key: ValueKey('category-header-$_transactionType'),
+                            title: '分类',
+                            trailing: Icon(
+                              _transactionType == 0
+                                  ? Icons.trending_down_rounded
+                                  : Icons.trending_up_rounded,
+                              color: _transactionType == 0
+                                  ? colorScheme.error
+                                  : colorScheme.primary,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -503,113 +509,89 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                         }
 
                         final personMap = peopleByUuid(peoplePool);
-                        return AppSectionCard(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              AppSectionHeader(
-                                title: _transactionType == 0 ? '使用人员' : '参与人员',
-                                trailing: TextButton(
-                                  onPressed: () {
-                                    setState(() {
-                                      if (_selectedPersonIds.length ==
-                                          selectedLedger.personUuids.length) {
-                                        _selectedPersonIds.clear();
-                                      } else {
-                                        _selectedPersonIds.addAll(
-                                          selectedLedger.personUuids,
-                                        );
-                                      }
-                                    });
-                                  },
-                                  child: Text(
-                                    _selectedPersonIds.length ==
-                                            selectedLedger.personUuids.length
-                                        ? '取消全选'
-                                        : '全选',
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              if (_transactionType == 0) ...[
-                                SegmentedButton<bool>(
-                                  showSelectedIcon: false,
-                                  segments: const [
-                                    ButtonSegment(
-                                      value: false,
-                                      icon: Icon(
-                                        Icons.account_balance_wallet_outlined,
-                                      ),
-                                      label: Text('共同钱包'),
-                                    ),
-                                    ButtonSegment(
-                                      value: true,
-                                      icon: Icon(Icons.person_outline_rounded),
-                                      label: Text('某人代付'),
-                                    ),
-                                  ],
-                                  selected: {_payerPersonUuid != null},
-                                  onSelectionChanged: (selection) {
-                                    setState(() {
-                                      if (selection.first) {
-                                        _payerPersonUuid ??=
-                                            _selectedPersonIds.isNotEmpty
-                                            ? _selectedPersonIds.first
-                                            : selectedLedger.personUuids.first;
-                                      } else {
-                                        _payerPersonUuid = null;
-                                      }
-                                    });
-                                  },
-                                ),
-                                const SizedBox(height: 10),
-                                Text(
-                                  _payerPersonUuid == null
-                                      ? '使用人员将平均分摊该支出金额。'
-                                      : '付款人先垫付，总额由使用人员平均分摊。',
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.onSurfaceVariant,
-                                      ),
-                                ),
-                                const SizedBox(height: 10),
-                              ],
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: selectedLedger.personUuids.map((pid) {
-                                  final person = personOrFallback(
-                                    personMap,
-                                    pid,
-                                  );
-                                  final isSelected = _selectedPersonIds
-                                      .contains(pid);
-                                  return FilterChip(
-                                    avatar: Text(person.avatar),
-                                    label: Text(person.name),
-                                    selected: isSelected,
-                                    onSelected: (selected) {
+                        return AppAnimatedSwitcher(
+                          child: AppSectionCard(
+                            key: ValueKey(
+                              'people-${selectedLedger.uuid}-$_transactionType-${_payerPersonUuid != null}',
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                AppSectionHeader(
+                                  title: _transactionType == 0
+                                      ? '使用人员'
+                                      : '参与人员',
+                                  trailing: TextButton(
+                                    onPressed: () {
                                       setState(() {
-                                        if (selected) {
-                                          _selectedPersonIds.add(pid);
+                                        if (_selectedPersonIds.length ==
+                                            selectedLedger.personUuids.length) {
+                                          _selectedPersonIds.clear();
                                         } else {
-                                          _selectedPersonIds.remove(pid);
+                                          _selectedPersonIds.addAll(
+                                            selectedLedger.personUuids,
+                                          );
                                         }
                                       });
                                     },
-                                  );
-                                }).toList(),
-                              ),
-                              if (_transactionType == 0 &&
-                                  _payerPersonUuid != null) ...[
-                                const SizedBox(height: 14),
-                                Text(
-                                  '付款人',
-                                  style: Theme.of(context).textTheme.titleSmall,
+                                    child: Text(
+                                      _selectedPersonIds.length ==
+                                              selectedLedger.personUuids.length
+                                          ? '取消全选'
+                                          : '全选',
+                                    ),
+                                  ),
                                 ),
-                                const SizedBox(height: 8),
+                                const SizedBox(height: 10),
+                                if (_transactionType == 0) ...[
+                                  SegmentedButton<bool>(
+                                    showSelectedIcon: false,
+                                    segments: const [
+                                      ButtonSegment(
+                                        value: false,
+                                        icon: Icon(
+                                          Icons.account_balance_wallet_outlined,
+                                        ),
+                                        label: Text('共同钱包'),
+                                      ),
+                                      ButtonSegment(
+                                        value: true,
+                                        icon: Icon(
+                                          Icons.person_outline_rounded,
+                                        ),
+                                        label: Text('某人代付'),
+                                      ),
+                                    ],
+                                    selected: {_payerPersonUuid != null},
+                                    onSelectionChanged: (selection) {
+                                      setState(() {
+                                        if (selection.first) {
+                                          _payerPersonUuid ??=
+                                              _selectedPersonIds.isNotEmpty
+                                              ? _selectedPersonIds.first
+                                              : selectedLedger
+                                                    .personUuids
+                                                    .first;
+                                        } else {
+                                          _payerPersonUuid = null;
+                                        }
+                                      });
+                                    },
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    _payerPersonUuid == null
+                                        ? '使用人员将平均分摊该支出金额。'
+                                        : '付款人先垫付，总额由使用人员平均分摊。',
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.onSurfaceVariant,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                ],
                                 Wrap(
                                   spacing: 8,
                                   runSpacing: 8,
@@ -620,20 +602,59 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                                       personMap,
                                       pid,
                                     );
-                                    return ChoiceChip(
+                                    final isSelected = _selectedPersonIds
+                                        .contains(pid);
+                                    return FilterChip(
                                       avatar: Text(person.avatar),
                                       label: Text(person.name),
-                                      selected: _payerPersonUuid == pid,
-                                      onSelected: (_) {
+                                      selected: isSelected,
+                                      onSelected: (selected) {
                                         setState(() {
-                                          _payerPersonUuid = pid;
+                                          if (selected) {
+                                            _selectedPersonIds.add(pid);
+                                          } else {
+                                            _selectedPersonIds.remove(pid);
+                                          }
                                         });
                                       },
                                     );
                                   }).toList(),
                                 ),
+                                if (_transactionType == 0 &&
+                                    _payerPersonUuid != null) ...[
+                                  const SizedBox(height: 14),
+                                  Text(
+                                    '付款人',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleSmall,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: selectedLedger.personUuids.map((
+                                      pid,
+                                    ) {
+                                      final person = personOrFallback(
+                                        personMap,
+                                        pid,
+                                      );
+                                      return ChoiceChip(
+                                        avatar: Text(person.avatar),
+                                        label: Text(person.name),
+                                        selected: _payerPersonUuid == pid,
+                                        onSelected: (_) {
+                                          setState(() {
+                                            _payerPersonUuid = pid;
+                                          });
+                                        },
+                                      );
+                                    }).toList(),
+                                  ),
+                                ],
                               ],
-                            ],
+                            ),
                           ),
                         );
                       },
@@ -674,16 +695,26 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
               top: 12,
               bottom: 12 + MediaQuery.of(context).viewInsets.bottom,
             ),
-            child: peopleAsyncValue.maybeWhen(
-              data: (peoplePool) => FilledButton.icon(
-                onPressed: _selectedLedgerUuid == null
-                    ? null
-                    : () => _saveTransaction(peoplePool),
-                icon: const Icon(Icons.check_rounded),
-                label: const Text('保存记账'),
+            child: AppAnimatedSwitcher(
+              child: peopleAsyncValue.maybeWhen(
+                data: (peoplePool) => FilledButton.icon(
+                  key: const ValueKey('save-enabled'),
+                  onPressed: _selectedLedgerUuid == null
+                      ? null
+                      : () => _saveTransaction(peoplePool),
+                  icon: const Icon(Icons.check_rounded),
+                  label: const Text('保存记账'),
+                ),
+                orElse: () => FilledButton.icon(
+                  key: const ValueKey('save-loading'),
+                  onPressed: null,
+                  icon: const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  label: const Text('加载中'),
+                ),
               ),
-              orElse: () =>
-                  const FilledButton(onPressed: null, child: Text('加载中')),
             ),
           ),
         ),
@@ -705,6 +736,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
 
 class _QuickEntryHeader extends StatelessWidget {
   const _QuickEntryHeader({
+    super.key,
     required this.ledger,
     required this.currencyCode,
     required this.isIncome,

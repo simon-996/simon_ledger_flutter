@@ -41,7 +41,11 @@ class _HomePageState extends ConsumerState<HomePage> {
         child: isAccountTab
             ? const AccountTab()
             : ledgersAsyncValue.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
+                loading: () => const AppLoadingState(
+                  title: '正在加载账本',
+                  message: '同步账本、人员和本地缓存状态',
+                  icon: Icons.book_outlined,
+                ),
                 error: (err, stack) => AppEmptyState(
                   icon: Icons.error_outline_rounded,
                   title: '加载账本失败',

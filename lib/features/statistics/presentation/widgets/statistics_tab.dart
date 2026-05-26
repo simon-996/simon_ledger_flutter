@@ -121,7 +121,11 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
     }
 
     if (_selectedLedgerUuid == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const AppLoadingState(
+        title: '正在准备统计',
+        message: '读取账本和筛选条件',
+        icon: Icons.bar_chart_outlined,
+      );
     }
 
     final currentLedger = widget.ledgers.firstWhere(
@@ -232,8 +236,16 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
         ),
         Expanded(
           child: transactionsAsyncValue.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (err, stack) => Center(child: Text('加载统计失败: $err')),
+            loading: () => const AppLoadingState(
+              title: '正在加载统计',
+              message: '计算分类占比和人员结余',
+              icon: Icons.pie_chart_outline_rounded,
+            ),
+            error: (err, stack) => AppEmptyState(
+              icon: Icons.error_outline_rounded,
+              title: '加载统计失败',
+              message: '$err',
+            ),
             data: (allTransactions) {
               final filtered = _filterTransactions(allTransactions);
               if (filtered.isEmpty) {
@@ -317,12 +329,15 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                   peopleAsyncValue.when(
                     loading: () => const SliverToBoxAdapter(
                       child: Padding(
-                        padding: EdgeInsets.all(24),
-                        child: Center(child: CircularProgressIndicator()),
+                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        child: AppInlineLoadingCard(message: '正在加载人员结余'),
                       ),
                     ),
                     error: (e, st) => SliverToBoxAdapter(
-                      child: Center(child: Text('加载人员失败: $e')),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: AppSectionCard(child: Text('加载人员失败：$e')),
+                      ),
                     ),
                     data: (peoplePool) {
                       final personMap = peopleByUuid(peoplePool);

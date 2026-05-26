@@ -21,7 +21,11 @@ class AccountTab extends ConsumerWidget {
     final userAsync = ref.watch(currentUserProvider);
 
     return tokenAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const AppLoadingState(
+        title: '正在读取账户状态',
+        message: '恢复登录信息和本地资料',
+        icon: Icons.account_circle_outlined,
+      ),
       error: (error, stackTrace) => _AuthPanel(errorText: '$error'),
       data: (token) {
         final isSignedIn = token != null && token.isValid;
@@ -128,101 +132,107 @@ class _UnifiedProfileCardState extends ConsumerState<_UnifiedProfileCard> {
     final profileAsync = ref.watch(localProfileProvider);
     final colorScheme = Theme.of(context).colorScheme;
 
-    return AppSectionCard(
-      child: profileAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => Text('账户资料加载失败：$error'),
-        data: (profile) {
-          final syncing =
-              _syncing || (widget.syncingProfile && profile.pendingSync);
+    return profileAsync.when(
+      loading: () => const AppInlineLoadingCard(message: '正在加载账户资料'),
+      error: (error, stackTrace) =>
+          AppSectionCard(child: Text('账户资料加载失败：$error')),
+      data: (profile) {
+        final syncing =
+            _syncing || (widget.syncingProfile && profile.pendingSync);
 
-          return InkWell(
-            borderRadius: BorderRadius.circular(18),
-            onTap: () => _editProfile(profile),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  AppSectionHeader(
-                    title: '账户昵称和头像',
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (syncing) ...[
-                          const SizedBox.square(
-                            dimension: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+        return AppSectionCard(
+          child: AppAnimatedSwitcher(
+            child: InkWell(
+              key: ValueKey(
+                '${profile.normalizedNickname}-${profile.personAvatar}-${profile.pendingSync}-$syncing',
+              ),
+              borderRadius: BorderRadius.circular(18),
+              onTap: () => _editProfile(profile),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    AppSectionHeader(
+                      title: '账户昵称和头像',
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (syncing) ...[
+                            const SizedBox.square(
+                              dimension: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          TextButton.icon(
+                            onPressed: () => _editProfile(profile),
+                            icon: const Icon(Icons.edit_rounded, size: 18),
+                            label: const Text('修改'),
                           ),
-                          const SizedBox(width: 8),
                         ],
-                        TextButton.icon(
-                          onPressed: () => _editProfile(profile),
-                          icon: const Icon(Icons.edit_rounded, size: 18),
-                          label: const Text('修改'),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 28,
+                          backgroundColor: colorScheme.primaryContainer,
+                          child: Text(
+                            profile.personAvatar,
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                profile.normalizedNickname,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w800),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                widget.account ??
+                                    (widget.isSignedIn ? '已登录' : '未登录本地使用'),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: colorScheme.onSurfaceVariant,
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 28,
-                        backgroundColor: colorScheme.primaryContainer,
-                        child: Text(
-                          profile.personAvatar,
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              profile.normalizedNickname,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.w800),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              widget.account ??
-                                  (widget.isSignedIn ? '已登录' : '未登录本地使用'),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Icon(
-                        Icons.chevron_right_rounded,
-                        color: colorScheme.onSurfaceVariant,
+                    if (syncing || profile.pendingSync) ...[
+                      const SizedBox(height: 12),
+                      _ProfileSyncBanner(
+                        syncing: syncing,
+                        errorText: profile.syncError,
+                        onRetry: widget.isSignedIn && !syncing
+                            ? _retrySyncProfile
+                            : null,
                       ),
                     ],
-                  ),
-                  if (syncing || profile.pendingSync) ...[
-                    const SizedBox(height: 12),
-                    _ProfileSyncBanner(
-                      syncing: syncing,
-                      errorText: profile.syncError,
-                      onRetry: widget.isSignedIn && !syncing
-                          ? _retrySyncProfile
-                          : null,
-                    ),
                   ],
-                ],
+                ),
               ),
             ),
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 

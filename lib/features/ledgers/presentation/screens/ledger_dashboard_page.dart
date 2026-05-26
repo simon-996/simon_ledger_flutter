@@ -273,8 +273,16 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
               ],
       ),
       body: transactionsAsyncValue.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(child: Text('Error: $err')),
+        loading: () => const AppLoadingState(
+          title: '正在加载流水',
+          message: '同步本地缓存和云端明细',
+          icon: Icons.receipt_long_outlined,
+        ),
+        error: (err, stack) => AppEmptyState(
+          icon: Icons.error_outline_rounded,
+          title: '加载流水失败',
+          message: '$err',
+        ),
         data: (transactions) {
           final totalExpense = transactions
               .where((t) => t.type == 0)
@@ -350,9 +358,16 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
               ),
               Expanded(
                 child: peopleAsyncValue.when(
-                  loading: () =>
-                      const Center(child: CircularProgressIndicator()),
-                  error: (e, st) => Center(child: Text('加载人员失败: $e')),
+                  loading: () => const AppLoadingState(
+                    title: '正在加载人员',
+                    message: '准备账本人员和结余数据',
+                    icon: Icons.group_outlined,
+                  ),
+                  error: (e, st) => AppEmptyState(
+                    icon: Icons.error_outline_rounded,
+                    title: '加载人员失败',
+                    message: '$e',
+                  ),
                   data: (peoplePool) {
                     final personMap = peopleByUuid(peoplePool);
                     final filteredTransactions = List<TransactionRecord>.from(

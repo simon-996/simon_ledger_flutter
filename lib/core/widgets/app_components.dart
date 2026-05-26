@@ -117,6 +117,158 @@ class AppAnimatedIndexedStack extends StatelessWidget {
   }
 }
 
+class AppAnimatedSwitcher extends StatelessWidget {
+  const AppAnimatedSwitcher({
+    super.key,
+    required this.child,
+    this.duration = AppMotion.normal,
+  });
+
+  final Widget child;
+  final Duration duration;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: duration,
+      switchInCurve: AppMotion.emphasized,
+      switchOutCurve: AppMotion.standard,
+      transitionBuilder: (child, animation) {
+        final scale = Tween<double>(begin: 0.98, end: 1).animate(animation);
+        return FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(scale: scale, child: child),
+        );
+      },
+      child: child,
+    );
+  }
+}
+
+class AppLoadingState extends StatelessWidget {
+  const AppLoadingState({
+    super.key,
+    this.title = '加载中',
+    this.message,
+    this.icon = Icons.hourglass_empty_rounded,
+  });
+
+  final String title;
+  final String? message;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Center(
+      child: SafeArea(
+        minimum: const EdgeInsets.all(24),
+        child: AppAnimatedEntry(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 320),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: 1),
+                  duration: AppMotion.slow,
+                  curve: AppMotion.emphasized,
+                  builder: (context, value, child) {
+                    return Transform.scale(
+                      scale: 0.94 + value * 0.06,
+                      child: child,
+                    );
+                  },
+                  child: Container(
+                    width: 76,
+                    height: 76,
+                    decoration: BoxDecoration(
+                      color: colorScheme.primaryContainer.withValues(
+                        alpha: 0.7,
+                      ),
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        SizedBox(
+                          width: 48,
+                          height: 48,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3,
+                            color: colorScheme.primary,
+                            backgroundColor: colorScheme.primary.withValues(
+                              alpha: 0.12,
+                            ),
+                          ),
+                        ),
+                        Icon(icon, size: 22, color: colorScheme.primary),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                if (message != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    message!,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class AppInlineLoadingCard extends StatelessWidget {
+  const AppInlineLoadingCard({super.key, this.message = '加载中'});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return AppSectionCard(
+      child: Row(
+        children: [
+          SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.4,
+              color: colorScheme.primary,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class AppEmptyState extends StatelessWidget {
   const AppEmptyState({
     super.key,
