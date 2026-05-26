@@ -43,23 +43,26 @@ class RemoteLedgerRepository implements LedgerRepository {
       fromJson: (json) =>
           (json! as List<dynamic>).map(_ledgerFromJson).toList(),
     );
-    await Future.wait(
-      ledgers.map((ledger) async {
-        try {
-          ledger.personUuids = await _apiClient.get<List<String>>(
-            '/api/ledgers/${ledger.uuid}/people',
-            fromJson: (json) => (json! as List<dynamic>)
-                .map(
-                  (person) =>
-                      (person as Map<String, dynamic>)['uuid'].toString(),
-                )
-                .toList(),
-          );
-        } catch (_) {
-          ledger.personUuids = const [];
-        }
-      }),
-    );
+    if (ledgers.isEmpty) {
+      return ledgers;
+    }
+
+    try {
+      final peopleByLedger = await _apiClient.get<Map<String, List<String>>>(
+        '/api/ledgers/people',
+        queryParameters: {
+          'ledgerUuids': ledgers.map((ledger) => ledger.uuid).join(','),
+        },
+        fromJson: _peopleByLedgerFromJson,
+      );
+      for (final ledger in ledgers) {
+        ledger.personUuids = peopleByLedger[ledger.uuid] ?? const [];
+      }
+    } catch (_) {
+      for (final ledger in ledgers) {
+        ledger.personUuids = const [];
+      }
+    }
     return ledgers;
   }
 
@@ -119,5 +122,15 @@ class RemoteLedgerRepository implements LedgerRepository {
       ..exchangeRateToCNY =
           (map['exchangeRateToCny'] as num?)?.toDouble() ?? 1.0
       ..role = map['role']?.toString();
+  }
+
+  static Map<String, List<String>> _peopleByLedgerFromJson(Object? json) {
+    final map = json! as Map<String, dynamic>;
+    return map.map((ledgerUuid, peopleJson) {
+      final personUuids = (peopleJson as List<dynamic>)
+          .map((person) => (person as Map<String, dynamic>)['uuid'].toString())
+          .toList();
+      return MapEntry(ledgerUuid, personUuids);
+    });
   }
 }
