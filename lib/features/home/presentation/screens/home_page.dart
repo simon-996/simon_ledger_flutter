@@ -166,13 +166,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     try {
       await ref.read(ledgerNotifierProvider.notifier).addLedger(newLedger);
       if (result.includeSelf) {
-        final selfPersonUuid = await _ensureSelfPerson(newLedger.uuid);
-        if (!newLedger.personUuids.contains(selfPersonUuid)) {
-          newLedger.personUuids = [...newLedger.personUuids, selfPersonUuid];
-          await ref
-              .read(ledgerNotifierProvider.notifier)
-              .updateLedger(newLedger);
-        }
+        await _addSelfToLedgerWithRetry(newLedger);
       }
     } catch (e) {
       _showWriteError(e);
@@ -266,6 +260,38 @@ class _HomePageState extends ConsumerState<HomePage> {
     await personRepository.savePerson(person, ledgerUuid: ledgerScope);
     ref.invalidate(personNotifierProvider);
     return person.uuid;
+  }
+
+  Future<void> _addSelfToLedgerWithRetry(Ledger ledger) async {
+    try {
+      await _addSelfToLedger(ledger);
+    } catch (error) {
+      _showSelfJoinError(ledger, error);
+    }
+  }
+
+  Future<void> _addSelfToLedger(Ledger ledger) async {
+    final selfPersonUuid = await _ensureSelfPerson(ledger.uuid);
+    if (ledger.personUuids.contains(selfPersonUuid)) {
+      return;
+    }
+
+    ledger.personUuids = [...ledger.personUuids, selfPersonUuid];
+    await ref.read(ledgerNotifierProvider.notifier).updateLedger(ledger);
+  }
+
+  void _showSelfJoinError(Ledger ledger, Object error) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('账本已创建，但加入本人失败：$error'),
+        duration: const Duration(seconds: 8),
+        action: SnackBarAction(
+          label: '重试',
+          onPressed: () => _addSelfToLedgerWithRetry(ledger),
+        ),
+      ),
+    );
   }
 
   void _showWriteError(Object error) {
