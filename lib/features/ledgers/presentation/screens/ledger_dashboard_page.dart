@@ -575,6 +575,8 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                                   date: dateStr,
                                   people: peopleStr,
                                   note: t.note,
+                                  createdByText: t.createdByNickname,
+                                  createdByAvatar: t.createdByAvatar,
                                   amount:
                                       '${t.type == 0 ? '-' : '+'} ${t.currencyCode} ${t.amount.toStringAsFixed(2)}',
                                   isExpense: t.type == 0,

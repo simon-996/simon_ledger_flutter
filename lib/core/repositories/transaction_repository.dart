@@ -358,6 +358,9 @@ class RemoteTransactionRepository implements TransactionRepository {
       ..personUuids = (map['personUuids'] as List<dynamic>? ?? [])
           .map((value) => value.toString())
           .toList()
+      ..createdByUserUuid = map['createdByUserUuid']?.toString()
+      ..createdByNickname = map['createdByNickname']?.toString()
+      ..createdByAvatar = map['createdByAvatar']?.toString()
       ..createdAt =
           DateTime.tryParse(map['happenedAt']?.toString() ?? '') ??
           DateTime.now()

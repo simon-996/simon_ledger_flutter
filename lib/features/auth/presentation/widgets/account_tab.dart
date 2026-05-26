@@ -60,6 +60,8 @@ class _SignedInPanel extends ConsumerWidget {
           syncingProfile: syncingProfile,
         ),
         const SizedBox(height: 16),
+        const _JoinInviteCard(),
+        const SizedBox(height: 16),
         const _CloudImportCard(),
         const SizedBox(height: 16),
         FilledButton.icon(
@@ -79,6 +81,88 @@ class _SignedInPanel extends ConsumerWidget {
         ),
       ],
     );
+  }
+}
+
+class _JoinInviteCard extends ConsumerStatefulWidget {
+  const _JoinInviteCard();
+
+  @override
+  ConsumerState<_JoinInviteCard> createState() => _JoinInviteCardState();
+}
+
+class _JoinInviteCardState extends ConsumerState<_JoinInviteCard> {
+  final _codeController = TextEditingController();
+  bool _joining = false;
+
+  @override
+  void dispose() {
+    _codeController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppSectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const AppSectionHeader(title: '加入共享账本'),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _codeController,
+            textCapitalization: TextCapitalization.characters,
+            decoration: const InputDecoration(
+              labelText: '邀请码',
+              prefixIcon: Icon(Icons.key_outlined),
+            ),
+            onSubmitted: (_) => _join(),
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: _joining ? null : _join,
+            icon: _joining
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.group_add_outlined),
+            label: Text(_joining ? '加入中' : '加入账本'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _join() async {
+    final code = _codeController.text.trim();
+    if (code.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请输入邀请码')));
+      return;
+    }
+
+    setState(() => _joining = true);
+    try {
+      final invite = await ref.read(inviteRepositoryProvider).join(code);
+      ref.invalidate(ledgerNotifierProvider);
+      ref.invalidate(ledgerStatsProvider);
+      if (!mounted) return;
+      _codeController.clear();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('已加入账本：${invite.ledgerName}')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('加入账本失败：$error')));
+    } finally {
+      if (mounted) {
+        setState(() => _joining = false);
+      }
+    }
   }
 }
 

@@ -5,9 +5,11 @@ import '../../../../core/models/ledger.dart';
 import '../../../../core/models/person.dart';
 import '../../../../core/models/person_lookup.dart';
 import '../../../../core/models/transaction_record.dart';
+import '../../../../core/di/providers.dart';
 import '../../../../core/preferences/last_selected_ledger_preference.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
 import '../providers/transaction_provider.dart';
 
@@ -259,6 +261,8 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     final selectedPeople = _selectedPersonIds.map((pid) {
       return personOrFallback(personMap, pid);
     }).toList();
+    final profile = await ref.read(localProfileProvider.future);
+    final currentUser = await ref.read(currentUserProvider.future);
 
     final record = TransactionRecord()
       ..uuid = DateTime.now().microsecondsSinceEpoch.toString()
@@ -270,6 +274,9 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
       ..category = category
       ..personUuids = _selectedPersonIds.toList()
       ..note = _noteController.text.trim()
+      ..createdByUserUuid = currentUser?.uuid
+      ..createdByNickname = currentUser?.nickname ?? profile.normalizedNickname
+      ..createdByAvatar = currentUser?.avatar ?? profile.personAvatar
       ..createdAt = DateTime.now();
 
     try {

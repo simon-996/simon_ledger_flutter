@@ -19,6 +19,12 @@ class Ledger {
 
   String? role;
 
+  int memberCount = 1;
+
+  List<LedgerMemberSummary> members = [];
+
+  bool get isShared => memberCount > 1 || members.length > 1;
+
   String get displayCode {
     final normalizedUuid = uuid.trim();
     final suffix = normalizedUuid.length <= 8
@@ -28,4 +34,30 @@ class Ledger {
   }
 
   String get displayNameWithCode => '$name · $displayCode';
+}
+
+class LedgerMemberSummary {
+  LedgerMemberSummary({
+    required this.uuid,
+    this.userUuid,
+    this.nickname,
+    this.avatar,
+    this.role,
+  });
+
+  final String uuid;
+  final String? userUuid;
+  final String? nickname;
+  final String? avatar;
+  final String? role;
+
+  String get displayName {
+    final value = nickname?.trim();
+    return value == null || value.isEmpty ? '成员' : value;
+  }
+
+  String get displayAvatar {
+    final value = avatar?.trim();
+    return value == null || value.isEmpty ? '👤' : value;
+  }
 }

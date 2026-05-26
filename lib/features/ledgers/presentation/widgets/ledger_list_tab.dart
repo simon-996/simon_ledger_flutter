@@ -14,6 +14,7 @@ class LedgerListTab extends ConsumerWidget {
     required this.ledgerStats,
     required this.onTap,
     required this.onEdit,
+    required this.onShare,
     required this.onDelete,
     required this.onCreate,
   });
@@ -22,6 +23,7 @@ class LedgerListTab extends ConsumerWidget {
   final Map<String, Map<String, double>> ledgerStats;
   final ValueChanged<Ledger> onTap;
   final ValueChanged<Ledger> onEdit;
+  final ValueChanged<Ledger> onShare;
   final ValueChanged<Ledger> onDelete;
   final VoidCallback onCreate;
 
@@ -103,12 +105,18 @@ class LedgerListTab extends ConsumerWidget {
               index: index,
               onTap: () => onTap(ledger),
               onEdit: () => onEdit(ledger),
+              onShare: () => onShare(ledger),
               canReorder: !isCloudMode,
+              canShare: isCloudMode && _canShare(ledger.role),
             ),
           ),
         );
       },
     );
+  }
+
+  bool _canShare(String? role) {
+    return role == 'owner' || role == 'admin';
   }
 
   Future<bool?> _confirmDelete(BuildContext context, Ledger ledger) {
@@ -146,7 +154,9 @@ class _LedgerCard extends StatelessWidget {
     required this.index,
     required this.onTap,
     required this.onEdit,
+    required this.onShare,
     required this.canReorder,
+    required this.canShare,
   });
 
   final Ledger ledger;
@@ -156,7 +166,9 @@ class _LedgerCard extends StatelessWidget {
   final int index;
   final VoidCallback onTap;
   final VoidCallback onEdit;
+  final VoidCallback onShare;
   final bool canReorder;
+  final bool canShare;
 
   @override
   Widget build(BuildContext context) {
@@ -224,6 +236,10 @@ class _LedgerCard extends StatelessWidget {
                             runSpacing: 6,
                             children: [
                               _MetaChip(text: ledger.baseCurrencyCode),
+                              if (ledger.isShared)
+                                _MetaChip(
+                                  text: '共享中 · ${ledger.memberCount} 人',
+                                ),
                               if (hasRate)
                                 _MetaChip(
                                   text: '汇率 ${ledger.exchangeRateToCNY}',
@@ -238,6 +254,12 @@ class _LedgerCard extends StatelessWidget {
                       icon: const Icon(Icons.edit_outlined),
                       onPressed: onEdit,
                     ),
+                    if (canShare)
+                      IconButton(
+                        tooltip: '分享邀请',
+                        icon: const Icon(Icons.ios_share_rounded),
+                        onPressed: onShare,
+                      ),
                     if (canReorder)
                       Tooltip(
                         message: '排序',
@@ -257,6 +279,10 @@ class _LedgerCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 16),
+                if (ledger.members.isNotEmpty) ...[
+                  _LedgerMembersRow(ledger: ledger),
+                  const SizedBox(height: 14),
+                ],
                 Row(
                   children: [
                     Expanded(
@@ -290,6 +316,86 @@ class _LedgerCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _LedgerMembersRow extends StatelessWidget {
+  const _LedgerMembersRow({required this.ledger});
+
+  final Ledger ledger;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final visibleMembers = ledger.members.take(4).toList();
+    final remaining = ledger.memberCount - visibleMembers.length;
+
+    return Row(
+      children: [
+        SizedBox(
+          height: 32,
+          width: 28.0 + visibleMembers.length * 24 + (remaining > 0 ? 28 : 0),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              for (var i = 0; i < visibleMembers.length; i++)
+                Positioned(
+                  left: i * 24.0,
+                  child: Tooltip(
+                    message:
+                        '${visibleMembers[i].displayName}${_roleLabel(visibleMembers[i].role)}',
+                    child: CircleAvatar(
+                      radius: 16,
+                      backgroundColor: colorScheme.surfaceContainerHighest,
+                      child: Text(
+                        visibleMembers[i].displayAvatar,
+                        style: const TextStyle(fontSize: 15),
+                      ),
+                    ),
+                  ),
+                ),
+              if (remaining > 0)
+                Positioned(
+                  left: visibleMembers.length * 24.0,
+                  child: CircleAvatar(
+                    radius: 16,
+                    backgroundColor: colorScheme.primaryContainer,
+                    child: Text(
+                      '+$remaining',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: colorScheme.primary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            ledger.isShared ? '已加入 ${ledger.memberCount} 人' : '仅自己使用',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _roleLabel(String? role) {
+    return switch (role) {
+      'owner' => ' · 所有者',
+      'admin' => ' · 管理员',
+      'editor' => ' · 可记账',
+      'viewer' => ' · 查看',
+      _ => '',
+    };
   }
 }
 

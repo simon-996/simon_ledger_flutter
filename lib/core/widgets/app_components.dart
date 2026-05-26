@@ -524,6 +524,8 @@ class AppTransactionTile extends StatelessWidget {
     required this.amount,
     required this.isExpense,
     this.note,
+    this.createdByText,
+    this.createdByAvatar,
     this.leading,
     this.selected = false,
     this.syncStatus,
@@ -538,6 +540,8 @@ class AppTransactionTile extends StatelessWidget {
   final String amount;
   final bool isExpense;
   final String? note;
+  final String? createdByText;
+  final String? createdByAvatar;
   final Widget? leading;
   final bool selected;
   final TransactionSyncStatus? syncStatus;
@@ -629,6 +633,40 @@ class AppTransactionTile extends StatelessWidget {
                           color: colorScheme.onSurfaceVariant,
                           fontStyle: FontStyle.italic,
                         ),
+                      ),
+                    ],
+                    if (createdByText != null && createdByText!.isNotEmpty) ...[
+                      const SizedBox(height: 5),
+                      Row(
+                        children: [
+                          if (createdByAvatar != null &&
+                              createdByAvatar!.isNotEmpty) ...[
+                            Text(
+                              createdByAvatar!,
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                            const SizedBox(width: 4),
+                          ] else ...[
+                            Icon(
+                              Icons.person_outline_rounded,
+                              size: 13,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 4),
+                          ],
+                          Flexible(
+                            child: Text(
+                              '由 $createdByText 添加',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ],

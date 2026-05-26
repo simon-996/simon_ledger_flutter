@@ -26,6 +26,12 @@ class TransactionRecord {
 
   late String note;
 
+  String? createdByUserUuid;
+
+  String? createdByNickname;
+
+  String? createdByAvatar;
+
   late DateTime createdAt;
 
   bool pendingSync = false;

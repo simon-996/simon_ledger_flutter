@@ -264,7 +264,12 @@ class DatabaseService {
           .toList()
       ..sortOrder = (json['sortOrder'] as num?)?.toInt() ?? 0
       ..isDeleted = json['isDeleted'] == true
-      ..role = json['role']?.toString();
+      ..role = json['role']?.toString()
+      ..memberCount = (json['memberCount'] as num?)?.toInt() ?? 1
+      ..members = (json['members'] as List<dynamic>? ?? [])
+          .whereType<Map<dynamic, dynamic>>()
+          .map((value) => _ledgerMemberFromJson(value.cast<String, dynamic>()))
+          .toList();
   }
 
   static Map<String, dynamic> _ledgerToJson(Ledger ledger) {
@@ -278,6 +283,28 @@ class DatabaseService {
       'sortOrder': ledger.sortOrder,
       'isDeleted': ledger.isDeleted,
       'role': ledger.role,
+      'memberCount': ledger.memberCount,
+      'members': ledger.members.map(_ledgerMemberToJson).toList(),
+    };
+  }
+
+  static LedgerMemberSummary _ledgerMemberFromJson(Map<String, dynamic> json) {
+    return LedgerMemberSummary(
+      uuid: json['uuid']?.toString() ?? '',
+      userUuid: json['userUuid']?.toString(),
+      nickname: json['nickname']?.toString(),
+      avatar: json['avatar']?.toString(),
+      role: json['role']?.toString(),
+    );
+  }
+
+  static Map<String, dynamic> _ledgerMemberToJson(LedgerMemberSummary member) {
+    return {
+      'uuid': member.uuid,
+      'userUuid': member.userUuid,
+      'nickname': member.nickname,
+      'avatar': member.avatar,
+      'role': member.role,
     };
   }
 
@@ -297,6 +324,9 @@ class DatabaseService {
           .map((value) => value.toString())
           .toList()
       ..note = json['note']?.toString() ?? ''
+      ..createdByUserUuid = json['createdByUserUuid']?.toString()
+      ..createdByNickname = json['createdByNickname']?.toString()
+      ..createdByAvatar = json['createdByAvatar']?.toString()
       ..createdAt =
           DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
           DateTime.now()
@@ -321,6 +351,9 @@ class DatabaseService {
       'category': transaction.category,
       'personUuids': transaction.personUuids,
       'note': transaction.note,
+      'createdByUserUuid': transaction.createdByUserUuid,
+      'createdByNickname': transaction.createdByNickname,
+      'createdByAvatar': transaction.createdByAvatar,
       'createdAt': transaction.createdAt.toIso8601String(),
       'pendingSync': transaction.pendingSync,
       'syncError': transaction.syncError,

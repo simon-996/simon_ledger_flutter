@@ -184,6 +184,22 @@ class TransactionDetailSheet extends ConsumerWidget {
                               '时间',
                               dateStr,
                             ),
+                            if (transaction.createdByNickname != null &&
+                                transaction.createdByNickname!
+                                    .trim()
+                                    .isNotEmpty) ...[
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 10),
+                                child: Divider(height: 1),
+                              ),
+                              _buildDetailRow(
+                                context,
+                                Icons.person_outline_rounded,
+                                '添加人',
+                                '${transaction.createdByAvatar ?? ''} ${transaction.createdByNickname}'
+                                    .trim(),
+                              ),
+                            ],
                             const Padding(
                               padding: EdgeInsets.symmetric(vertical: 10),
                               child: Divider(height: 1),

@@ -121,7 +121,22 @@ class RemoteLedgerRepository implements LedgerRepository {
       ..baseCurrencyCode = map['baseCurrencyCode'].toString()
       ..exchangeRateToCNY =
           (map['exchangeRateToCny'] as num?)?.toDouble() ?? 1.0
-      ..role = map['role']?.toString();
+      ..role = map['role']?.toString()
+      ..memberCount = (map['memberCount'] as num?)?.toInt() ?? 1
+      ..members = (map['members'] as List<dynamic>? ?? [])
+          .map(_memberFromJson)
+          .toList();
+  }
+
+  static LedgerMemberSummary _memberFromJson(Object? json) {
+    final map = json! as Map<String, dynamic>;
+    return LedgerMemberSummary(
+      uuid: map['uuid']?.toString() ?? '',
+      userUuid: map['userUuid']?.toString(),
+      nickname: map['nickname']?.toString(),
+      avatar: map['avatar']?.toString(),
+      role: map['role']?.toString(),
+    );
   }
 
   static Map<String, List<String>> _peopleByLedgerFromJson(Object? json) {

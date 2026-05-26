@@ -5,6 +5,7 @@ import '../network/api_client.dart';
 import '../network/token_store.dart';
 import '../preferences/local_profile_store.dart';
 import '../repositories/auth_repository.dart';
+import '../repositories/invite_repository.dart';
 import '../repositories/ledger_repository.dart';
 import '../repositories/person_repository.dart';
 import '../repositories/transaction_repository.dart';
@@ -54,6 +55,10 @@ final ledgerRepositoryProvider = Provider<LedgerRepository>((ref) {
     return RemoteLedgerRepository(ref.watch(apiClientProvider));
   }
   return LocalLedgerRepository(ref.watch(databaseProvider));
+});
+
+final inviteRepositoryProvider = Provider<InviteRepository>((ref) {
+  return InviteRepository(ref.watch(apiClientProvider));
 });
 
 final personRepositoryProvider = Provider<PersonRepository>((ref) {

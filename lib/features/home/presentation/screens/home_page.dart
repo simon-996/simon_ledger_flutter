@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/di/providers.dart';
 import '../../../../core/models/ledger.dart';
@@ -62,6 +63,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                           ledgerStats: const {},
                           onTap: _openLedger,
                           onEdit: _editLedger,
+                          onShare: _shareLedger,
                           onDelete: _deleteLedger,
                           onCreate: _openCreateLedger,
                         ),
@@ -70,6 +72,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                           ledgerStats: const {},
                           onTap: _openLedger,
                           onEdit: _editLedger,
+                          onShare: _shareLedger,
                           onDelete: _deleteLedger,
                           onCreate: _openCreateLedger,
                         ),
@@ -78,6 +81,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                           ledgerStats: stats,
                           onTap: _openLedger,
                           onEdit: _editLedger,
+                          onShare: _shareLedger,
                           onDelete: _deleteLedger,
                           onCreate: _openCreateLedger,
                         ),
@@ -223,6 +227,45 @@ class _HomePageState extends ConsumerState<HomePage> {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => LedgerDashboardPage(ledger: ledger)),
     );
+  }
+
+  Future<void> _shareLedger(Ledger ledger) async {
+    try {
+      final invite = await ref
+          .read(inviteRepositoryProvider)
+          .createInvite(ledger.uuid);
+      if (!mounted) return;
+      final text = 'Simon Ledger 邀请码：${invite.code}';
+      await Clipboard.setData(ClipboardData(text: invite.code));
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('分享账本'),
+          content: SelectableText('$text\n\n对方登录后使用邀请码加入：${ledger.name}'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('关闭'),
+            ),
+            FilledButton.icon(
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: invite.code));
+                if (context.mounted) {
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('邀请码已复制')));
+                }
+              },
+              icon: const Icon(Icons.copy_rounded),
+              label: const Text('复制'),
+            ),
+          ],
+        ),
+      );
+    } catch (error) {
+      _showWriteError(error);
+    }
   }
 
   Future<String> _ensureSelfPerson(String ledgerUuid) async {
