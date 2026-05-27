@@ -8,6 +8,7 @@ import '../../../../core/models/person_lookup.dart';
 import '../../../../core/models/transaction_record.dart';
 import '../../../../core/di/providers.dart';
 import '../../../../core/network/friendly_error.dart';
+import '../../../../core/preferences/bookkeeping_preference.dart';
 import '../../../../core/preferences/last_selected_ledger_preference.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
@@ -71,15 +72,9 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     }
 
     setState(() {
-      _selectedCurrency = currentLedger.baseCurrencyCode;
-      if (!currentLedger.personUuids.contains(_payerPersonUuid)) {
-        _payerPersonUuid = null;
-      }
-      _selectedPersonIds.retainWhere(currentLedger.personUuids.contains);
-      if (_selectedPersonIds.isEmpty && currentLedger.personUuids.isNotEmpty) {
-        _selectedPersonIds.add(currentLedger.personUuids.first);
-      }
+      _sanitizeCurrentSelection(currentLedger);
     });
+    _persistDraft();
   }
 
   Ledger? get _selectedLedger {
@@ -92,31 +87,69 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
   }
 
   Future<void> _initDefaults() async {
-    _selectedCategory ??= _currentCategories.first;
-
+    final draft = await BookkeepingDraftPreference.read();
     final lastUuid = await LastSelectedLedgerPreference.getUuid();
 
     if (!mounted || widget.ledgers.isEmpty) return;
 
     setState(() {
-      if (lastUuid != null && widget.ledgers.any((l) => l.uuid == lastUuid)) {
-        _updateSelectedLedger(lastUuid);
+      if (draft != null &&
+          widget.ledgers.any((ledger) => ledger.uuid == draft.ledgerUuid)) {
+        _transactionType = draft.transactionType == 1 ? 1 : 0;
+        _selectedCategory = _categoryOrDefault(draft.category);
+        _selectedCurrency = draft.currencyCode;
+        _selectedPersonIds
+          ..clear()
+          ..addAll(draft.personUuids);
+        _payerPersonUuid = draft.payerPersonUuid;
+        _updateSelectedLedger(draft.ledgerUuid, persist: false);
+      } else if (lastUuid != null &&
+          widget.ledgers.any((l) => l.uuid == lastUuid)) {
+        _selectedCategory ??= _currentCategories.first;
+        _updateSelectedLedger(lastUuid, persist: false);
       } else if (widget.ledgers.length == 1) {
-        _updateSelectedLedger(widget.ledgers.first.uuid);
+        _selectedCategory ??= _currentCategories.first;
+        _updateSelectedLedger(widget.ledgers.first.uuid, persist: false);
       } else {
+        _selectedCategory ??= _currentCategories.first;
         _selectedLedgerUuid = null;
       }
     });
+    _persistDraft();
   }
 
-  void _updateSelectedLedger(String ledgerUuid) {
+  void _updateSelectedLedger(String ledgerUuid, {bool persist = true}) {
     _selectedLedgerUuid = ledgerUuid;
     final ledger = widget.ledgers.firstWhere((l) => l.uuid == ledgerUuid);
+    _sanitizeCurrentSelection(ledger);
+
+    LastSelectedLedgerPreference.setUuid(ledgerUuid);
+    if (persist) {
+      _persistDraft();
+    }
+  }
+
+  List<String> get _currentCategories {
+    return _transactionType == 0 ? _expenseCategories : _incomeCategories;
+  }
+
+  String _categoryOrDefault(String? category) {
+    final value = category?.trim();
+    if (value != null && _currentCategories.contains(value)) {
+      return value;
+    }
+    return _currentCategories.first;
+  }
+
+  void _sanitizeCurrentSelection(Ledger ledger) {
     final currencies = supportedCurrenciesForLedger(ledger);
     _selectedCurrency = currencies.contains(_selectedCurrency)
         ? _selectedCurrency
         : currencies.last;
-    if (!ledger.personUuids.contains(_payerPersonUuid)) {
+    _selectedCategory = _categoryOrDefault(_selectedCategory);
+    if (_transactionType == 1) {
+      _payerPersonUuid = null;
+    } else if (!ledger.personUuids.contains(_payerPersonUuid)) {
       _payerPersonUuid = null;
     }
     _selectedPersonIds.retainWhere(ledger.personUuids.contains);
@@ -127,12 +160,26 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
       _selectedPersonIds.clear();
       _payerPersonUuid = null;
     }
-
-    LastSelectedLedgerPreference.setUuid(ledgerUuid);
   }
 
-  List<String> get _currentCategories {
-    return _transactionType == 0 ? _expenseCategories : _incomeCategories;
+  void _setAndPersist(VoidCallback update) {
+    setState(update);
+    _persistDraft();
+  }
+
+  void _persistDraft() {
+    final ledgerUuid = _selectedLedgerUuid;
+    if (ledgerUuid == null) return;
+    BookkeepingDraftPreference.write(
+      BookkeepingDraft(
+        ledgerUuid: ledgerUuid,
+        transactionType: _transactionType,
+        category: _selectedCategory ?? _currentCategories.first,
+        currencyCode: _selectedCurrency ?? 'CNY',
+        personUuids: _selectedPersonIds.toList(),
+        payerPersonUuid: _transactionType == 0 ? _payerPersonUuid : null,
+      ),
+    );
   }
 
   @override
@@ -368,7 +415,9 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                             ledgers: widget.ledgers,
                             selectedLedger: selectedLedger,
                             onChanged: (ledgerUuid) {
-                              setState(() => _updateSelectedLedger(ledgerUuid));
+                              setState(() {
+                                _updateSelectedLedger(ledgerUuid);
+                              });
                             },
                           ),
                           second: SegmentedButton<int>(
@@ -387,7 +436,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                             ],
                             selected: {_transactionType},
                             onSelectionChanged: (Set<int> newSelection) {
-                              setState(() {
+                              _setAndPersist(() {
                                 _transactionType = newSelection.first;
                                 if (_transactionType == 1) {
                                   _payerPersonUuid = null;
@@ -418,8 +467,10 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                                   ),
                                 )
                                 .toList(),
-                            onChanged: (val) =>
-                                setState(() => _selectedCurrency = val),
+                            onChanged: (val) {
+                              if (val == null) return;
+                              _setAndPersist(() => _selectedCurrency = val);
+                            },
                           ),
                           second: TextField(
                             controller: _amountController,
@@ -472,7 +523,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                               selected: isSelected,
                               onSelected: (selected) {
                                 if (selected) {
-                                  setState(() => _selectedCategory = cat);
+                                  _setAndPersist(() => _selectedCategory = cat);
                                 }
                               },
                             );
@@ -540,7 +591,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                                     ],
                                     selected: {_payerPersonUuid != null},
                                     onSelectionChanged: (selection) {
-                                      setState(() {
+                                      _setAndPersist(() {
                                         if (selection.first) {
                                           _payerPersonUuid ??=
                                               _selectedPersonIds.isNotEmpty
@@ -574,7 +625,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                                       : '参与人员',
                                   trailing: TextButton(
                                     onPressed: () {
-                                      setState(() {
+                                      _setAndPersist(() {
                                         if (_selectedPersonIds.length ==
                                             selectedLedger.personUuids.length) {
                                           _selectedPersonIds.clear();
@@ -598,7 +649,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                                   items: personChoices,
                                   selectedIds: _selectedPersonIds,
                                   onToggle: (pid, selected) {
-                                    setState(() {
+                                    _setAndPersist(() {
                                       if (selected) {
                                         _selectedPersonIds.add(pid);
                                       } else {
@@ -636,7 +687,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                                             items: personChoices,
                                             selectedId: _payerPersonUuid,
                                             onSelect: (pid) {
-                                              setState(() {
+                                              _setAndPersist(() {
                                                 _payerPersonUuid = pid;
                                               });
                                             },
