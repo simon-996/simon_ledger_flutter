@@ -427,34 +427,6 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                             });
                           },
                         ),
-                        if (_transactionType == 0 &&
-                            selectedLedger != null &&
-                            selectedLedger.personUuids.isNotEmpty) ...[
-                          const SizedBox(height: 10),
-                          _PaymentModeSelector(
-                            paidByPerson: _payerPersonUuid != null,
-                            onChanged: (paidByPerson) {
-                              _setAndPersist(() {
-                                if (paidByPerson) {
-                                  _payerPersonUuid ??=
-                                      _selectedPersonIds.isNotEmpty
-                                      ? _selectedPersonIds.first
-                                      : selectedLedger.personUuids.first;
-                                } else {
-                                  _payerPersonUuid = null;
-                                }
-                              });
-                            },
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            _payerPersonUuid == null
-                                ? '共同钱包支出由使用人员平均分摊。'
-                                : '某人先垫付，总额由使用人员平均分摊。',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: colorScheme.onSurfaceVariant),
-                          ),
-                        ],
                         const SizedBox(height: 14),
                         _ResponsivePair(
                           breakpoint: 0,
@@ -562,6 +534,55 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
+                                if (_transactionType == 0) ...[
+                                  SegmentedButton<bool>(
+                                    showSelectedIcon: false,
+                                    segments: const [
+                                      ButtonSegment(
+                                        value: false,
+                                        icon: Icon(
+                                          Icons.account_balance_wallet_outlined,
+                                        ),
+                                        label: Text('共同钱包'),
+                                      ),
+                                      ButtonSegment(
+                                        value: true,
+                                        icon: Icon(
+                                          Icons.person_outline_rounded,
+                                        ),
+                                        label: Text('某人代付'),
+                                      ),
+                                    ],
+                                    selected: {_payerPersonUuid != null},
+                                    onSelectionChanged: (selection) {
+                                      _setAndPersist(() {
+                                        if (selection.first) {
+                                          _payerPersonUuid ??=
+                                              _selectedPersonIds.isNotEmpty
+                                              ? _selectedPersonIds.first
+                                              : selectedLedger
+                                                    .personUuids
+                                                    .first;
+                                        } else {
+                                          _payerPersonUuid = null;
+                                        }
+                                      });
+                                    },
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    _payerPersonUuid == null
+                                        ? '使用人员将平均分摊该支出金额。'
+                                        : '付款人先垫付，总额由使用人员平均分摊。',
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.onSurfaceVariant,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                ],
                                 AppSectionHeader(
                                   title: _transactionType == 0
                                       ? '使用人员'
@@ -1030,108 +1051,6 @@ class _TransactionTypeButton extends StatelessWidget {
                 label,
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
                   color: selected ? accent : colorScheme.onSurface,
-                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PaymentModeSelector extends StatelessWidget {
-  const _PaymentModeSelector({
-    required this.paidByPerson,
-    required this.onChanged,
-  });
-
-  final bool paidByPerson;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _PaymentModeButton(
-            label: '共同钱包',
-            icon: Icons.account_balance_wallet_outlined,
-            selected: !paidByPerson,
-            value: false,
-            onChanged: onChanged,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _PaymentModeButton(
-            label: '某人代付',
-            icon: Icons.person_outline_rounded,
-            selected: paidByPerson,
-            value: true,
-            onChanged: onChanged,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _PaymentModeButton extends StatelessWidget {
-  const _PaymentModeButton({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return AnimatedContainer(
-      duration: AppMotion.fast,
-      curve: Curves.easeOut,
-      height: 44,
-      decoration: BoxDecoration(
-        color: selected
-            ? colorScheme.primary.withValues(alpha: 0.1)
-            : colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: selected
-              ? colorScheme.primary.withValues(alpha: 0.48)
-              : colorScheme.outlineVariant,
-        ),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: selected ? null : () => onChanged(value),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 18,
-                color: selected
-                    ? colorScheme.primary
-                    : colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: selected ? colorScheme.primary : colorScheme.onSurface,
                   fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
                 ),
               ),
