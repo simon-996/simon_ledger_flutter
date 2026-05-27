@@ -409,18 +409,21 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _ResponsivePair(
-                          breakpoint: 430,
-                          first: _LedgerSelector(
-                            ledgers: widget.ledgers,
-                            selectedLedger: selectedLedger,
-                            onChanged: (ledgerUuid) {
-                              setState(() {
-                                _updateSelectedLedger(ledgerUuid);
-                              });
-                            },
-                          ),
-                          second: SegmentedButton<int>(
+                        _LedgerSelector(
+                          ledgers: widget.ledgers,
+                          selectedLedger: selectedLedger,
+                          onChanged: (ledgerUuid) {
+                            setState(() {
+                              _updateSelectedLedger(ledgerUuid);
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: SegmentedButton<int>(
+                            expandedInsets: EdgeInsets.zero,
                             showSelectedIcon: false,
                             segments: const [
                               ButtonSegment(
@@ -448,19 +451,8 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                         ),
                         const SizedBox(height: 14),
                         _ResponsivePair(
-                          breakpoint: 390,
-                          firstFlex: 4,
-                          secondFlex: 7,
-                          first: _CurrencySelector(
-                            currencies: currencyOptions,
-                            selectedCurrency: _selectedCurrency ?? 'CNY',
-                            onChanged: (currency) {
-                              _setAndPersist(
-                                () => _selectedCurrency = currency,
-                              );
-                            },
-                          ),
-                          second: TextField(
+                          breakpoint: 0,
+                          first: TextField(
                             controller: _amountController,
                             keyboardType: const TextInputType.numberWithOptions(
                               decimal: true,
@@ -473,6 +465,15 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                               prefixText: '${_selectedCurrency ?? 'CNY'} ',
                             ),
                             onChanged: _limitAmountPrecision,
+                          ),
+                          second: _CurrencySelector(
+                            currencies: currencyOptions,
+                            selectedCurrency: _selectedCurrency ?? 'CNY',
+                            onChanged: (currency) {
+                              _setAndPersist(
+                                () => _selectedCurrency = currency,
+                              );
+                            },
                           ),
                         ),
                       ],
@@ -1297,15 +1298,11 @@ class _ResponsivePair extends StatelessWidget {
   const _ResponsivePair({
     required this.first,
     required this.second,
-    this.firstFlex = 1,
-    this.secondFlex = 1,
     this.breakpoint = 420,
   });
 
   final Widget first;
   final Widget second;
-  final int firstFlex;
-  final int secondFlex;
   final double breakpoint;
 
   @override
@@ -1322,9 +1319,9 @@ class _ResponsivePair extends StatelessWidget {
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(flex: firstFlex, child: first),
+            Expanded(child: first),
             const SizedBox(width: 12),
-            Expanded(flex: secondFlex, child: second),
+            Expanded(child: second),
           ],
         );
       },
