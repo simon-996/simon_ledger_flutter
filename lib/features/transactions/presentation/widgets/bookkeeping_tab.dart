@@ -430,19 +430,23 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                         const SizedBox(height: 14),
                         _ResponsivePair(
                           breakpoint: 0,
-                          first: TextField(
-                            controller: _amountController,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
+                          first: SizedBox(
+                            height: 56,
+                            child: TextField(
+                              controller: _amountController,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              style: Theme.of(context).textTheme.headlineSmall
+                                  ?.copyWith(fontWeight: FontWeight.w800),
+                              decoration: InputDecoration(
+                                labelText: '金额',
+                                hintText: '0.00',
+                                prefixText: '${_selectedCurrency ?? 'CNY'} ',
+                              ),
+                              onChanged: _limitAmountPrecision,
                             ),
-                            style: Theme.of(context).textTheme.headlineSmall
-                                ?.copyWith(fontWeight: FontWeight.w800),
-                            decoration: InputDecoration(
-                              labelText: '金额',
-                              hintText: '0.00',
-                              prefixText: '${_selectedCurrency ?? 'CNY'} ',
-                            ),
-                            onChanged: _limitAmountPrecision,
                           ),
                           second: _CurrencySelector(
                             currencies: currencyOptions,
@@ -1148,6 +1152,24 @@ class _CurrencySelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (currencies.length == 1) {
+      final currency = currencies.first;
+      return SizedBox(
+        width: double.infinity,
+        height: 56,
+        child: _CurrencyQuickItem(
+          currency: currency,
+          selected: currency == selectedCurrency,
+          fillWidth: true,
+          onTap: () {
+            if (currency != selectedCurrency) {
+              onChanged(currency);
+            }
+          },
+        ),
+      );
+    }
+
     return SizedBox(
       height: 56,
       child: ListView.separated(
@@ -1160,6 +1182,7 @@ class _CurrencySelector extends StatelessWidget {
           return _CurrencyQuickItem(
             currency: currency,
             selected: currency == selectedCurrency,
+            fillWidth: false,
             onTap: () {
               if (currency != selectedCurrency) {
                 onChanged(currency);
@@ -1176,11 +1199,13 @@ class _CurrencyQuickItem extends StatelessWidget {
   const _CurrencyQuickItem({
     required this.currency,
     required this.selected,
+    required this.fillWidth,
     required this.onTap,
   });
 
   final String currency;
   final bool selected;
+  final bool fillWidth;
   final VoidCallback onTap;
 
   @override
@@ -1189,6 +1214,7 @@ class _CurrencyQuickItem extends StatelessWidget {
     final label = currency.trim().toUpperCase();
 
     return AnimatedContainer(
+      width: fillWidth ? double.infinity : null,
       duration: AppMotion.fast,
       curve: Curves.easeOut,
       decoration: BoxDecoration(
@@ -1210,7 +1236,10 @@ class _CurrencyQuickItem extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
-              mainAxisSize: MainAxisSize.min,
+              mainAxisSize: fillWidth ? MainAxisSize.max : MainAxisSize.min,
+              mainAxisAlignment: fillWidth
+                  ? MainAxisAlignment.center
+                  : MainAxisAlignment.start,
               children: [
                 Icon(
                   label == 'CNY'
