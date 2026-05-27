@@ -793,13 +793,11 @@ class _QuickEntryHeader extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('快速记账', style: Theme.of(context).textTheme.titleLarge),
-                    const SizedBox(height: 4),
                     Text(
-                      ledger?.name ?? '请选择账本',
+                      ledger?.name ?? '点击选择一个账本',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         color: colorScheme.onSurface,
                         fontWeight: FontWeight.w900,
                       ),
