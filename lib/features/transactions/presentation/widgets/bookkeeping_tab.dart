@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/models/ledger.dart';
+import '../../../../core/models/money.dart';
 import '../../../../core/models/person.dart';
 import '../../../../core/models/person_lookup.dart';
 import '../../../../core/models/transaction_record.dart';
@@ -111,7 +112,10 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
   void _updateSelectedLedger(String ledgerUuid) {
     _selectedLedgerUuid = ledgerUuid;
     final ledger = widget.ledgers.firstWhere((l) => l.uuid == ledgerUuid);
-    _selectedCurrency = ledger.baseCurrencyCode;
+    final currencies = supportedCurrenciesForLedger(ledger);
+    _selectedCurrency = currencies.contains(_selectedCurrency)
+        ? _selectedCurrency
+        : currencies.last;
     if (!ledger.personUuids.contains(_payerPersonUuid)) {
       _payerPersonUuid = null;
     }
@@ -313,6 +317,12 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     }
 
     final selectedLedger = _selectedLedger;
+    final currencyOptions = selectedLedger == null
+        ? const ['CNY']
+        : supportedCurrenciesForLedger(selectedLedger);
+    if (!currencyOptions.contains(_selectedCurrency)) {
+      _selectedCurrency = currencyOptions.last;
+    }
     final peopleAsyncValue = ref.watch(
       personNotifierProvider(
         includeDeleted: true,
@@ -400,28 +410,14 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                               prefixIcon: Icon(Icons.payments_outlined),
                             ),
                             isExpanded: true,
-                            items: const [
-                              DropdownMenuItem(
-                                value: 'CNY',
-                                child: Text('CNY'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'USD',
-                                child: Text('USD'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'EUR',
-                                child: Text('EUR'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'JPY',
-                                child: Text('JPY'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'THB',
-                                child: Text('THB'),
-                              ),
-                            ],
+                            items: currencyOptions
+                                .map(
+                                  (currency) => DropdownMenuItem(
+                                    value: currency,
+                                    child: Text(currency),
+                                  ),
+                                )
+                                .toList(),
                             onChanged: (val) =>
                                 setState(() => _selectedCurrency = val),
                           ),

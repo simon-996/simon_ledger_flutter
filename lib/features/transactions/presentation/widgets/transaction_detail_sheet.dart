@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/models/person.dart';
 import '../../../../core/models/person_lookup.dart';
 import '../../../../core/models/ledger.dart';
+import '../../../../core/models/money.dart';
 import '../../../../core/models/transaction_record.dart';
 import '../../../../core/network/friendly_error.dart';
 import '../../../../core/widgets/app_components.dart';
@@ -30,6 +31,10 @@ class TransactionDetailSheet extends ConsumerWidget {
         ? colorScheme.error
         : colorScheme.primary;
     final maxHeight = MediaQuery.sizeOf(context).height * 0.82;
+    final convertedAmount = formatTransactionConvertedAmount(
+      transaction,
+      ledger,
+    );
 
     final splitAmount = transaction.personUuids.isNotEmpty
         ? transaction.amount / transaction.personUuids.length
@@ -80,7 +85,10 @@ class TransactionDetailSheet extends ConsumerWidget {
                           fit: BoxFit.scaleDown,
                           alignment: Alignment.centerLeft,
                           child: Text(
-                            '${transaction.currencyCode} ${transaction.amount.toStringAsFixed(2)}',
+                            formatMoney(
+                              transaction.currencyCode,
+                              transaction.amount,
+                            ),
                             style: Theme.of(context).textTheme.headlineMedium
                                 ?.copyWith(
                                   fontWeight: FontWeight.w900,
@@ -88,6 +96,17 @@ class TransactionDetailSheet extends ConsumerWidget {
                                 ),
                           ),
                         ),
+                        if (convertedAmount != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            convertedAmount,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -284,7 +303,10 @@ class TransactionDetailSheet extends ConsumerWidget {
                                 ),
                                 const SizedBox(width: 12),
                                 Text(
-                                  '${transaction.currencyCode} ${splitAmount.toStringAsFixed(2)}',
+                                  formatMoney(
+                                    transaction.currencyCode,
+                                    splitAmount,
+                                  ),
                                   style: Theme.of(context).textTheme.titleSmall
                                       ?.copyWith(
                                         color: accent,

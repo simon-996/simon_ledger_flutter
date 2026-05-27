@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/models/transaction_record.dart';
 import '../../../../core/models/person_lookup.dart';
 import '../../../../core/models/ledger.dart';
+import '../../../../core/models/money.dart';
 import '../../../../core/network/friendly_error.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
@@ -29,6 +30,7 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
 
   late int _transactionType;
   late String _selectedCategory;
+  late String _selectedCurrency;
   String? _payerPersonUuid;
   final Set<String> _selectedPersonIds = {};
 
@@ -51,6 +53,7 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
     );
     _noteController = TextEditingController(text: widget.transaction.note);
     _transactionType = widget.transaction.type;
+    _selectedCurrency = widget.transaction.currencyCode;
     _payerPersonUuid = widget.transaction.payerPersonUuid;
     _selectedCategory = widget.transaction.category;
     _selectedPersonIds.addAll(widget.transaction.personUuids);
@@ -80,6 +83,7 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
     }
 
     final oldAmount = widget.transaction.amount;
+    final oldCurrencyCode = widget.transaction.currencyCode;
     final oldType = widget.transaction.type;
     final oldPayerPersonUuid = widget.transaction.payerPersonUuid;
     final oldCategory = widget.transaction.category;
@@ -87,6 +91,7 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
     final oldPersonUuids = List<String>.from(widget.transaction.personUuids);
 
     widget.transaction.amount = amount;
+    widget.transaction.currencyCode = _selectedCurrency;
     widget.transaction.type = _transactionType;
     widget.transaction.payerPersonUuid = _transactionType == 0
         ? _payerPersonUuid
@@ -101,6 +106,7 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
           .updateTransaction(widget.transaction);
     } catch (e) {
       widget.transaction.amount = oldAmount;
+      widget.transaction.currencyCode = oldCurrencyCode;
       widget.transaction.type = oldType;
       widget.transaction.payerPersonUuid = oldPayerPersonUuid;
       widget.transaction.category = oldCategory;
@@ -125,6 +131,10 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final maxHeight = MediaQuery.sizeOf(context).height * 0.86;
     final colorScheme = Theme.of(context).colorScheme;
+    final currencyOptions = supportedCurrenciesForLedger(widget.ledger);
+    if (!currencyOptions.contains(_selectedCurrency)) {
+      _selectedCurrency = currencyOptions.last;
+    }
     final peopleAsyncValue = ref.watch(
       personNotifierProvider(
         includeDeleted: true,
@@ -232,19 +242,50 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                               ),
                             ),
                             const SizedBox(height: 14),
-                            TextField(
-                              controller: _amountController,
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                    decimal: true,
+                            Row(
+                              children: [
+                                Expanded(
+                                  flex: 3,
+                                  child: DropdownButtonFormField<String>(
+                                    initialValue: _selectedCurrency,
+                                    decoration: const InputDecoration(
+                                      labelText: '币种',
+                                      prefixIcon: Icon(Icons.payments_outlined),
+                                    ),
+                                    items: currencyOptions
+                                        .map(
+                                          (currency) => DropdownMenuItem(
+                                            value: currency,
+                                            child: Text(currency),
+                                          ),
+                                        )
+                                        .toList(),
+                                    onChanged: (value) {
+                                      if (value == null) return;
+                                      setState(() => _selectedCurrency = value);
+                                    },
                                   ),
-                              style: Theme.of(context).textTheme.headlineSmall
-                                  ?.copyWith(fontWeight: FontWeight.w800),
-                              decoration: InputDecoration(
-                                labelText: '金额',
-                                prefixText:
-                                    '${widget.ledger.baseCurrencyCode} ',
-                              ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  flex: 5,
+                                  child: TextField(
+                                    controller: _amountController,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                          decimal: true,
+                                        ),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .headlineSmall
+                                        ?.copyWith(fontWeight: FontWeight.w800),
+                                    decoration: InputDecoration(
+                                      labelText: '金额',
+                                      prefixText: '$_selectedCurrency ',
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/di/providers.dart';
 import '../../../../core/models/ledger.dart';
+import '../../../../core/models/money.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../providers/ledger_provider.dart';
@@ -242,7 +243,8 @@ class _LedgerCard extends StatelessWidget {
                                 ),
                               if (hasRate)
                                 _MetaChip(
-                                  text: '汇率 ${ledger.exchangeRateToCNY}',
+                                  text:
+                                      '1 ${ledger.baseCurrencyCode} = ${ledger.exchangeRateToCNY.toStringAsFixed(4)} CNY',
                                 ),
                             ],
                           ),
@@ -288,7 +290,7 @@ class _LedgerCard extends StatelessWidget {
                     Expanded(
                       child: _StatPill(
                         label: '收入',
-                        value: income.toStringAsFixed(2),
+                        value: formatMoney('CNY', income),
                         color: colorScheme.primary,
                       ),
                     ),
@@ -296,7 +298,7 @@ class _LedgerCard extends StatelessWidget {
                     Expanded(
                       child: _StatPill(
                         label: '支出',
-                        value: expense.toStringAsFixed(2),
+                        value: formatMoney('CNY', expense),
                         color: colorScheme.error,
                       ),
                     ),
@@ -304,7 +306,7 @@ class _LedgerCard extends StatelessWidget {
                     Expanded(
                       child: _StatPill(
                         label: '结余',
-                        value: balance.toStringAsFixed(2),
+                        value: formatMoney('CNY', balance, signed: true),
                         color: colorScheme.onSurface,
                       ),
                     ),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/models/ledger.dart';
+import '../../../../core/models/money.dart';
 import '../../../../core/models/person_lookup.dart';
 import '../../../../core/models/person_transaction_stats.dart';
 import '../../../../core/models/transaction_record.dart';
@@ -28,6 +29,7 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
   String? _selectedLedgerUuid;
   TimeFilter _timeFilter = TimeFilter.month;
   int _transactionType = 0;
+  String _displayCurrency = 'CNY';
 
   @override
   void initState() {
@@ -88,10 +90,14 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
 
   Map<String, double> _aggregateByCategory(
     List<TransactionRecord> transactions,
+    Ledger ledger,
+    String displayCurrency,
   ) {
     final map = <String, double>{};
     for (final t in transactions) {
-      map[t.category] = (map[t.category] ?? 0.0) + t.amount;
+      map[t.category] =
+          (map[t.category] ?? 0.0) +
+          transactionAmountForDisplay(t, ledger, displayCurrency);
     }
     return map;
   }
@@ -248,6 +254,12 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
               message: FriendlyError.message(err, fallback: '暂时无法加载统计，请稍后重试。'),
             ),
             data: (allTransactions) {
+              final displayCurrencies = supportedCurrenciesForLedger(
+                currentLedger,
+              );
+              if (!displayCurrencies.contains(_displayCurrency)) {
+                _displayCurrency = 'CNY';
+              }
               final filtered = _filterTransactions(allTransactions);
               if (filtered.isEmpty) {
                 return const AppEmptyState(
@@ -257,7 +269,11 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                 );
               }
 
-              final categoryMap = _aggregateByCategory(filtered);
+              final categoryMap = _aggregateByCategory(
+                filtered,
+                currentLedger,
+                _displayCurrency,
+              );
               final sortedCategories = categoryMap.entries.toList()
                 ..sort((a, b) => b.value.compareTo(a.value));
               final totalAmount = sortedCategories.fold<double>(
@@ -269,6 +285,11 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
 
               final personStats = calculatePersonTransactionStats(
                 sortedTransactions,
+                amountOf: (transaction) => transactionAmountForDisplay(
+                  transaction,
+                  currentLedger,
+                  _displayCurrency,
+                ),
               );
               final personBalances = personStats.personBalances;
 
@@ -281,11 +302,15 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                         delay: const Duration(milliseconds: 70),
                         child: _SummaryChartCard(
                           title: '总${_transactionType == 0 ? "支出" : "收入"}',
-                          amount:
-                              '${currentLedger.baseCurrencyCode} ${totalAmount.toStringAsFixed(2)}',
+                          amount: formatMoney(_displayCurrency, totalAmount),
                           isExpense: _transactionType == 0,
                           categories: sortedCategories,
                           totalAmount: totalAmount,
+                          displayCurrencies: displayCurrencies,
+                          selectedCurrency: _displayCurrency,
+                          onCurrencyChanged: (currency) {
+                            setState(() => _displayCurrency = currency);
+                          },
                           colorForIndex: (index) =>
                               _getColorForCategory(index, context),
                         ),
@@ -320,8 +345,7 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                         child: _CategoryBreakdownTile(
                           color: _getColorForCategory(index, context),
                           category: entry.key,
-                          amount:
-                              '${currentLedger.baseCurrencyCode} ${entry.value.toStringAsFixed(2)}',
+                          amount: formatMoney(_displayCurrency, entry.value),
                           percentage: '${percentage.toStringAsFixed(1)}%',
                         ),
                       );
@@ -392,8 +416,11 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                                     child: AppPersonBalanceCard(
                                       avatar: p.avatar,
                                       name: p.name,
-                                      balance:
-                                          '${pBalance >= 0 ? '+' : ''}${pBalance.toStringAsFixed(2)}',
+                                      balance: formatMoney(
+                                        _displayCurrency,
+                                        pBalance,
+                                        signed: true,
+                                      ),
                                       isPositive: pBalance >= 0,
                                     ),
                                   );
@@ -440,8 +467,10 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                                             fromName: from.name,
                                             toAvatar: to.avatar,
                                             toName: to.name,
-                                            amount:
-                                                '¥${settlement.amount.toStringAsFixed(2)}',
+                                            amount: formatMoney(
+                                              _displayCurrency,
+                                              settlement.amount,
+                                            ),
                                           ),
                                         );
                                       }),
@@ -499,8 +528,11 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                               note: t.note,
                               createdByText: t.createdByNickname,
                               createdByAvatar: t.createdByAvatar,
-                              amount:
-                                  '${t.type == 0 ? '-' : '+'} ${t.currencyCode} ${t.amount.toStringAsFixed(2)}',
+                              amount: formatTransactionPrimaryAmount(t),
+                              convertedAmount: formatTransactionConvertedAmount(
+                                t,
+                                currentLedger,
+                              ),
                               isExpense: t.type == 0,
                               syncStatus: _syncStatusFor(t),
                               syncError: t.syncError,
@@ -551,6 +583,9 @@ class _SummaryChartCard extends StatelessWidget {
     required this.isExpense,
     required this.categories,
     required this.totalAmount,
+    required this.displayCurrencies,
+    required this.selectedCurrency,
+    required this.onCurrencyChanged,
     required this.colorForIndex,
   });
 
@@ -559,6 +594,9 @@ class _SummaryChartCard extends StatelessWidget {
   final bool isExpense;
   final List<MapEntry<String, double>> categories;
   final double totalAmount;
+  final List<String> displayCurrencies;
+  final String selectedCurrency;
+  final ValueChanged<String> onCurrencyChanged;
   final Color Function(int index) colorForIndex;
 
   @override
@@ -589,6 +627,22 @@ class _SummaryChartCard extends StatelessWidget {
               ),
             ),
           ),
+          if (displayCurrencies.length > 1) ...[
+            const SizedBox(height: 12),
+            SegmentedButton<String>(
+              showSelectedIcon: false,
+              segments: displayCurrencies
+                  .map(
+                    (currency) =>
+                        ButtonSegment(value: currency, label: Text(currency)),
+                  )
+                  .toList(),
+              selected: {selectedCurrency},
+              onSelectionChanged: (selection) {
+                onCurrencyChanged(selection.first);
+              },
+            ),
+          ],
           const SizedBox(height: 20),
           SizedBox(
             height: 210,

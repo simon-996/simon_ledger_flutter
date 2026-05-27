@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/models/ledger.dart';
+import '../../../../core/models/money.dart';
 import '../../../../core/models/person.dart';
 import '../../../../core/models/person_lookup.dart';
 import '../../../../core/models/person_transaction_stats.dart';
@@ -29,13 +30,14 @@ class ShareLedgerImageWidget extends StatelessWidget {
     final personMap = peopleByUuid(peoplePool);
     final totalExpense = summary
         .where((t) => t.type == 0)
-        .fold(0.0, (sum, t) => sum + t.amount);
+        .fold(0.0, (sum, t) => sum + transactionAmountInCny(t, ledger));
     final totalIncome = summary
         .where((t) => t.type == 1)
-        .fold(0.0, (sum, t) => sum + t.amount);
+        .fold(0.0, (sum, t) => sum + transactionAmountInCny(t, ledger));
     final balance = totalIncome - totalExpense;
     final personBalances = calculatePersonTransactionStats(
       summary,
+      amountOf: (transaction) => transactionAmountInCny(transaction, ledger),
     ).personBalances;
     final peopleInImage = personBalances.keys.map((pid) {
       return personOrFallback(personMap, pid);
@@ -79,7 +81,7 @@ class ShareLedgerImageWidget extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '结余 (${ledger.baseCurrencyCode})',
+                  '结余 (CNY)',
                   style: const TextStyle(
                     fontSize: 14,
                     color: Color(0xFF6B7280),
@@ -154,7 +156,7 @@ class ShareLedgerImageWidget extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${isPositive ? '+' : ''}${pBalance.toStringAsFixed(2)}',
+                          formatMoney('CNY', pBalance, signed: true),
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
@@ -249,7 +251,7 @@ class ShareLedgerImageWidget extends StatelessWidget {
                       ),
                       const SizedBox(width: 12),
                       Text(
-                        '${t.type == 0 ? '-' : '+'} ${t.currencyCode} ${t.amount.toStringAsFixed(2)}',
+                        formatTransactionPrimaryAmount(t),
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,

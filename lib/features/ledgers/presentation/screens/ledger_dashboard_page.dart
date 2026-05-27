@@ -4,6 +4,7 @@ import 'package:screenshot/screenshot.dart';
 import 'package:gal/gal.dart';
 import '../../../../core/common/gallery_launcher.dart';
 import '../../../../core/models/ledger.dart';
+import '../../../../core/models/money.dart';
 import '../../../../core/models/person.dart';
 import '../../../../core/models/person_lookup.dart';
 import '../../../../core/models/person_transaction_stats.dart';
@@ -32,6 +33,7 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
   final Set<String> _selectedFilterPersonUuids = {};
   final ScreenshotController _screenshotController = ScreenshotController();
   bool _isGeneratingImage = false;
+  String _displayCurrency = 'CNY';
 
   void _toggleSelectionMode() {
     setState(() {
@@ -291,15 +293,44 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
           message: FriendlyError.message(err, fallback: '暂时无法加载流水，请检查网络后重试。'),
         ),
         data: (transactions) {
+          final displayCurrencies = supportedCurrenciesForLedger(widget.ledger);
+          if (!displayCurrencies.contains(_displayCurrency)) {
+            _displayCurrency = 'CNY';
+          }
           final totalExpense = transactions
               .where((t) => t.type == 0)
-              .fold(0.0, (sum, t) => sum + t.amount);
+              .fold(
+                0.0,
+                (sum, t) =>
+                    sum +
+                    transactionAmountForDisplay(
+                      t,
+                      widget.ledger,
+                      _displayCurrency,
+                    ),
+              );
           final totalIncome = transactions
               .where((t) => t.type == 1)
-              .fold(0.0, (sum, t) => sum + t.amount);
+              .fold(
+                0.0,
+                (sum, t) =>
+                    sum +
+                    transactionAmountForDisplay(
+                      t,
+                      widget.ledger,
+                      _displayCurrency,
+                    ),
+              );
           final balance = totalIncome - totalExpense;
 
-          final personStats = calculatePersonTransactionStats(transactions);
+          final personStats = calculatePersonTransactionStats(
+            transactions,
+            amountOf: (transaction) => transactionAmountForDisplay(
+              transaction,
+              widget.ledger,
+              _displayCurrency,
+            ),
+          );
           final personBalances = personStats.personBalances;
 
           final colorScheme = Theme.of(context).colorScheme;
@@ -322,16 +353,38 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text(
-                          '结余 (${widget.ledger.baseCurrencyCode})',
+                          '结余 ($_displayCurrency)',
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(color: colorScheme.onSurfaceVariant),
                         ),
+                        if (displayCurrencies.length > 1) ...[
+                          const SizedBox(height: 8),
+                          Center(
+                            child: SegmentedButton<String>(
+                              showSelectedIcon: false,
+                              segments: displayCurrencies
+                                  .map(
+                                    (currency) => ButtonSegment(
+                                      value: currency,
+                                      label: Text(currency),
+                                    ),
+                                  )
+                                  .toList(),
+                              selected: {_displayCurrency},
+                              onSelectionChanged: (selection) {
+                                setState(
+                                  () => _displayCurrency = selection.first,
+                                );
+                              },
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 8),
                         FittedBox(
                           fit: BoxFit.scaleDown,
                           child: Text(
-                            balance.toStringAsFixed(2),
+                            formatMoney(_displayCurrency, balance),
                             style: Theme.of(context).textTheme.displayMedium
                                 ?.copyWith(fontWeight: FontWeight.w900),
                           ),
@@ -343,7 +396,10 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                               child: AppMetricTile(
                                 icon: Icons.arrow_downward_rounded,
                                 label: '总收入',
-                                value: totalIncome.toStringAsFixed(2),
+                                value: formatMoney(
+                                  _displayCurrency,
+                                  totalIncome,
+                                ),
                                 color: colorScheme.primary,
                               ),
                             ),
@@ -352,7 +408,10 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                               child: AppMetricTile(
                                 icon: Icons.arrow_upward_rounded,
                                 label: '总支出',
-                                value: totalExpense.toStringAsFixed(2),
+                                value: formatMoney(
+                                  _displayCurrency,
+                                  totalExpense,
+                                ),
                                 color: colorScheme.error,
                               ),
                             ),
@@ -446,8 +505,11 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                                         child: AppPersonBalanceCard(
                                           avatar: p.avatar,
                                           name: p.name,
-                                          balance:
-                                              '${pBalance >= 0 ? '+' : ''}${pBalance.toStringAsFixed(2)}',
+                                          balance: formatMoney(
+                                            _displayCurrency,
+                                            pBalance,
+                                            signed: true,
+                                          ),
                                           isPositive: pBalance >= 0,
                                           isSelected: _selectedFilterPersonUuids
                                               .contains(p.uuid),
@@ -476,31 +538,34 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                                             ).textTheme.titleMedium,
                                           ),
                                           const SizedBox(height: 10),
-                                          ...personStats.settlements.take(5).map((
-                                            settlement,
-                                          ) {
-                                            final from = personOrFallback(
-                                              personMap,
-                                              settlement.fromPersonUuid,
-                                            );
-                                            final to = personOrFallback(
-                                              personMap,
-                                              settlement.toPersonUuid,
-                                            );
-                                            return Padding(
-                                              padding: const EdgeInsets.only(
-                                                bottom: 8,
-                                              ),
-                                              child: AppSettlementTile(
-                                                fromAvatar: from.avatar,
-                                                fromName: from.name,
-                                                toAvatar: to.avatar,
-                                                toName: to.name,
-                                                amount:
-                                                    '¥${settlement.amount.toStringAsFixed(2)}',
-                                              ),
-                                            );
-                                          }),
+                                          ...personStats.settlements
+                                              .take(5)
+                                              .map((settlement) {
+                                                final from = personOrFallback(
+                                                  personMap,
+                                                  settlement.fromPersonUuid,
+                                                );
+                                                final to = personOrFallback(
+                                                  personMap,
+                                                  settlement.toPersonUuid,
+                                                );
+                                                return Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                        bottom: 8,
+                                                      ),
+                                                  child: AppSettlementTile(
+                                                    fromAvatar: from.avatar,
+                                                    fromName: from.name,
+                                                    toAvatar: to.avatar,
+                                                    toName: to.name,
+                                                    amount: formatMoney(
+                                                      _displayCurrency,
+                                                      settlement.amount,
+                                                    ),
+                                                  ),
+                                                );
+                                              }),
                                         ],
                                       ),
                                     ),
@@ -571,8 +636,12 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                                   note: t.note,
                                   createdByText: t.createdByNickname,
                                   createdByAvatar: t.createdByAvatar,
-                                  amount:
-                                      '${t.type == 0 ? '-' : '+'} ${t.currencyCode} ${t.amount.toStringAsFixed(2)}',
+                                  amount: formatTransactionPrimaryAmount(t),
+                                  convertedAmount:
+                                      formatTransactionConvertedAmount(
+                                        t,
+                                        widget.ledger,
+                                      ),
                                   isExpense: t.type == 0,
                                   syncStatus: _syncStatusFor(t),
                                   syncError: t.syncError,

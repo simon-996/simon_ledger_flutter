@@ -18,6 +18,7 @@ class LedgerStats extends _$LedgerStats {
 
     return calculateLedgerStats(
       ledgerUuids: ledgers.map((ledger) => ledger.uuid),
+      ledgersByUuid: {for (final ledger in ledgers) ledger.uuid: ledger},
       transactions: transactions,
     );
   }

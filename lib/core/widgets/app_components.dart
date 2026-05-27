@@ -812,6 +812,7 @@ class AppTransactionTile extends StatelessWidget {
     required this.people,
     required this.amount,
     required this.isExpense,
+    this.convertedAmount,
     this.note,
     this.createdByText,
     this.createdByAvatar,
@@ -828,6 +829,7 @@ class AppTransactionTile extends StatelessWidget {
   final String people;
   final String amount;
   final bool isExpense;
+  final String? convertedAmount;
   final String? note;
   final String? createdByText;
   final String? createdByAvatar;
@@ -964,16 +966,36 @@ class AppTransactionTile extends StatelessWidget {
               const SizedBox(width: 12),
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 132),
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    amount,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: amountColor,
-                      fontWeight: FontWeight.w800,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        amount,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: amountColor,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                     ),
-                  ),
+                    if (convertedAmount != null &&
+                        convertedAmount!.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        convertedAmount!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.right,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ],

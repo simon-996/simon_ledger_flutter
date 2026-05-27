@@ -1,9 +1,12 @@
+import '../../../../core/models/ledger.dart';
+import '../../../../core/models/money.dart';
 import '../../../../core/models/transaction_record.dart';
 
 typedef LedgerStatsMap = Map<String, Map<String, double>>;
 
 LedgerStatsMap calculateLedgerStats({
   required Iterable<String> ledgerUuids,
+  required Map<String, Ledger> ledgersByUuid,
   required Iterable<TransactionRecord> transactions,
 }) {
   final stats = <String, Map<String, double>>{};
@@ -15,11 +18,14 @@ LedgerStatsMap calculateLedgerStats({
   for (final transaction in transactions) {
     final ledgerStats = stats[transaction.ledgerUuid];
     if (ledgerStats == null) continue;
+    final ledger = ledgersByUuid[transaction.ledgerUuid];
+    if (ledger == null) continue;
+    final amount = transactionAmountInCny(transaction, ledger);
 
     if (transaction.type == 0) {
-      ledgerStats['expense'] = ledgerStats['expense']! + transaction.amount;
+      ledgerStats['expense'] = ledgerStats['expense']! + amount;
     } else {
-      ledgerStats['income'] = ledgerStats['income']! + transaction.amount;
+      ledgerStats['income'] = ledgerStats['income']! + amount;
     }
   }
 

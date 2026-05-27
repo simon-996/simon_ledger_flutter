@@ -23,15 +23,17 @@ class PersonSettlement {
 }
 
 PersonTransactionStats calculatePersonTransactionStats(
-  Iterable<TransactionRecord> transactions,
-) {
+  Iterable<TransactionRecord> transactions, {
+  double Function(TransactionRecord transaction)? amountOf,
+}) {
   final personBalances = <String, double>{};
   final netSettlementMap = <String, double>{};
 
   for (final transaction in transactions) {
     if (transaction.personUuids.isEmpty) continue;
 
-    final splitAmount = transaction.amount / transaction.personUuids.length;
+    final amount = amountOf?.call(transaction) ?? transaction.amount;
+    final splitAmount = amount / transaction.personUuids.length;
 
     if (transaction.type == 1) {
       for (final personUuid in transaction.personUuids) {
@@ -51,7 +53,7 @@ PersonTransactionStats calculatePersonTransactionStats(
     }
 
     personBalances[payerPersonUuid] =
-        (personBalances[payerPersonUuid] ?? 0) + transaction.amount;
+        (personBalances[payerPersonUuid] ?? 0) + amount;
     for (final personUuid in transaction.personUuids) {
       personBalances[personUuid] =
           (personBalances[personUuid] ?? 0) - splitAmount;
