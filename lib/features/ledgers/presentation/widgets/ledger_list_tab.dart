@@ -327,66 +327,51 @@ class _LedgerMembersRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final visibleMembers = ledger.members.take(4).toList();
-    final remaining = ledger.memberCount - visibleMembers.length;
 
-    return Row(
-      children: [
-        SizedBox(
-          height: 32,
-          width: 28.0 + visibleMembers.length * 24 + (remaining > 0 ? 28 : 0),
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              for (var i = 0; i < visibleMembers.length; i++)
-                Positioned(
-                  left: i * 24.0,
-                  child: Tooltip(
-                    message:
-                        '${visibleMembers[i].displayName}${_roleLabel(visibleMembers[i].role)}',
-                    child: CircleAvatar(
-                      radius: 16,
-                      backgroundColor: colorScheme.surfaceContainerHighest,
-                      child: Text(
-                        visibleMembers[i].displayAvatar,
-                        style: const TextStyle(fontSize: 15),
-                      ),
-                    ),
-                  ),
-                ),
-              if (remaining > 0)
-                Positioned(
-                  left: visibleMembers.length * 24.0,
-                  child: CircleAvatar(
-                    radius: 16,
-                    backgroundColor: colorScheme.primaryContainer,
-                    child: Text(
-                      '+$remaining',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: colorScheme.primary,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-        if (ledger.isShared) ...[
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              '已加入 ${ledger.memberCount} 人',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: ledger.members.map((member) {
+        return Tooltip(
+          message: '${member.displayName}${_roleLabel(member.role)}',
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 156),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.68),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: colorScheme.outlineVariant.withValues(alpha: 0.72),
               ),
             ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircleAvatar(
+                  radius: 13,
+                  backgroundColor: colorScheme.surfaceContainerHighest,
+                  child: Text(
+                    member.displayAvatar,
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    member.displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: colorScheme.onSurface,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ],
-      ],
+        );
+      }).toList(),
     );
   }
 

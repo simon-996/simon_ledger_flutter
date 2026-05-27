@@ -354,28 +354,11 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                       children: [
                         _ResponsivePair(
                           breakpoint: 430,
-                          first: DropdownButtonFormField<String>(
-                            key: ValueKey('ledger-$_selectedLedgerUuid'),
-                            initialValue: _selectedLedgerUuid,
-                            decoration: const InputDecoration(
-                              labelText: '所属账本',
-                              prefixIcon: Icon(Icons.book_outlined),
-                            ),
-                            isExpanded: true,
-                            items: widget.ledgers
-                                .map(
-                                  (l) => DropdownMenuItem(
-                                    value: l.uuid,
-                                    child: _LedgerDropdownItem(ledger: l),
-                                  ),
-                                )
-                                .toList(),
-                            selectedItemBuilder: (context) => widget.ledgers
-                                .map((l) => _SelectedLedgerText(ledger: l))
-                                .toList(),
-                            onChanged: (val) {
-                              if (val == null) return;
-                              setState(() => _updateSelectedLedger(val));
+                          first: _LedgerSelector(
+                            ledgers: widget.ledgers,
+                            selectedLedger: selectedLedger,
+                            onChanged: (ledgerUuid) {
+                              setState(() => _updateSelectedLedger(ledgerUuid));
                             },
                           ),
                           second: SegmentedButton<int>(
@@ -821,45 +804,229 @@ class _QuickEntryHeader extends StatelessWidget {
   }
 }
 
-class _LedgerDropdownItem extends StatelessWidget {
-  const _LedgerDropdownItem({required this.ledger});
+class _LedgerSelector extends StatelessWidget {
+  const _LedgerSelector({
+    required this.ledgers,
+    required this.selectedLedger,
+    required this.onChanged,
+  });
+
+  final List<Ledger> ledgers;
+  final Ledger? selectedLedger;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final ledger = selectedLedger;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => _showLedgerPicker(context),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 72),
+          padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerLowest,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: colorScheme.outlineVariant),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: colorScheme.primaryContainer.withValues(alpha: 0.72),
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Icon(
+                  Icons.menu_book_outlined,
+                  color: colorScheme.primary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '所属账本',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      ledger?.name ?? '请选择账本',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    if (ledger != null) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        [
+                          ledger.displayCode,
+                          ledger.baseCurrencyCode,
+                          if (ledger.isShared) '${ledger.memberCount} 人共享',
+                        ].join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.expand_more_rounded,
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showLedgerPicker(BuildContext context) async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (context) => SafeArea(
+        top: false,
+        child: ListView.separated(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          itemCount: ledgers.length + 1,
+          separatorBuilder: (_, index) => index == 0
+              ? const SizedBox(height: 8)
+              : const SizedBox(height: 6),
+          itemBuilder: (context, index) {
+            if (index == 0) {
+              return Text(
+                '选择所属账本',
+                style: Theme.of(context).textTheme.titleMedium,
+              );
+            }
+
+            final ledger = ledgers[index - 1];
+            final selected = ledger.uuid == selectedLedger?.uuid;
+            return _LedgerPickerItem(
+              ledger: ledger,
+              selected: selected,
+              onTap: () => Navigator.of(context).pop(ledger.uuid),
+            );
+          },
+        ),
+      ),
+    );
+
+    if (picked != null) {
+      onChanged(picked);
+    }
+  }
+}
+
+class _LedgerPickerItem extends StatelessWidget {
+  const _LedgerPickerItem({
+    required this.ledger,
+    required this.selected,
+    required this.onTap,
+  });
 
   final Ledger ledger;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(ledger.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-        Text(
-          ledger.displayCode,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-            fontWeight: FontWeight.w600,
+    return Material(
+      color: selected
+          ? colorScheme.primaryContainer.withValues(alpha: 0.58)
+          : colorScheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: selected
+                      ? colorScheme.primary.withValues(alpha: 0.14)
+                      : colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  Icons.menu_book_rounded,
+                  color: selected
+                      ? colorScheme.primary
+                      : colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      ledger.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      [
+                        ledger.displayCode,
+                        ledger.baseCurrencyCode,
+                        if (ledger.isShared) '${ledger.memberCount} 人共享',
+                      ].join(' · '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              AnimatedOpacity(
+                opacity: selected ? 1 : 0,
+                duration: AppMotion.fast,
+                child: Icon(
+                  Icons.check_circle_rounded,
+                  color: colorScheme.primary,
+                ),
+              ),
+            ],
           ),
         ),
-      ],
-    );
-  }
-}
-
-class _SelectedLedgerText extends StatelessWidget {
-  const _SelectedLedgerText({required this.ledger});
-
-  final Ledger ledger;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      ledger.displayNameWithCode,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
+      ),
     );
   }
 }
