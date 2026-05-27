@@ -1070,108 +1070,29 @@ class _CategorySelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final accent = isIncome ? colorScheme.primary : colorScheme.error;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => _showCategoryPicker(context),
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 58),
-          padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
-          decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerLowest,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: colorScheme.outlineVariant),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(13),
-                ),
-                child: Icon(
-                  _iconFor(selectedCategory),
-                  color: accent,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  selectedCategory,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Icon(
-                Icons.expand_more_rounded,
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ],
-          ),
-        ),
+    return SizedBox(
+      height: 46,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        clipBehavior: Clip.none,
+        itemCount: categories.length,
+        separatorBuilder: (context, index) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final category = categories[index];
+          return _CategoryQuickItem(
+            category: category,
+            icon: _iconFor(category),
+            selected: category == selectedCategory,
+            isIncome: isIncome,
+            onTap: () {
+              if (category != selectedCategory) {
+                onChanged(category);
+              }
+            },
+          );
+        },
       ),
     );
-  }
-
-  Future<void> _showCategoryPicker(BuildContext context) async {
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      useSafeArea: true,
-      builder: (context) {
-        return SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text('选择分类', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 12),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final itemWidth = (constraints.maxWidth - 16) / 3;
-                    return Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: categories.map((category) {
-                        final selected = category == selectedCategory;
-                        return SizedBox(
-                          width: itemWidth,
-                          child: _CategoryPickerItem(
-                            category: category,
-                            icon: _iconFor(category),
-                            selected: selected,
-                            isIncome: isIncome,
-                            onTap: () => Navigator.of(context).pop(category),
-                          ),
-                        );
-                      }).toList(),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-
-    if (picked != null && picked != selectedCategory) {
-      onChanged(picked);
-    }
   }
 
   IconData _iconFor(String category) {
@@ -1192,8 +1113,8 @@ class _CategorySelector extends StatelessWidget {
   }
 }
 
-class _CategoryPickerItem extends StatelessWidget {
-  const _CategoryPickerItem({
+class _CategoryQuickItem extends StatelessWidget {
+  const _CategoryQuickItem({
     required this.category,
     required this.icon,
     required this.selected,
@@ -1212,61 +1133,47 @@ class _CategoryPickerItem extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final accent = isIncome ? colorScheme.primary : colorScheme.error;
 
-    return Material(
-      color: selected
-          ? accent.withValues(alpha: 0.12)
-          : colorScheme.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
+    return AnimatedContainer(
+      duration: AppMotion.fast,
+      curve: Curves.easeOut,
+      decoration: BoxDecoration(
+        color: selected
+            ? accent.withValues(alpha: 0.12)
+            : colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: selected
-                          ? accent.withValues(alpha: 0.16)
-                          : colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(
-                      icon,
-                      color: selected ? accent : colorScheme.onSurfaceVariant,
-                      size: 21,
-                    ),
-                  ),
-                  if (selected)
-                    Positioned(
-                      right: -4,
-                      top: -4,
-                      child: Icon(
-                        Icons.check_circle_rounded,
-                        color: accent,
-                        size: 16,
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                category,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: selected ? accent : null,
-                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+        border: Border.all(
+          color: selected
+              ? accent.withValues(alpha: 0.52)
+              : colorScheme.outlineVariant,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color: selected ? accent : colorScheme.onSurfaceVariant,
                 ),
-              ),
-            ],
+                const SizedBox(width: 6),
+                Text(
+                  category,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: selected ? accent : colorScheme.onSurface,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
