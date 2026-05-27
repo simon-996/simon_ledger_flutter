@@ -513,21 +513,14 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                           ),
                         ),
                         const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: _currentCategories.map((cat) {
-                            final isSelected = _selectedCategory == cat;
-                            return ChoiceChip(
-                              label: Text(cat),
-                              selected: isSelected,
-                              onSelected: (selected) {
-                                if (selected) {
-                                  _setAndPersist(() => _selectedCategory = cat);
-                                }
-                              },
-                            );
-                          }).toList(),
+                        _CategorySelector(
+                          categories: _currentCategories,
+                          selectedCategory:
+                              _selectedCategory ?? _currentCategories.first,
+                          isIncome: _transactionType == 1,
+                          onChanged: (category) {
+                            _setAndPersist(() => _selectedCategory = category);
+                          },
                         ),
                       ],
                     ),
@@ -917,22 +910,6 @@ class _LedgerSelector extends StatelessWidget {
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    if (ledger != null) ...[
-                      const SizedBox(height: 3),
-                      Text(
-                        [
-                          ledger.displayCode,
-                          ledger.baseCurrencyCode,
-                          if (ledger.isShared) '${ledger.memberCount} 人共享',
-                        ].join(' · '),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),
@@ -1068,6 +1045,225 @@ class _LedgerPickerItem extends StatelessWidget {
                 child: Icon(
                   Icons.check_circle_rounded,
                   color: colorScheme.primary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CategorySelector extends StatelessWidget {
+  const _CategorySelector({
+    required this.categories,
+    required this.selectedCategory,
+    required this.isIncome,
+    required this.onChanged,
+  });
+
+  final List<String> categories;
+  final String selectedCategory;
+  final bool isIncome;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final accent = isIncome ? colorScheme.primary : colorScheme.error;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => _showCategoryPicker(context),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 58),
+          padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerLowest,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: colorScheme.outlineVariant),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Icon(
+                  _iconFor(selectedCategory),
+                  color: accent,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  selectedCategory,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.expand_more_rounded,
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showCategoryPicker(BuildContext context) async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (context) {
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('选择分类', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 12),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final itemWidth = (constraints.maxWidth - 16) / 3;
+                    return Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: categories.map((category) {
+                        final selected = category == selectedCategory;
+                        return SizedBox(
+                          width: itemWidth,
+                          child: _CategoryPickerItem(
+                            category: category,
+                            icon: _iconFor(category),
+                            selected: selected,
+                            isIncome: isIncome,
+                            onTap: () => Navigator.of(context).pop(category),
+                          ),
+                        );
+                      }).toList(),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (picked != null && picked != selectedCategory) {
+      onChanged(picked);
+    }
+  }
+
+  IconData _iconFor(String category) {
+    return switch (category) {
+      '交通' => Icons.directions_bus_filled_outlined,
+      '购物' => Icons.shopping_bag_outlined,
+      '餐饮' => Icons.restaurant_outlined,
+      '杂费' => Icons.widgets_outlined,
+      '娱乐' => Icons.sports_esports_outlined,
+      '居住' => Icons.home_outlined,
+      '工资' => Icons.badge_outlined,
+      '兼职' => Icons.work_outline_rounded,
+      '理财' => Icons.account_balance_outlined,
+      '红包' => Icons.card_giftcard_rounded,
+      '其他' => Icons.more_horiz_rounded,
+      _ => Icons.category_outlined,
+    };
+  }
+}
+
+class _CategoryPickerItem extends StatelessWidget {
+  const _CategoryPickerItem({
+    required this.category,
+    required this.icon,
+    required this.selected,
+    required this.isIncome,
+    required this.onTap,
+  });
+
+  final String category;
+  final IconData icon;
+  final bool selected;
+  final bool isIncome;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final accent = isIncome ? colorScheme.primary : colorScheme.error;
+
+    return Material(
+      color: selected
+          ? accent.withValues(alpha: 0.12)
+          : colorScheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? accent.withValues(alpha: 0.16)
+                          : colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(
+                      icon,
+                      color: selected ? accent : colorScheme.onSurfaceVariant,
+                      size: 21,
+                    ),
+                  ),
+                  if (selected)
+                    Positioned(
+                      right: -4,
+                      top: -4,
+                      child: Icon(
+                        Icons.check_circle_rounded,
+                        color: accent,
+                        size: 16,
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                category,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: selected ? accent : null,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
                 ),
               ),
             ],
