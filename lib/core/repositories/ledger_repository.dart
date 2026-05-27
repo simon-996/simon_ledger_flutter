@@ -1,11 +1,24 @@
 import '../database/database_service.dart';
 import '../models/ledger.dart';
+import '../models/person.dart';
 import '../network/api_client.dart';
+
+class CreatedLedgerWithPeople {
+  const CreatedLedgerWithPeople({required this.ledger, required this.people});
+
+  final Ledger ledger;
+  final List<Person> people;
+}
 
 abstract class LedgerRepository {
   Future<List<Ledger>> getAllLedgers({bool includeDeleted = false});
 
   Future<void> saveLedger(Ledger ledger);
+
+  Future<CreatedLedgerWithPeople> createLedgerWithPeople(
+    Ledger ledger,
+    List<Person> people,
+  );
 
   Future<void> deleteLedger(String uuid);
 }
@@ -23,6 +36,19 @@ class LocalLedgerRepository implements LedgerRepository {
   @override
   Future<void> saveLedger(Ledger ledger) {
     return _db.saveLedger(ledger);
+  }
+
+  @override
+  Future<CreatedLedgerWithPeople> createLedgerWithPeople(
+    Ledger ledger,
+    List<Person> people,
+  ) async {
+    for (final person in people) {
+      await _db.savePerson(person);
+    }
+    ledger.personUuids = people.map((person) => person.uuid).toList();
+    await _db.saveLedger(ledger);
+    return CreatedLedgerWithPeople(ledger: ledger, people: people);
   }
 
   @override
@@ -97,6 +123,35 @@ class RemoteLedgerRepository implements LedgerRepository {
     );
   }
 
+  @override
+  Future<CreatedLedgerWithPeople> createLedgerWithPeople(
+    Ledger ledger,
+    List<Person> people,
+  ) async {
+    final saved = await _apiClient.post<CreatedLedgerWithPeople>(
+      '/api/ledgers/with-people',
+      data: {
+        'name': ledger.name,
+        'baseCurrencyCode': ledger.baseCurrencyCode,
+        'exchangeRateToCny': ledger.exchangeRateToCNY,
+        'people': people.map(_personToJson).toList(),
+      },
+      idempotencyKey: ledger.uuid,
+      fromJson: _createdLedgerWithPeopleFromJson,
+    );
+
+    ledger
+      ..uuid = saved.ledger.uuid
+      ..name = saved.ledger.name
+      ..baseCurrencyCode = saved.ledger.baseCurrencyCode
+      ..exchangeRateToCNY = saved.ledger.exchangeRateToCNY
+      ..personUuids = saved.people.map((person) => person.uuid).toList()
+      ..role = saved.ledger.role
+      ..memberCount = saved.ledger.memberCount
+      ..members = saved.ledger.members;
+    return CreatedLedgerWithPeople(ledger: ledger, people: saved.people);
+  }
+
   bool _looksLikeRemoteUuid(String uuid) {
     return RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(uuid);
   }
@@ -126,6 +181,35 @@ class RemoteLedgerRepository implements LedgerRepository {
       ..members = (map['members'] as List<dynamic>? ?? [])
           .map(_memberFromJson)
           .toList();
+  }
+
+  static Map<String, dynamic> _personToJson(Person person) {
+    return {
+      'name': person.name,
+      'avatar': person.avatar,
+      'linkedUserUuid': person.linkedUserUuid,
+    };
+  }
+
+  static Person _personFromJson(Object? json) {
+    final map = json! as Map<String, dynamic>;
+    return Person()
+      ..uuid = map['uuid'].toString()
+      ..name = map['name'].toString()
+      ..avatar = map['avatar']?.toString() ?? ''
+      ..linkedUserUuid = map['linkedUserUuid']?.toString();
+  }
+
+  static CreatedLedgerWithPeople _createdLedgerWithPeopleFromJson(
+    Object? json,
+  ) {
+    final map = json! as Map<String, dynamic>;
+    final ledger = _ledgerFromJson(map['ledger']);
+    final people = (map['people'] as List<dynamic>? ?? [])
+        .map(_personFromJson)
+        .toList();
+    ledger.personUuids = people.map((person) => person.uuid).toList();
+    return CreatedLedgerWithPeople(ledger: ledger, people: people);
   }
 
   static LedgerMemberSummary _memberFromJson(Object? json) {

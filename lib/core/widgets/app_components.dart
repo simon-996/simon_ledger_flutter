@@ -630,45 +630,54 @@ class AppSettlementTile extends StatelessWidget {
               child: _SettlementPerson(avatar: fromAvatar, name: fromName),
             ),
             const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: colorScheme.primary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    '应还',
-                    style: textTheme.labelSmall?.copyWith(
-                      color: colorScheme.primary,
-                      fontWeight: FontWeight.w800,
-                    ),
+            Expanded(
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
                   ),
-                  const SizedBox(width: 2),
-                  Icon(
-                    Icons.arrow_forward_rounded,
-                    size: 14,
-                    color: colorScheme.primary,
+                  decoration: BoxDecoration(
+                    color: colorScheme.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(999),
                   ),
-                ],
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '应付',
+                        style: textTheme.labelSmall?.copyWith(
+                          color: colorScheme.primary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 14,
+                        color: colorScheme.primary,
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: _SettlementPerson(avatar: toAvatar, name: toName),
             ),
-            const SizedBox(width: 10),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 96),
-              child: Text(
-                amount,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: textTheme.titleSmall?.copyWith(
-                  color: colorScheme.primary,
-                  fontWeight: FontWeight.w900,
+            const SizedBox(width: 8),
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  amount,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.titleSmall?.copyWith(
+                    color: colorScheme.primary,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
               ),
             ),
@@ -690,7 +699,7 @@ class _SettlementPerson extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Row(
-      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         CircleAvatar(
           radius: 16,
@@ -698,7 +707,7 @@ class _SettlementPerson extends StatelessWidget {
           child: Text(avatar, style: const TextStyle(fontSize: 16)),
         ),
         const SizedBox(width: 8),
-        Expanded(
+        Flexible(
           child: Text(
             name,
             maxLines: 1,

@@ -1,6 +1,7 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../../core/di/providers.dart';
 import '../../../../core/models/ledger.dart';
+import '../../../../core/models/person.dart';
 
 part 'ledger_provider.g.dart';
 
@@ -22,6 +23,16 @@ class LedgerNotifier extends _$LedgerNotifier {
     }
     await repository.saveLedger(ledger);
     // Refresh the state
+    ref.invalidateSelf();
+  }
+
+  Future<void> addLedgerWithPeople(Ledger ledger, List<Person> people) async {
+    final repository = ref.read(ledgerRepositoryProvider);
+    final currentLedgers = state.valueOrNull ?? [];
+    if (currentLedgers.isNotEmpty) {
+      ledger.sortOrder = currentLedgers.last.sortOrder + 1;
+    }
+    await repository.createLedgerWithPeople(ledger, people);
     ref.invalidateSelf();
   }
 

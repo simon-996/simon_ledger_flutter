@@ -372,18 +372,20 @@ class _LedgerMembersRow extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            ledger.isShared ? '已加入 ${ledger.memberCount} 人' : '仅自己使用',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w600,
+        if (ledger.isShared) ...[
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '已加入 ${ledger.memberCount} 人',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
-        ),
+        ],
       ],
     );
   }

@@ -5,6 +5,7 @@ import '../../../../core/models/ledger.dart';
 import '../../../../core/models/person.dart';
 import '../../../../core/network/friendly_error.dart';
 import '../../../../core/widgets/app_components.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../people_pool/presentation/widgets/person_edit_dialog.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
 
@@ -14,6 +15,7 @@ class CreateLedgerResult {
     required this.baseCurrencyCode,
     required this.exchangeRateToCNY,
     required this.personIds,
+    required this.people,
     required this.includeSelf,
   });
 
@@ -21,6 +23,7 @@ class CreateLedgerResult {
   final String baseCurrencyCode;
   final double exchangeRateToCNY;
   final List<String> personIds;
+  final List<Person> people;
   final bool includeSelf;
 }
 
@@ -41,6 +44,8 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
   late bool _includeSelf;
 
   final Set<String> _selectedPersonIds = {};
+  final List<Person> _draftPeople = [];
+  bool _submitting = false;
 
   @override
   void initState() {
@@ -68,6 +73,20 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
   }
 
   Future<void> _addNewPerson() async {
+    if (_isDraftPeopleMode) {
+      final result = await showDialog<Person>(
+        context: context,
+        builder: (context) => const PersonEditDialog(),
+      );
+      if (result == null || !mounted) return;
+      if (!_validateDraftPersonName(result)) return;
+      setState(() {
+        _draftPeople.add(result);
+        _selectedPersonIds.add(result.uuid);
+      });
+      return;
+    }
+
     final ledgerUuid = _personLedgerUuid;
     final result = await showDialog<Person>(
       context: context,
@@ -90,6 +109,24 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
   }
 
   Future<void> _editPerson(Person person) async {
+    if (_isDraftPeopleMode) {
+      final result = await showDialog<Person>(
+        context: context,
+        builder: (context) => PersonEditDialog(person: person),
+      );
+      if (result == null || !mounted) return;
+      if (!_validateDraftPersonName(result, currentUuid: person.uuid)) return;
+      setState(() {
+        final index = _draftPeople.indexWhere(
+          (item) => item.uuid == person.uuid,
+        );
+        if (index != -1) {
+          _draftPeople[index] = result;
+        }
+      });
+      return;
+    }
+
     final ledgerUuid = _personLedgerUuid;
     final result = await showDialog<Person>(
       context: context,
@@ -130,6 +167,14 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
     );
 
     if (confirm == true && mounted) {
+      if (_isDraftPeopleMode) {
+        setState(() {
+          _draftPeople.removeWhere((item) => item.uuid == person.uuid);
+          _selectedPersonIds.remove(person.uuid);
+        });
+        return;
+      }
+
       try {
         await ref
             .read(
@@ -146,6 +191,23 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
   }
 
   String? get _personLedgerUuid => widget.existingLedger?.uuid;
+
+  bool get _isDraftPeopleMode {
+    final token = ref.read(authTokenProvider).valueOrNull;
+    return widget.existingLedger == null && token != null && token.isValid;
+  }
+
+  bool _validateDraftPersonName(Person person, {String? currentUuid}) {
+    final name = person.name.trim();
+    final exists = _draftPeople.any(
+      (item) => item.uuid != currentUuid && item.name.trim() == name,
+    );
+    if (!exists) return true;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('手动人员名称不能重复')));
+    return false;
+  }
 
   void _showWriteError(Object error) {
     if (!mounted) return;
@@ -199,9 +261,11 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
     final token = ref.watch(authTokenProvider).valueOrNull;
     final isCloudMode = token != null && token.isValid;
     final personLedgerUuid = isCloudMode ? widget.existingLedger?.uuid : null;
-    final canManagePeople = !isCloudMode || personLedgerUuid != null;
+    final isDraftPeopleMode = isCloudMode && widget.existingLedger == null;
+    final canManagePeople =
+        !isCloudMode || personLedgerUuid != null || isDraftPeopleMode;
     final localProfile = ref.watch(localProfileProvider).valueOrNull;
-    final peopleAsyncValue = canManagePeople
+    final peopleAsyncValue = canManagePeople && !isDraftPeopleMode
         ? ref.watch(
             personNotifierProvider(
               includeDeleted: false,
@@ -334,7 +398,9 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
                                 title: Text(
                                   '加入${localProfile?.normalizedNickname ?? '本人'}',
                                 ),
-                                subtitle: const Text('创建后自动把本地身份加入账本'),
+                                subtitle: Text(
+                                  isCloudMode ? '创建时一次性加入账本' : '创建后自动把本地身份加入账本',
+                                ),
                                 value: _includeSelf,
                                 onChanged: (value) {
                                   setState(() => _includeSelf = value);
@@ -342,7 +408,22 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
                               ),
                               const SizedBox(height: 8),
                             ],
-                            if (!canManagePeople)
+                            if (isDraftPeopleMode)
+                              _DraftPeopleSelector(
+                                people: _draftPeople,
+                                selectedPersonIds: _selectedPersonIds,
+                                onToggle: (person, selected) {
+                                  setState(() {
+                                    if (selected) {
+                                      _selectedPersonIds.add(person.uuid);
+                                    } else {
+                                      _selectedPersonIds.remove(person.uuid);
+                                    }
+                                  });
+                                },
+                                onLongPress: _showPersonOptions,
+                              )
+                            else if (!canManagePeople)
                               const Text('云端账本创建后，可再次编辑账本人员。')
                             else
                               peopleAsyncValue!.when(
@@ -421,8 +502,13 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
               ),
               const SizedBox(height: 14),
               FilledButton(
-                onPressed: canSubmit ? _submit : null,
-                child: Text(widget.existingLedger == null ? '创建' : '保存修改'),
+                onPressed: canSubmit && !_submitting ? _submit : null,
+                child: _submitting
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(widget.existingLedger == null ? '创建' : '保存修改'),
               ),
             ],
           ),
@@ -431,7 +517,7 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
     );
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) return;
 
@@ -443,14 +529,98 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
       return;
     }
 
+    setState(() => _submitting = true);
+    final List<Person> people;
+    try {
+      people = await _buildCreatePeople();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      _showWriteError(error);
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _submitting = false);
+
     Navigator.of(context).pop(
       CreateLedgerResult(
         name: name,
         baseCurrencyCode: _baseCurrencyCode,
         exchangeRateToCNY: rate,
         personIds: _selectedPersonIds.toList(),
+        people: people,
         includeSelf: _includeSelf,
       ),
+    );
+  }
+
+  Future<List<Person>> _buildCreatePeople() async {
+    if (!_isDraftPeopleMode) {
+      return const [];
+    }
+
+    final selectedPeople = _draftPeople
+        .where((person) => _selectedPersonIds.contains(person.uuid))
+        .toList();
+    if (!_includeSelf) {
+      return selectedPeople;
+    }
+
+    final profile = await ref.read(localProfileProvider.future);
+    final user = await ref.read(currentUserProvider.future);
+    if (user == null) {
+      throw const FormatException('登录状态已失效，请重新登录');
+    }
+    return [
+      Person()
+        ..uuid = 'self-${DateTime.now().microsecondsSinceEpoch}'
+        ..name = profile.normalizedNickname
+        ..avatar = profile.personAvatar
+        ..linkedUserUuid = user.uuid,
+      ...selectedPeople,
+    ];
+  }
+}
+
+class _DraftPeopleSelector extends StatelessWidget {
+  const _DraftPeopleSelector({
+    required this.people,
+    required this.selectedPersonIds,
+    required this.onToggle,
+    required this.onLongPress,
+  });
+
+  final List<Person> people;
+  final Set<String> selectedPersonIds;
+  final void Function(Person person, bool selected) onToggle;
+  final ValueChanged<Person> onLongPress;
+
+  @override
+  Widget build(BuildContext context) {
+    if (people.isEmpty) {
+      return Text(
+        '可先新增手动人员，创建账本时会一次保存。',
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      );
+    }
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: people.map((person) {
+        final isSelected = selectedPersonIds.contains(person.uuid);
+        return GestureDetector(
+          onLongPress: () => onLongPress(person),
+          child: FilterChip(
+            avatar: Text(person.avatar, style: const TextStyle(fontSize: 16)),
+            label: Text(person.name),
+            selected: isSelected,
+            onSelected: (selected) => onToggle(person, selected),
+          ),
+        );
+      }).toList(),
     );
   }
 }

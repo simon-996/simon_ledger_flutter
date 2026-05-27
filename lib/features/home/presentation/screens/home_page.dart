@@ -176,8 +176,16 @@ class _HomePageState extends ConsumerState<HomePage> {
       ..personUuids = result.personIds;
 
     try {
-      await ref.read(ledgerNotifierProvider.notifier).addLedger(newLedger);
-      if (result.includeSelf) {
+      final token = await ref.read(authTokenProvider.future);
+      final isCloudMode = token != null && token.isValid;
+      if (isCloudMode) {
+        await ref
+            .read(ledgerNotifierProvider.notifier)
+            .addLedgerWithPeople(newLedger, result.people);
+      } else {
+        await ref.read(ledgerNotifierProvider.notifier).addLedger(newLedger);
+      }
+      if (!isCloudMode && result.includeSelf) {
         await _addSelfToLedgerWithRetry(newLedger);
       }
     } catch (e) {
