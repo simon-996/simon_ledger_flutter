@@ -449,27 +449,15 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                         const SizedBox(height: 14),
                         _ResponsivePair(
                           breakpoint: 390,
-                          firstFlex: 3,
-                          secondFlex: 6,
-                          first: DropdownButtonFormField<String>(
-                            key: ValueKey('currency-$_selectedCurrency'),
-                            initialValue: _selectedCurrency,
-                            decoration: const InputDecoration(
-                              labelText: '币种',
-                              prefixIcon: Icon(Icons.payments_outlined),
-                            ),
-                            isExpanded: true,
-                            items: currencyOptions
-                                .map(
-                                  (currency) => DropdownMenuItem(
-                                    value: currency,
-                                    child: Text(currency),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (val) {
-                              if (val == null) return;
-                              _setAndPersist(() => _selectedCurrency = val);
+                          firstFlex: 4,
+                          secondFlex: 7,
+                          first: _CurrencySelector(
+                            currencies: currencyOptions,
+                            selectedCurrency: _selectedCurrency ?? 'CNY',
+                            onChanged: (currency) {
+                              _setAndPersist(
+                                () => _selectedCurrency = currency,
+                              );
                             },
                           ),
                           second: TextField(
@@ -1048,6 +1036,130 @@ class _LedgerPickerItem extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CurrencySelector extends StatelessWidget {
+  const _CurrencySelector({
+    required this.currencies,
+    required this.selectedCurrency,
+    required this.onChanged,
+  });
+
+  final List<String> currencies;
+  final String selectedCurrency;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 56,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        clipBehavior: Clip.none,
+        itemCount: currencies.length,
+        separatorBuilder: (context, index) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final currency = currencies[index];
+          return _CurrencyQuickItem(
+            currency: currency,
+            selected: currency == selectedCurrency,
+            onTap: () {
+              if (currency != selectedCurrency) {
+                onChanged(currency);
+              }
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _CurrencyQuickItem extends StatelessWidget {
+  const _CurrencyQuickItem({
+    required this.currency,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String currency;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final label = currency.trim().toUpperCase();
+
+    return AnimatedContainer(
+      duration: AppMotion.fast,
+      curve: Curves.easeOut,
+      decoration: BoxDecoration(
+        color: selected
+            ? colorScheme.primaryContainer.withValues(alpha: 0.58)
+            : colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: selected
+              ? colorScheme.primary.withValues(alpha: 0.52)
+              : colorScheme.outlineVariant,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  label == 'CNY'
+                      ? Icons.currency_yuan_rounded
+                      : Icons.currency_exchange_rounded,
+                  size: 18,
+                  color: selected
+                      ? colorScheme.primary
+                      : colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 6),
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: selected
+                            ? colorScheme.primary
+                            : colorScheme.onSurface,
+                        fontWeight: selected
+                            ? FontWeight.w800
+                            : FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      label == 'CNY' ? '人民币' : '账本币种',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
