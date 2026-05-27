@@ -397,9 +397,15 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                     key: ValueKey(
                       'quick-header-${selectedLedger?.uuid}-$_transactionType',
                     ),
+                    ledgers: widget.ledgers,
                     ledger: selectedLedger,
                     currencyCode: _selectedCurrency,
                     isIncome: _transactionType == 1,
+                    onLedgerChanged: (ledgerUuid) {
+                      setState(() {
+                        _updateSelectedLedger(ledgerUuid);
+                      });
+                    },
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -409,45 +415,17 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _LedgerSelector(
-                          ledgers: widget.ledgers,
-                          selectedLedger: selectedLedger,
-                          onChanged: (ledgerUuid) {
-                            setState(() {
-                              _updateSelectedLedger(ledgerUuid);
+                        _TransactionTypeSelector(
+                          selectedType: _transactionType,
+                          onChanged: (type) {
+                            _setAndPersist(() {
+                              _transactionType = type;
+                              if (_transactionType == 1) {
+                                _payerPersonUuid = null;
+                              }
+                              _selectedCategory = _currentCategories.first;
                             });
                           },
-                        ),
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 48,
-                          child: SegmentedButton<int>(
-                            expandedInsets: EdgeInsets.zero,
-                            showSelectedIcon: false,
-                            segments: const [
-                              ButtonSegment(
-                                value: 0,
-                                icon: Icon(Icons.remove_rounded),
-                                label: Text('支出'),
-                              ),
-                              ButtonSegment(
-                                value: 1,
-                                icon: Icon(Icons.add_rounded),
-                                label: Text('收入'),
-                              ),
-                            ],
-                            selected: {_transactionType},
-                            onSelectionChanged: (Set<int> newSelection) {
-                              _setAndPersist(() {
-                                _transactionType = newSelection.first;
-                                if (_transactionType == 1) {
-                                  _payerPersonUuid = null;
-                                }
-                                _selectedCategory = _currentCategories.first;
-                              });
-                            },
-                          ),
                         ),
                         const SizedBox(height: 14),
                         _ResponsivePair(
@@ -763,14 +741,18 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
 class _QuickEntryHeader extends StatelessWidget {
   const _QuickEntryHeader({
     super.key,
+    required this.ledgers,
     required this.ledger,
     required this.currencyCode,
     required this.isIncome,
+    required this.onLedgerChanged,
   });
 
+  final List<Ledger> ledgers;
   final Ledger? ledger;
   final String? currencyCode;
   final bool isIncome;
+  final ValueChanged<String> onLedgerChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -781,53 +763,61 @@ class _QuickEntryHeader extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       color: colorScheme.primaryContainer.withValues(alpha: 0.38),
       borderColor: colorScheme.primary.withValues(alpha: 0.12),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(16),
+      child: _ResponsivePair(
+        breakpoint: 0,
+        first: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(
+                isIncome ? Icons.savings_outlined : Icons.receipt_long_outlined,
+                color: accent,
+              ),
             ),
-            child: Icon(
-              isIncome ? Icons.savings_outlined : Icons.receipt_long_outlined,
-              color: accent,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('快速记账', style: Theme.of(context).textTheme.titleLarge),
-                const SizedBox(height: 4),
-                Text(
-                  ledger == null
-                      ? '请选择账本'
-                      : '${ledger!.name} · ${currencyCode ?? 'CNY'}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                if (ledger != null) ...[
-                  const SizedBox(height: 2),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('快速记账', style: Theme.of(context).textTheme.titleLarge),
+                  const SizedBox(height: 4),
                   Text(
-                    ledger!.displayCode,
+                    ledger == null
+                        ? '请选择账本'
+                        : '${ledger!.name} · ${currencyCode ?? 'CNY'}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
                     ),
                   ),
+                  if (ledger != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      ledger!.displayCode,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
+        second: _LedgerSelector(
+          ledgers: ledgers,
+          selectedLedger: ledger,
+          onChanged: onLedgerChanged,
+        ),
       ),
     );
   }
@@ -1044,6 +1034,107 @@ class _LedgerPickerItem extends StatelessWidget {
   }
 }
 
+class _TransactionTypeSelector extends StatelessWidget {
+  const _TransactionTypeSelector({
+    required this.selectedType,
+    required this.onChanged,
+  });
+
+  final int selectedType;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _TransactionTypeButton(
+            label: '支出',
+            icon: Icons.remove_rounded,
+            selected: selectedType == 0,
+            value: 0,
+            onChanged: onChanged,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _TransactionTypeButton(
+            label: '收入',
+            icon: Icons.add_rounded,
+            selected: selectedType == 1,
+            value: 1,
+            onChanged: onChanged,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TransactionTypeButton extends StatelessWidget {
+  const _TransactionTypeButton({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final int value;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final accent = value == 0 ? colorScheme.error : colorScheme.primary;
+
+    return AnimatedContainer(
+      duration: AppMotion.fast,
+      curve: Curves.easeOut,
+      height: 48,
+      decoration: BoxDecoration(
+        color: selected
+            ? accent.withValues(alpha: 0.12)
+            : colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: selected
+              ? accent.withValues(alpha: 0.52)
+              : colorScheme.outlineVariant,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: selected ? null : () => onChanged(value),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 20,
+                color: selected ? accent : colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: selected ? accent : colorScheme.onSurface,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _CurrencySelector extends StatelessWidget {
   const _CurrencySelector({
     required this.currencies,
@@ -1187,7 +1278,7 @@ class _CategorySelector extends StatelessWidget {
       height: 46,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        clipBehavior: Clip.none,
+        clipBehavior: Clip.hardEdge,
         itemCount: categories.length,
         separatorBuilder: (context, index) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
