@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/config/avatar_config.dart';
 import '../../../../core/di/providers.dart';
 import '../../../../core/models/local_profile.dart';
+import '../../../../core/network/friendly_error.dart';
 import '../../../../core/services/cloud_import_service.dart';
 import '../../../../core/services/profile_sync_service.dart';
 import '../../../../core/widgets/app_components.dart';
@@ -26,7 +27,9 @@ class AccountTab extends ConsumerWidget {
         message: '恢复登录信息和本地资料',
         icon: Icons.account_circle_outlined,
       ),
-      error: (error, stackTrace) => _AuthPanel(errorText: '$error'),
+      error: (error, stackTrace) => _AuthPanel(
+        errorText: FriendlyError.message(error, fallback: '暂时无法读取登录状态，请稍后重试。'),
+      ),
       data: (token) {
         final isSignedIn = token != null && token.isValid;
         if (!isSignedIn) {
@@ -155,9 +158,13 @@ class _JoinInviteCardState extends ConsumerState<_JoinInviteCard> {
       ).showSnackBar(SnackBar(content: Text('已加入账本：${invite.ledgerName}')));
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('加入账本失败：$error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            FriendlyError.message(error, fallback: '加入账本失败，请检查邀请码后重试。'),
+          ),
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() => _joining = false);
@@ -218,8 +225,9 @@ class _UnifiedProfileCardState extends ConsumerState<_UnifiedProfileCard> {
 
     return profileAsync.when(
       loading: () => const AppInlineLoadingCard(message: '正在加载账户资料'),
-      error: (error, stackTrace) =>
-          AppSectionCard(child: Text('账户资料加载失败：$error')),
+      error: (error, stackTrace) => AppSectionCard(
+        child: Text(FriendlyError.message(error, fallback: '账户资料加载失败，请稍后重试。')),
+      ),
       data: (profile) {
         final syncing =
             _syncing || (widget.syncingProfile && profile.pendingSync);
@@ -339,9 +347,13 @@ class _UnifiedProfileCardState extends ConsumerState<_UnifiedProfileCard> {
       _showSyncResult(syncResult);
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('账户资料保存失败：$error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            FriendlyError.message(error, fallback: '账户资料保存失败，请稍后重试。'),
+          ),
+        ),
+      );
     } finally {
       if (widget.isSignedIn) {
         _endSync();
@@ -449,7 +461,7 @@ class _ProfileSyncBanner extends StatelessWidget {
                   ? '正在同步账户资料...'
                   : errorText == null || errorText!.isEmpty
                   ? '账户资料已在本地保存，尚未同步到云端。'
-                  : '账户资料已在本地保存，尚未同步到云端：$errorText',
+                  : '账户资料已在本地保存，尚未同步到云端，${FriendlyError.syncMessage(errorText)}',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: colorScheme.onTertiaryContainer,
               ),
@@ -608,7 +620,7 @@ class _CloudImportCardState extends ConsumerState<_CloudImportCard> {
               if (snapshot.connectionState == ConnectionState.waiting)
                 const Center(child: CircularProgressIndicator())
               else if (snapshot.hasError)
-                Text('扫描失败：${snapshot.error}')
+                const Text('扫描失败，请稍后重试。')
               else ...[
                 Text(
                   '可导入账本 $pendingCount 个，已导入 ${candidates.length - pendingCount} 个',
@@ -782,7 +794,7 @@ class _CloudImportDialogState extends ConsumerState<_CloudImportDialog> {
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _errorText = '导入失败，请重试：$error';
+        _errorText = FriendlyError.message(error, fallback: '导入失败，请稍后重试。');
         _importing = false;
       });
     }
@@ -990,7 +1002,7 @@ class _AuthPanelState extends ConsumerState<_AuthPanel> {
       setState(() {
         _errorText = error is FormatException
             ? error.message
-            : error.toString();
+            : FriendlyError.message(error, fallback: '登录失败，请检查账号和密码。');
       });
     } finally {
       if (mounted) {

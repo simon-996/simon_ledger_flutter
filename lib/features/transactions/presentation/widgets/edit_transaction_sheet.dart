@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/models/transaction_record.dart';
 import '../../../../core/models/person_lookup.dart';
 import '../../../../core/models/ledger.dart';
+import '../../../../core/network/friendly_error.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
 import '../providers/transaction_provider.dart';
@@ -106,9 +107,11 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
       widget.transaction.note = oldNote;
       widget.transaction.personUuids = oldPersonUuids;
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('保存失败，请重试：$e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(FriendlyError.message(e, fallback: '保存失败，请稍后重试。')),
+        ),
+      );
       return;
     }
 
@@ -121,6 +124,7 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final maxHeight = MediaQuery.sizeOf(context).height * 0.86;
+    final colorScheme = Theme.of(context).colorScheme;
     final peopleAsyncValue = ref.watch(
       personNotifierProvider(
         includeDeleted: true,
@@ -291,17 +295,20 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                             return const SizedBox.shrink();
                           }
                           final personMap = peopleByUuid(peoplePool);
+                          final personChoices = widget.ledger.personUuids.map((
+                            pid,
+                          ) {
+                            final person = personOrFallback(personMap, pid);
+                            return AppPersonChoiceItem(
+                              id: pid,
+                              name: person.name,
+                              avatar: person.avatar,
+                            );
+                          }).toList();
                           return AppSectionCard(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                Text(
-                                  _transactionType == 0 ? '使用人员' : '参与人员',
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.titleMedium,
-                                ),
-                                const SizedBox(height: 10),
                                 if (_transactionType == 0) ...[
                                   SegmentedButton<bool>(
                                     showSelectedIcon: false,
@@ -349,65 +356,63 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                                   ),
                                   const SizedBox(height: 10),
                                 ],
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: widget.ledger.personUuids.map((
-                                    pid,
-                                  ) {
-                                    final person = personOrFallback(
-                                      personMap,
-                                      pid,
-                                    );
-                                    final isSelected = _selectedPersonIds
-                                        .contains(pid);
-                                    return FilterChip(
-                                      avatar: Text(person.avatar),
-                                      label: Text(person.name),
-                                      selected: isSelected,
-                                      onSelected: (selected) {
-                                        setState(() {
-                                          if (selected) {
-                                            _selectedPersonIds.add(pid);
-                                          } else {
-                                            _selectedPersonIds.remove(pid);
-                                          }
-                                        });
-                                      },
-                                    );
-                                  }).toList(),
+                                Text(
+                                  _transactionType == 0 ? '使用人员' : '参与人员',
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.titleMedium,
+                                ),
+                                const SizedBox(height: 10),
+                                AppPersonChoiceGrid(
+                                  items: personChoices,
+                                  selectedIds: _selectedPersonIds,
+                                  onToggle: (pid, selected) {
+                                    setState(() {
+                                      if (selected) {
+                                        _selectedPersonIds.add(pid);
+                                      } else {
+                                        _selectedPersonIds.remove(pid);
+                                      }
+                                    });
+                                  },
                                 ),
                                 if (_transactionType == 0 &&
                                     _payerPersonUuid != null) ...[
-                                  const SizedBox(height: 14),
-                                  Text(
-                                    '付款人',
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.titleSmall,
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Wrap(
-                                    spacing: 8,
-                                    runSpacing: 8,
-                                    children: widget.ledger.personUuids.map((
-                                      pid,
-                                    ) {
-                                      final person = personOrFallback(
-                                        personMap,
-                                        pid,
-                                      );
-                                      return ChoiceChip(
-                                        avatar: Text(person.avatar),
-                                        label: Text(person.name),
-                                        selected: _payerPersonUuid == pid,
-                                        onSelected: (_) {
-                                          setState(() {
-                                            _payerPersonUuid = pid;
-                                          });
-                                        },
-                                      );
-                                    }).toList(),
+                                  const SizedBox(height: 16),
+                                  DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      color: colorScheme.surfaceContainerLow,
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: colorScheme.outlineVariant
+                                            .withValues(alpha: 0.72),
+                                      ),
+                                    ),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(12),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          Text(
+                                            '付款人',
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.titleSmall,
+                                          ),
+                                          const SizedBox(height: 8),
+                                          AppPersonChoiceGrid(
+                                            items: personChoices,
+                                            selectedId: _payerPersonUuid,
+                                            onSelect: (pid) {
+                                              setState(() {
+                                                _payerPersonUuid = pid;
+                                              });
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   ),
                                 ],
                               ],

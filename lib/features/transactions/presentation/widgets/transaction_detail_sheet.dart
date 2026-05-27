@@ -4,6 +4,7 @@ import '../../../../core/models/person.dart';
 import '../../../../core/models/person_lookup.dart';
 import '../../../../core/models/ledger.dart';
 import '../../../../core/models/transaction_record.dart';
+import '../../../../core/network/friendly_error.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../providers/transaction_provider.dart';
 import 'edit_transaction_sheet.dart';
@@ -150,7 +151,14 @@ class TransactionDetailSheet extends ConsumerWidget {
                               .deleteTransaction(transaction.uuid);
                         } catch (e) {
                           messenger.showSnackBar(
-                            SnackBar(content: Text('删除失败，请重试：$e')),
+                            SnackBar(
+                              content: Text(
+                                FriendlyError.message(
+                                  e,
+                                  fallback: '删除失败，请稍后重试。',
+                                ),
+                              ),
+                            ),
                           );
                         }
                       }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/di/providers.dart';
 import '../../../../core/models/ledger.dart';
 import '../../../../core/models/person.dart';
+import '../../../../core/network/friendly_error.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../people_pool/presentation/widgets/person_edit_dialog.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
@@ -148,9 +149,11 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
 
   void _showWriteError(Object error) {
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('操作失败，请重试：$error')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(FriendlyError.message(error, fallback: '操作失败，请稍后重试。')),
+      ),
+    );
   }
 
   void _showPersonOptions(Person person) {
@@ -346,7 +349,12 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
                                 loading: () => const Center(
                                   child: CircularProgressIndicator(),
                                 ),
-                                error: (e, st) => Text('加载人员失败: $e'),
+                                error: (e, st) => Text(
+                                  FriendlyError.message(
+                                    e,
+                                    fallback: '人员加载失败，请稍后重试。',
+                                  ),
+                                ),
                                 data: (peoplePool) {
                                   if (widget.existingLedger == null &&
                                       _selectedPersonIds.isEmpty &&

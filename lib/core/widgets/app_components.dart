@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../network/friendly_error.dart';
+
 class AppMotion {
   static const Duration fast = Duration(milliseconds: 160);
   static const Duration normal = Duration(milliseconds: 260);
@@ -515,6 +517,164 @@ class AppPersonBalanceCard extends StatelessWidget {
   }
 }
 
+class AppPersonChoiceItem {
+  const AppPersonChoiceItem({
+    required this.id,
+    required this.name,
+    required this.avatar,
+  });
+
+  final String id;
+  final String name;
+  final String avatar;
+}
+
+class AppPersonChoiceGrid extends StatelessWidget {
+  const AppPersonChoiceGrid({
+    super.key,
+    required this.items,
+    this.selectedIds = const {},
+    this.selectedId,
+    this.onToggle,
+    this.onSelect,
+    this.minTileWidth = 148,
+  });
+
+  final List<AppPersonChoiceItem> items;
+  final Set<String> selectedIds;
+  final String? selectedId;
+  final void Function(String id, bool selected)? onToggle;
+  final ValueChanged<String>? onSelect;
+  final double minTileWidth;
+
+  bool get _singleSelection => onSelect != null;
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const spacing = 8.0;
+        final columns = constraints.maxWidth >= minTileWidth * 2 + spacing
+            ? 2
+            : 1;
+        final tileWidth =
+            (constraints.maxWidth - spacing * (columns - 1)) / columns;
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: items.map((item) {
+            final selected = _singleSelection
+                ? selectedId == item.id
+                : selectedIds.contains(item.id);
+            return SizedBox(
+              width: tileWidth,
+              child: _PersonChoiceTile(
+                item: item,
+                selected: selected,
+                singleSelection: _singleSelection,
+                onTap: () {
+                  if (_singleSelection) {
+                    onSelect?.call(item.id);
+                    return;
+                  }
+                  onToggle?.call(item.id, !selected);
+                },
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+}
+
+class _PersonChoiceTile extends StatelessWidget {
+  const _PersonChoiceTile({
+    required this.item,
+    required this.selected,
+    required this.singleSelection,
+    required this.onTap,
+  });
+
+  final AppPersonChoiceItem item;
+  final bool selected;
+  final bool singleSelection;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return _AnimatedTapSurface(
+      color: selected
+          ? colorScheme.primaryContainer.withValues(alpha: 0.72)
+          : colorScheme.surfaceContainerLowest,
+      borderRadius: 16,
+      borderSide: BorderSide(
+        width: selected ? 1.5 : 1,
+        color: selected ? colorScheme.primary : colorScheme.outlineVariant,
+      ),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 17,
+              backgroundColor: selected
+                  ? colorScheme.primary.withValues(alpha: 0.13)
+                  : colorScheme.surfaceContainerHigh,
+              child: Text(item.avatar, style: const TextStyle(fontSize: 17)),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                item.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: selected ? colorScheme.primary : colorScheme.onSurface,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            AnimatedContainer(
+              duration: AppMotion.fast,
+              curve: AppMotion.standard,
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: selected ? colorScheme.primary : Colors.transparent,
+                border: Border.all(
+                  color: selected
+                      ? colorScheme.primary
+                      : colorScheme.outlineVariant,
+                ),
+              ),
+              child: selected
+                  ? Icon(
+                      singleSelection
+                          ? Icons.radio_button_checked_rounded
+                          : Icons.check_rounded,
+                      size: 15,
+                      color: colorScheme.onPrimary,
+                    )
+                  : null,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class AppTransactionTile extends StatelessWidget {
   const AppTransactionTile({
     super.key,
@@ -710,10 +870,8 @@ class _TransactionSyncChip extends StatelessWidget {
     final color = failed ? colorScheme.error : colorScheme.tertiary;
 
     return Tooltip(
-      message: failed && errorText != null && errorText!.isNotEmpty
-          ? '同步失败：$errorText'
-          : failed
-          ? '同步失败，稍后会重试'
+      message: failed
+          ? '同步失败，${FriendlyError.syncMessage(errorText)}'
           : '待同步，联网后会自动上传',
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),

@@ -6,6 +6,7 @@ import '../../../../core/models/ledger.dart';
 import '../../../../core/models/person_lookup.dart';
 import '../../../../core/models/person_transaction_stats.dart';
 import '../../../../core/models/transaction_record.dart';
+import '../../../../core/network/friendly_error.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
@@ -244,7 +245,7 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
             error: (err, stack) => AppEmptyState(
               icon: Icons.error_outline_rounded,
               title: '加载统计失败',
-              message: '$err',
+              message: FriendlyError.message(err, fallback: '暂时无法加载统计，请稍后重试。'),
             ),
             data: (allTransactions) {
               final filtered = _filterTransactions(allTransactions);
@@ -336,7 +337,14 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                     error: (e, st) => SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: AppSectionCard(child: Text('加载人员失败：$e')),
+                        child: AppSectionCard(
+                          child: Text(
+                            FriendlyError.message(
+                              e,
+                              fallback: '人员结余加载失败，请稍后重试。',
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                     data: (peoplePool) {

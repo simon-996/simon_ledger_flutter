@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/di/providers.dart';
 import '../../../../core/models/ledger.dart';
 import '../../../../core/models/person.dart';
+import '../../../../core/network/friendly_error.dart';
 import '../../../../core/preferences/last_selected_ledger_preference.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
@@ -50,7 +51,10 @@ class _HomePageState extends ConsumerState<HomePage> {
                 error: (err, stack) => AppEmptyState(
                   icon: Icons.error_outline_rounded,
                   title: '加载账本失败',
-                  message: '$err',
+                  message: FriendlyError.message(
+                    err,
+                    fallback: '暂时无法加载账本，请检查网络后重试。',
+                  ),
                 ),
                 data: (ledgers) {
                   return AppAnimatedIndexedStack(
@@ -331,7 +335,9 @@ class _HomePageState extends ConsumerState<HomePage> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('账本已创建，但加入本人失败：$error'),
+        content: Text(
+          FriendlyError.message(error, fallback: '账本已创建，但暂时无法加入本人，请稍后重试。'),
+        ),
         duration: const Duration(seconds: 8),
         action: SnackBarAction(
           label: '重试',
@@ -343,8 +349,10 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   void _showWriteError(Object error) {
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('操作失败，请重试：$error')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(FriendlyError.message(error, fallback: '操作失败，请稍后重试。')),
+      ),
+    );
   }
 }

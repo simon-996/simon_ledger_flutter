@@ -6,6 +6,7 @@ import '../../../../core/models/person.dart';
 import '../../../../core/models/person_lookup.dart';
 import '../../../../core/models/transaction_record.dart';
 import '../../../../core/di/providers.dart';
+import '../../../../core/network/friendly_error.dart';
 import '../../../../core/preferences/last_selected_ledger_preference.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
@@ -285,9 +286,11 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
           .addTransaction(record);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('保存失败，请重试：$e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(FriendlyError.message(e, fallback: '保存失败，请稍后重试。')),
+        ),
+      );
       return;
     }
 
@@ -508,14 +511,27 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                       loading: () => const AppSectionCard(
                         child: Center(child: CircularProgressIndicator()),
                       ),
-                      error: (e, st) =>
-                          AppSectionCard(child: Text('加载人员失败: $e')),
+                      error: (e, st) => AppSectionCard(
+                        child: Text(
+                          FriendlyError.message(e, fallback: '人员加载失败，请稍后重试。'),
+                        ),
+                      ),
                       data: (peoplePool) {
                         if (selectedLedger.personUuids.isEmpty) {
                           return const SizedBox.shrink();
                         }
 
                         final personMap = peopleByUuid(peoplePool);
+                        final personChoices = selectedLedger.personUuids.map((
+                          pid,
+                        ) {
+                          final person = personOrFallback(personMap, pid);
+                          return AppPersonChoiceItem(
+                            id: pid,
+                            name: person.name,
+                            avatar: person.avatar,
+                          );
+                        }).toList();
                         return AppAnimatedSwitcher(
                           child: AppSectionCard(
                             key: ValueKey(
@@ -524,32 +540,6 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                AppSectionHeader(
-                                  title: _transactionType == 0
-                                      ? '使用人员'
-                                      : '参与人员',
-                                  trailing: TextButton(
-                                    onPressed: () {
-                                      setState(() {
-                                        if (_selectedPersonIds.length ==
-                                            selectedLedger.personUuids.length) {
-                                          _selectedPersonIds.clear();
-                                        } else {
-                                          _selectedPersonIds.addAll(
-                                            selectedLedger.personUuids,
-                                          );
-                                        }
-                                      });
-                                    },
-                                    child: Text(
-                                      _selectedPersonIds.length ==
-                                              selectedLedger.personUuids.length
-                                          ? '取消全选'
-                                          : '全选',
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
                                 if (_transactionType == 0) ...[
                                   SegmentedButton<bool>(
                                     showSelectedIcon: false,
@@ -599,65 +589,82 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                                   ),
                                   const SizedBox(height: 10),
                                 ],
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: selectedLedger.personUuids.map((
-                                    pid,
-                                  ) {
-                                    final person = personOrFallback(
-                                      personMap,
-                                      pid,
-                                    );
-                                    final isSelected = _selectedPersonIds
-                                        .contains(pid);
-                                    return FilterChip(
-                                      avatar: Text(person.avatar),
-                                      label: Text(person.name),
-                                      selected: isSelected,
-                                      onSelected: (selected) {
-                                        setState(() {
-                                          if (selected) {
-                                            _selectedPersonIds.add(pid);
-                                          } else {
-                                            _selectedPersonIds.remove(pid);
-                                          }
-                                        });
-                                      },
-                                    );
-                                  }).toList(),
+                                AppSectionHeader(
+                                  title: _transactionType == 0
+                                      ? '使用人员'
+                                      : '参与人员',
+                                  trailing: TextButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        if (_selectedPersonIds.length ==
+                                            selectedLedger.personUuids.length) {
+                                          _selectedPersonIds.clear();
+                                        } else {
+                                          _selectedPersonIds.addAll(
+                                            selectedLedger.personUuids,
+                                          );
+                                        }
+                                      });
+                                    },
+                                    child: Text(
+                                      _selectedPersonIds.length ==
+                                              selectedLedger.personUuids.length
+                                          ? '取消全选'
+                                          : '全选',
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                AppPersonChoiceGrid(
+                                  items: personChoices,
+                                  selectedIds: _selectedPersonIds,
+                                  onToggle: (pid, selected) {
+                                    setState(() {
+                                      if (selected) {
+                                        _selectedPersonIds.add(pid);
+                                      } else {
+                                        _selectedPersonIds.remove(pid);
+                                      }
+                                    });
+                                  },
                                 ),
                                 if (_transactionType == 0 &&
                                     _payerPersonUuid != null) ...[
-                                  const SizedBox(height: 14),
-                                  Text(
-                                    '付款人',
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.titleSmall,
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Wrap(
-                                    spacing: 8,
-                                    runSpacing: 8,
-                                    children: selectedLedger.personUuids.map((
-                                      pid,
-                                    ) {
-                                      final person = personOrFallback(
-                                        personMap,
-                                        pid,
-                                      );
-                                      return ChoiceChip(
-                                        avatar: Text(person.avatar),
-                                        label: Text(person.name),
-                                        selected: _payerPersonUuid == pid,
-                                        onSelected: (_) {
-                                          setState(() {
-                                            _payerPersonUuid = pid;
-                                          });
-                                        },
-                                      );
-                                    }).toList(),
+                                  const SizedBox(height: 16),
+                                  DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      color: colorScheme.surfaceContainerLow,
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: colorScheme.outlineVariant
+                                            .withValues(alpha: 0.72),
+                                      ),
+                                    ),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(12),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          Text(
+                                            '付款人',
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.titleSmall,
+                                          ),
+                                          const SizedBox(height: 8),
+                                          AppPersonChoiceGrid(
+                                            items: personChoices,
+                                            selectedId: _payerPersonUuid,
+                                            onSelect: (pid) {
+                                              setState(() {
+                                                _payerPersonUuid = pid;
+                                              });
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   ),
                                 ],
                               ],

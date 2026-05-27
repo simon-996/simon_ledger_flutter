@@ -8,6 +8,7 @@ import '../../../../core/models/person.dart';
 import '../../../../core/models/person_lookup.dart';
 import '../../../../core/models/person_transaction_stats.dart';
 import '../../../../core/models/transaction_record.dart';
+import '../../../../core/network/friendly_error.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../transactions/presentation/widgets/transaction_detail_sheet.dart';
@@ -155,9 +156,13 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                   await GalleryLauncher.openGalleryApp();
                 } catch (e) {
                   if (!mounted) return;
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text('打开相册失败: $e')));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        FriendlyError.message(e, fallback: '无法打开相册，请手动查看。'),
+                      ),
+                    ),
+                  );
                 }
               },
             ),
@@ -167,9 +172,11 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('生成长图失败: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(FriendlyError.message(e, fallback: '生成长图失败，请稍后重试。')),
+          ),
+        );
       }
     } finally {
       if (mounted) {
@@ -281,7 +288,7 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
         error: (err, stack) => AppEmptyState(
           icon: Icons.error_outline_rounded,
           title: '加载流水失败',
-          message: '$err',
+          message: FriendlyError.message(err, fallback: '暂时无法加载流水，请检查网络后重试。'),
         ),
         data: (transactions) {
           final totalExpense = transactions
@@ -366,7 +373,10 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                   error: (e, st) => AppEmptyState(
                     icon: Icons.error_outline_rounded,
                     title: '加载人员失败',
-                    message: '$e',
+                    message: FriendlyError.message(
+                      e,
+                      fallback: '暂时无法加载账本人员，请稍后重试。',
+                    ),
                   ),
                   data: (peoplePool) {
                     final personMap = peopleByUuid(peoplePool);
