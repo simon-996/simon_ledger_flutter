@@ -763,140 +763,63 @@ class _QuickEntryHeader extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final accent = isIncome ? colorScheme.primary : colorScheme.error;
 
-    return AppSectionCard(
-      padding: const EdgeInsets.all(18),
-      color: colorScheme.primaryContainer.withValues(alpha: 0.38),
-      borderColor: colorScheme.primary.withValues(alpha: 0.12),
-      child: _ResponsivePair(
-        breakpoint: 0,
-        first: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: accent.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Icon(
-                isIncome ? Icons.savings_outlined : Icons.receipt_long_outlined,
-                color: accent,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('快速记账', style: Theme.of(context).textTheme.titleLarge),
-                  const SizedBox(height: 4),
-                  Text(
-                    ledger == null
-                        ? '请选择账本'
-                        : '${ledger!.name} · ${currencyCode ?? 'CNY'}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  if (ledger != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      ledger!.displayCode,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-        second: _LedgerSelector(
-          ledgers: ledgers,
-          selectedLedger: ledger,
-          onChanged: onLedgerChanged,
-        ),
-      ),
-    );
-  }
-}
-
-class _LedgerSelector extends StatelessWidget {
-  const _LedgerSelector({
-    required this.ledgers,
-    required this.selectedLedger,
-    required this.onChanged,
-  });
-
-  final List<Ledger> ledgers;
-  final Ledger? selectedLedger;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final ledger = selectedLedger;
-
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         onTap: () => _showLedgerPicker(context),
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 72),
-          padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
-          decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerLowest,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: colorScheme.outlineVariant),
-          ),
+        child: AppSectionCard(
+          padding: const EdgeInsets.all(18),
+          color: colorScheme.primaryContainer.withValues(alpha: 0.38),
+          borderColor: colorScheme.primary.withValues(alpha: 0.12),
           child: Row(
             children: [
               Container(
-                width: 38,
-                height: 38,
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
-                  color: colorScheme.primaryContainer.withValues(alpha: 0.72),
-                  borderRadius: BorderRadius.circular(13),
+                  color: accent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 child: Icon(
-                  Icons.menu_book_outlined,
-                  color: colorScheme.primary,
-                  size: 20,
+                  isIncome
+                      ? Icons.savings_outlined
+                      : Icons.receipt_long_outlined,
+                  color: accent,
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      '所属账本',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
+                    Text('快速记账', style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: 4),
                     Text(
                       ledger?.name ?? '请选择账本',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: colorScheme.onSurface,
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
+                    if (ledger != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        '${currencyCode ?? 'CNY'} · ${ledger!.displayCode}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               Icon(
                 Icons.expand_more_rounded,
                 color: colorScheme.onSurfaceVariant,
@@ -919,7 +842,7 @@ class _LedgerSelector extends StatelessWidget {
           shrinkWrap: true,
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           itemCount: ledgers.length + 1,
-          separatorBuilder: (_, index) => index == 0
+          separatorBuilder: (context, index) => index == 0
               ? const SizedBox(height: 8)
               : const SizedBox(height: 6),
           itemBuilder: (context, index) {
@@ -930,12 +853,12 @@ class _LedgerSelector extends StatelessWidget {
               );
             }
 
-            final ledger = ledgers[index - 1];
-            final selected = ledger.uuid == selectedLedger?.uuid;
+            final item = ledgers[index - 1];
+            final selected = item.uuid == ledger?.uuid;
             return _LedgerPickerItem(
-              ledger: ledger,
+              ledger: item,
               selected: selected,
-              onTap: () => Navigator.of(context).pop(ledger.uuid),
+              onTap: () => Navigator.of(context).pop(item.uuid),
             );
           },
         ),
@@ -943,7 +866,7 @@ class _LedgerSelector extends StatelessWidget {
     );
 
     if (picked != null) {
-      onChanged(picked);
+      onLedgerChanged(picked);
     }
   }
 }
@@ -1252,8 +1175,8 @@ class _CurrencyQuickItem extends StatelessWidget {
                 ),
                 const SizedBox(width: 6),
                 Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
                       label,
