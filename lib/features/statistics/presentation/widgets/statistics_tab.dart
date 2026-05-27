@@ -435,29 +435,13 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                                           padding: const EdgeInsets.only(
                                             bottom: 8,
                                           ),
-                                          child: Row(
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                  '${from.avatar} ${from.name} -> ${to.avatar} ${to.name}',
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 8),
-                                              Text(
-                                                settlement.amount
-                                                    .toStringAsFixed(2),
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .titleSmall
-                                                    ?.copyWith(
-                                                      fontWeight:
-                                                          FontWeight.w800,
-                                                    ),
-                                              ),
-                                            ],
+                                          child: AppSettlementTile(
+                                            fromAvatar: from.avatar,
+                                            fromName: from.name,
+                                            toAvatar: to.avatar,
+                                            toName: to.name,
+                                            amount:
+                                                '¥${settlement.amount.toStringAsFixed(2)}',
                                           ),
                                         );
                                       }),
