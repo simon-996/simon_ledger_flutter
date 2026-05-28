@@ -67,6 +67,36 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
     }
   }
 
+  Future<void> _showLedgerPicker() async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: ListView.separated(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            itemCount: widget.ledgers.length,
+            separatorBuilder: (context, index) => const SizedBox(height: 8),
+            itemBuilder: (context, index) {
+              final ledger = widget.ledgers[index];
+              final selected = ledger.uuid == _selectedLedgerUuid;
+              return _LedgerPickerTile(
+                ledger: ledger,
+                selected: selected,
+                onTap: () => Navigator.of(context).pop(ledger.uuid),
+              );
+            },
+          ),
+        );
+      },
+    );
+    if (selected == null || selected == _selectedLedgerUuid || !mounted) {
+      return;
+    }
+    setState(() => _selectedLedgerUuid = selected);
+  }
+
   List<TransactionRecord> _filterTransactions(
     List<TransactionRecord> transactions,
   ) {
@@ -160,84 +190,17 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
             12,
           ),
           child: AppAnimatedEntry(
-            child: AppSectionCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _ResponsiveControls(
-                    first: DropdownButtonFormField<String>(
-                      key: ValueKey('stats-ledger-$_selectedLedgerUuid'),
-                      initialValue: _selectedLedgerUuid,
-                      decoration: const InputDecoration(
-                        labelText: '账本',
-                        prefixIcon: Icon(Icons.book_outlined),
-                      ),
-                      isExpanded: true,
-                      items: widget.ledgers
-                          .map(
-                            (l) => DropdownMenuItem(
-                              value: l.uuid,
-                              child: _LedgerDropdownItem(ledger: l),
-                            ),
-                          )
-                          .toList(),
-                      selectedItemBuilder: (context) => widget.ledgers
-                          .map((l) => _SelectedLedgerText(ledger: l))
-                          .toList(),
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() => _selectedLedgerUuid = val);
-                        }
-                      },
-                    ),
-                    second: SegmentedButton<int>(
-                      showSelectedIcon: false,
-                      segments: const [
-                        ButtonSegment(
-                          value: 0,
-                          icon: Icon(Icons.remove_rounded),
-                          label: Text('支出'),
-                        ),
-                        ButtonSegment(
-                          value: 1,
-                          icon: Icon(Icons.add_rounded),
-                          label: Text('收入'),
-                        ),
-                      ],
-                      selected: {_transactionType},
-                      onSelectionChanged: (Set<int> newSelection) {
-                        setState(() => _transactionType = newSelection.first);
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: SegmentedButton<TimeFilter>(
-                      showSelectedIcon: false,
-                      segments: const [
-                        ButtonSegment(
-                          value: TimeFilter.week,
-                          label: Text('近7天'),
-                        ),
-                        ButtonSegment(
-                          value: TimeFilter.month,
-                          label: Text('本月'),
-                        ),
-                        ButtonSegment(
-                          value: TimeFilter.year,
-                          label: Text('本年'),
-                        ),
-                        ButtonSegment(value: TimeFilter.all, label: Text('全部')),
-                      ],
-                      selected: {_timeFilter},
-                      onSelectionChanged: (Set<TimeFilter> newSelection) {
-                        setState(() => _timeFilter = newSelection.first);
-                      },
-                    ),
-                  ),
-                ],
-              ),
+            child: _StatsFilterPanel(
+              ledger: currentLedger,
+              transactionType: _transactionType,
+              timeFilter: _timeFilter,
+              onLedgerTap: _showLedgerPicker,
+              onTypeChanged: (type) {
+                setState(() => _transactionType = type);
+              },
+              onTimeChanged: (filter) {
+                setState(() => _timeFilter = filter);
+              },
             ),
           ),
         ),
@@ -282,6 +245,7 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
               );
               final sortedTransactions = List<TransactionRecord>.from(filtered)
                 ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+              final averageAmount = totalAmount / sortedTransactions.length;
 
               final personStats = calculatePersonTransactionStats(
                 sortedTransactions,
@@ -303,6 +267,11 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                         child: _SummaryChartCard(
                           title: '总${_transactionType == 0 ? "支出" : "收入"}',
                           amount: formatMoney(_displayCurrency, totalAmount),
+                          transactionCount: sortedTransactions.length,
+                          averageAmount: formatMoney(
+                            _displayCurrency,
+                            averageAmount,
+                          ),
                           isExpense: _transactionType == 0,
                           categories: sortedCategories,
                           totalAmount: totalAmount,
@@ -347,6 +316,7 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                           category: entry.key,
                           amount: formatMoney(_displayCurrency, entry.value),
                           percentage: '${percentage.toStringAsFixed(1)}%',
+                          progress: percentage / 100,
                         ),
                       );
                     },
@@ -580,6 +550,8 @@ class _SummaryChartCard extends StatelessWidget {
   const _SummaryChartCard({
     required this.title,
     required this.amount,
+    required this.transactionCount,
+    required this.averageAmount,
     required this.isExpense,
     required this.categories,
     required this.totalAmount,
@@ -591,6 +563,8 @@ class _SummaryChartCard extends StatelessWidget {
 
   final String title;
   final String amount;
+  final int transactionCount;
+  final String averageAmount;
   final bool isExpense;
   final List<MapEntry<String, double>> categories;
   final double totalAmount;
@@ -627,6 +601,26 @@ class _SummaryChartCard extends StatelessWidget {
               ),
             ),
           ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _SummaryMetric(
+                  label: '记录',
+                  value: '$transactionCount 条',
+                  color: accent,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _SummaryMetric(
+                  label: '平均',
+                  value: averageAmount,
+                  color: colorScheme.onSurface,
+                ),
+              ),
+            ],
+          ),
           if (displayCurrencies.length > 1) ...[
             const SizedBox(height: 12),
             SegmentedButton<String>(
@@ -646,26 +640,99 @@ class _SummaryChartCard extends StatelessWidget {
           const SizedBox(height: 20),
           SizedBox(
             height: 210,
-            child: PieChart(
-              PieChartData(
-                sectionsSpace: 2,
-                centerSpaceRadius: 46,
-                sections: List.generate(categories.length, (index) {
-                  final entry = categories[index];
-                  final percentage = entry.value / totalAmount * 100;
-                  return PieChartSectionData(
-                    color: colorForIndex(index),
-                    value: entry.value,
-                    title: '${percentage.toStringAsFixed(0)}%',
-                    radius: 58,
-                    titleStyle: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                PieChart(
+                  PieChartData(
+                    sectionsSpace: 3,
+                    centerSpaceRadius: 52,
+                    sections: List.generate(categories.length, (index) {
+                      final entry = categories[index];
+                      final percentage = entry.value / totalAmount * 100;
+                      return PieChartSectionData(
+                        color: colorForIndex(index),
+                        value: entry.value,
+                        title: percentage >= 6
+                            ? '${percentage.toStringAsFixed(0)}%'
+                            : '',
+                        radius: 58,
+                        titleStyle: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isExpense
+                          ? Icons.trending_down_rounded
+                          : Icons.trending_up_rounded,
+                      color: accent,
+                      size: 22,
                     ),
-                  );
-                }),
-              ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '分类',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryMetric extends StatelessWidget {
+  const _SummaryMetric({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: Theme.of(
+                context,
+              ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900),
             ),
           ),
         ],
@@ -680,12 +747,14 @@ class _CategoryBreakdownTile extends StatelessWidget {
     required this.category,
     required this.amount,
     required this.percentage,
+    required this.progress,
   });
 
   final Color color;
   final String category;
   final String amount;
   final String percentage;
+  final double progress;
 
   @override
   Widget build(BuildContext context) {
@@ -723,6 +792,16 @@ class _CategoryBreakdownTile extends StatelessWidget {
                       color: colorScheme.onSurfaceVariant,
                     ),
                   ),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: LinearProgressIndicator(
+                      minHeight: 6,
+                      value: progress.clamp(0, 1),
+                      color: color,
+                      backgroundColor: color.withValues(alpha: 0.12),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -747,45 +826,205 @@ class _CategoryBreakdownTile extends StatelessWidget {
   }
 }
 
-class _LedgerDropdownItem extends StatelessWidget {
-  const _LedgerDropdownItem({required this.ledger});
+class _StatsFilterPanel extends StatelessWidget {
+  const _StatsFilterPanel({
+    required this.ledger,
+    required this.transactionType,
+    required this.timeFilter,
+    required this.onLedgerTap,
+    required this.onTypeChanged,
+    required this.onTimeChanged,
+  });
 
   final Ledger ledger;
+  final int transactionType;
+  final TimeFilter timeFilter;
+  final VoidCallback onLedgerTap;
+  final ValueChanged<int> onTypeChanged;
+  final ValueChanged<TimeFilter> onTimeChanged;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(ledger.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-        Text(
-          ledger.displayCode,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-            fontWeight: FontWeight.w600,
+    return AppSectionCard(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            onTap: onLedgerTap,
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: colorScheme.outlineVariant),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.query_stats_rounded, color: colorScheme.primary),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          ledger.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w900),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          ledger.displayCode,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
-      ],
+          const SizedBox(height: 12),
+          _ResponsiveControls(
+            first: SegmentedButton<int>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(
+                  value: 0,
+                  icon: Icon(Icons.remove_rounded),
+                  label: Text('支出'),
+                ),
+                ButtonSegment(
+                  value: 1,
+                  icon: Icon(Icons.add_rounded),
+                  label: Text('收入'),
+                ),
+              ],
+              selected: {transactionType},
+              onSelectionChanged: (selection) => onTypeChanged(selection.first),
+            ),
+            second: _TimeFilterChips(
+              selected: timeFilter,
+              onChanged: onTimeChanged,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _SelectedLedgerText extends StatelessWidget {
-  const _SelectedLedgerText({required this.ledger});
+class _TimeFilterChips extends StatelessWidget {
+  const _TimeFilterChips({required this.selected, required this.onChanged});
 
-  final Ledger ledger;
+  final TimeFilter selected;
+  final ValueChanged<TimeFilter> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      ledger.displayNameWithCode,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
+    final items = const [
+      (TimeFilter.week, '近7天'),
+      (TimeFilter.month, '本月'),
+      (TimeFilter.year, '本年'),
+      (TimeFilter.all, '全部'),
+    ];
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Wrap(
+        spacing: 8,
+        children: items.map((item) {
+          final active = selected == item.$1;
+          return ChoiceChip(
+            label: Text(item.$2),
+            selected: active,
+            onSelected: (_) => onChanged(item.$1),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _LedgerPickerTile extends StatelessWidget {
+  const _LedgerPickerTile({
+    required this.ledger,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final Ledger ledger;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Material(
+      color: selected
+          ? colorScheme.primaryContainer.withValues(alpha: 0.62)
+          : colorScheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Icon(
+                selected
+                    ? Icons.check_circle_rounded
+                    : Icons.menu_book_outlined,
+                color: selected ? colorScheme.primary : colorScheme.onSurface,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      ledger.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      ledger.displayCode,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -803,20 +1042,16 @@ class _ResponsiveControls extends StatelessWidget {
         if (constraints.maxWidth < 430) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              first,
-              const SizedBox(height: 12),
-              Align(alignment: Alignment.centerLeft, child: second),
-            ],
+            children: [first, const SizedBox(height: 12), second],
           );
         }
 
         return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Expanded(child: first),
+            first,
             const SizedBox(width: 12),
-            second,
+            Expanded(child: second),
           ],
         );
       },
