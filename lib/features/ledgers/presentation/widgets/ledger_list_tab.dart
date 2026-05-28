@@ -194,7 +194,7 @@ class _LedgerCard extends StatelessWidget {
     final hasRate = ledger.exchangeRateToCNY != 1.0;
     final localManualPeople = ledger.personUuids
         .map((uuid) => personOrFallback(peopleById, uuid, name: '人员'))
-        .where((person) => person.linkedUserUuid == null)
+        .where((person) => person.linkedUserUuid == null && !person.isDeleted)
         .toList();
 
     return Padding(

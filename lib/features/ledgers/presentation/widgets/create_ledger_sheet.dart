@@ -149,7 +149,7 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('删除人员'),
-        content: Text('确定要删除 ${person.name} 吗？'),
+        content: Text('确定要删除 ${person.name} 吗？\n\n已有流水中的历史记录会保留，但新记账时不再显示该人员。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),

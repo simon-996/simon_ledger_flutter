@@ -443,16 +443,21 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                       _selectedFilterPersonUuids.isEmpty
                           ? transactions
                           : transactions.where(
-                              (t) => t.personUuids.any(
-                                (pid) =>
-                                    _selectedFilterPersonUuids.contains(pid),
-                              ),
+                              (t) =>
+                                  t.personUuids.any(
+                                    (pid) => _selectedFilterPersonUuids
+                                        .contains(pid),
+                                  ) ||
+                                  (t.payerPersonUuid != null &&
+                                      _selectedFilterPersonUuids.contains(
+                                        t.payerPersonUuid,
+                                      )),
                             ),
                     )..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-                    final peopleInLedger = personBalances.keys.map((pid) {
-                      return personOrFallback(personMap, pid);
-                    }).toList();
+                    final peopleInLedger = _dashboardPersonIds(
+                      transactions,
+                    ).map((pid) => personOrFallback(personMap, pid)).toList();
 
                     return CustomScrollView(
                       slivers: [
@@ -504,7 +509,9 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                                         ),
                                         child: AppPersonBalanceCard(
                                           avatar: p.avatar,
-                                          name: p.name,
+                                          name: p.isDeleted
+                                              ? '${p.name}（已删除）'
+                                              : p.name,
                                           balance: formatMoney(
                                             _displayCurrency,
                                             pBalance,
@@ -556,9 +563,13 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                                                       ),
                                                   child: AppSettlementTile(
                                                     fromAvatar: from.avatar,
-                                                    fromName: from.name,
+                                                    fromName: from.isDeleted
+                                                        ? '${from.name}（已删除）'
+                                                        : from.name,
                                                     toAvatar: to.avatar,
-                                                    toName: to.name,
+                                                    toName: to.isDeleted
+                                                        ? '${to.name}（已删除）'
+                                                        : to.name,
                                                     amount: formatMoney(
                                                       _displayCurrency,
                                                       settlement.amount,
@@ -694,6 +705,18 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
       return TransactionSyncStatus.failed;
     }
     return TransactionSyncStatus.pending;
+  }
+
+  List<String> _dashboardPersonIds(List<TransactionRecord> transactions) {
+    final ids = <String>{
+      ...widget.ledger.personUuids,
+      for (final transaction in transactions) ...transaction.personUuids,
+      for (final transaction in transactions)
+        if (transaction.payerPersonUuid != null &&
+            transaction.payerPersonUuid!.isNotEmpty)
+          transaction.payerPersonUuid!,
+    };
+    return ids.toList();
   }
 }
 

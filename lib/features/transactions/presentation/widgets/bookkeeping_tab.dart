@@ -372,7 +372,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     }
     final peopleAsyncValue = ref.watch(
       personNotifierProvider(
-        includeDeleted: true,
+        includeDeleted: false,
         ledgerUuid: selectedLedger?.uuid,
       ),
     );
@@ -516,10 +516,15 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                         }
 
                         final personMap = peopleByUuid(peoplePool);
-                        final personChoices = selectedLedger.personUuids.map((
-                          pid,
-                        ) {
-                          final person = personOrFallback(personMap, pid);
+                        final activePersonIds = selectedLedger.personUuids
+                            .where(personMap.containsKey)
+                            .toList();
+                        if (activePersonIds.isEmpty) {
+                          return const SizedBox.shrink();
+                        }
+                        _sanitizeVisiblePeopleSelection(activePersonIds);
+                        final personChoices = activePersonIds.map((pid) {
+                          final person = personMap[pid]!;
                           return AppPersonChoiceItem(
                             id: pid,
                             name: person.name,
@@ -564,9 +569,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                                                             .isNotEmpty
                                                         ? _selectedPersonIds
                                                               .first
-                                                        : selectedLedger
-                                                              .personUuids
-                                                              .first;
+                                                        : activePersonIds.first;
                                                   } else {
                                                     _payerPersonUuid = null;
                                                   }
@@ -587,18 +590,18 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                                     onPressed: () {
                                       _setAndPersist(() {
                                         if (_selectedPersonIds.length ==
-                                            selectedLedger.personUuids.length) {
+                                            activePersonIds.length) {
                                           _selectedPersonIds.clear();
                                         } else {
                                           _selectedPersonIds.addAll(
-                                            selectedLedger.personUuids,
+                                            activePersonIds,
                                           );
                                         }
                                       });
                                     },
                                     child: Text(
                                       _selectedPersonIds.length ==
-                                              selectedLedger.personUuids.length
+                                              activePersonIds.length
                                           ? '取消全选'
                                           : '全选',
                                     ),
@@ -759,6 +762,32 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     _amountController.selection = TextSelection.fromPosition(
       TextPosition(offset: _amountController.text.length),
     );
+  }
+
+  void _sanitizeVisiblePeopleSelection(List<String> activePersonIds) {
+    final activePersonIdSet = activePersonIds.toSet();
+    var changed = false;
+
+    final beforeCount = _selectedPersonIds.length;
+    _selectedPersonIds.retainWhere(activePersonIdSet.contains);
+    changed = changed || beforeCount != _selectedPersonIds.length;
+
+    if (_selectedPersonIds.isEmpty) {
+      _selectedPersonIds.add(activePersonIds.first);
+      changed = true;
+    }
+
+    if (_payerPersonUuid != null &&
+        !activePersonIdSet.contains(_payerPersonUuid)) {
+      _payerPersonUuid = null;
+      changed = true;
+    }
+
+    if (changed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _persistDraft();
+      });
+    }
   }
 }
 

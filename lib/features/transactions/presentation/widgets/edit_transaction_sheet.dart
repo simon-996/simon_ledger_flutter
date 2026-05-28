@@ -332,17 +332,18 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                         loading: () => const SizedBox.shrink(),
                         error: (err, st) => const SizedBox.shrink(),
                         data: (peoplePool) {
-                          if (widget.ledger.personUuids.isEmpty) {
+                          final visiblePersonIds = _visiblePersonIds();
+                          if (visiblePersonIds.isEmpty) {
                             return const SizedBox.shrink();
                           }
                           final personMap = peopleByUuid(peoplePool);
-                          final personChoices = widget.ledger.personUuids.map((
-                            pid,
-                          ) {
+                          final personChoices = visiblePersonIds.map((pid) {
                             final person = personOrFallback(personMap, pid);
                             return AppPersonChoiceItem(
                               id: pid,
-                              name: person.name,
+                              name: person.isDeleted
+                                  ? '${person.name}（已删除）'
+                                  : person.name,
                               avatar: person.avatar,
                             );
                           }).toList();
@@ -376,7 +377,7 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                                           _payerPersonUuid ??=
                                               _selectedPersonIds.isNotEmpty
                                               ? _selectedPersonIds.first
-                                              : widget.ledger.personUuids.first;
+                                              : visiblePersonIds.first;
                                         } else {
                                           _payerPersonUuid = null;
                                         }
@@ -482,5 +483,14 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
         ),
       ),
     );
+  }
+
+  List<String> _visiblePersonIds() {
+    return {
+      ...widget.ledger.personUuids,
+      ...widget.transaction.personUuids,
+      if (widget.transaction.payerPersonUuid != null)
+        widget.transaction.payerPersonUuid!,
+    }.toList();
   }
 }
