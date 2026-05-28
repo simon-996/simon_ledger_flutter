@@ -529,7 +529,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                         return AppAnimatedSwitcher(
                           child: AppSectionCard(
                             key: ValueKey(
-                              'people-${selectedLedger.uuid}-$_transactionType-${_payerPersonUuid != null}',
+                              'people-${selectedLedger.uuid}-$_transactionType',
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -622,45 +622,87 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                                     });
                                   },
                                 ),
-                                if (_transactionType == 0 &&
-                                    _payerPersonUuid != null) ...[
-                                  const SizedBox(height: 16),
-                                  DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      color: colorScheme.surfaceContainerLow,
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(
-                                        color: colorScheme.outlineVariant
-                                            .withValues(alpha: 0.72),
-                                      ),
-                                    ),
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(12),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.stretch,
-                                        children: [
-                                          Text(
-                                            '付款人',
-                                            style: Theme.of(
-                                              context,
-                                            ).textTheme.titleSmall,
+                                AnimatedSize(
+                                  duration: AppMotion.normal,
+                                  curve: AppMotion.emphasized,
+                                  alignment: Alignment.topCenter,
+                                  child: AnimatedSwitcher(
+                                    duration: AppMotion.normal,
+                                    switchInCurve: AppMotion.emphasized,
+                                    switchOutCurve: Curves.easeInCubic,
+                                    transitionBuilder: (child, animation) {
+                                      final curved = CurvedAnimation(
+                                        parent: animation,
+                                        curve: AppMotion.emphasized,
+                                      );
+                                      return FadeTransition(
+                                        opacity: animation,
+                                        child: SizeTransition(
+                                          sizeFactor: curved,
+                                          alignment: Alignment.topCenter,
+                                          child: child,
+                                        ),
+                                      );
+                                    },
+                                    child:
+                                        _transactionType == 0 &&
+                                            _payerPersonUuid != null
+                                        ? Padding(
+                                            key: const ValueKey(
+                                              'payer-person-panel',
+                                            ),
+                                            padding: const EdgeInsets.only(
+                                              top: 16,
+                                            ),
+                                            child: DecoratedBox(
+                                              decoration: BoxDecoration(
+                                                color: colorScheme
+                                                    .surfaceContainerLow,
+                                                borderRadius:
+                                                    BorderRadius.circular(16),
+                                                border: Border.all(
+                                                  color: colorScheme
+                                                      .outlineVariant
+                                                      .withValues(alpha: 0.72),
+                                                ),
+                                              ),
+                                              child: Padding(
+                                                padding: const EdgeInsets.all(
+                                                  12,
+                                                ),
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment
+                                                          .stretch,
+                                                  children: [
+                                                    Text(
+                                                      '付款人',
+                                                      style: Theme.of(
+                                                        context,
+                                                      ).textTheme.titleSmall,
+                                                    ),
+                                                    const SizedBox(height: 8),
+                                                    AppPersonChoiceGrid(
+                                                      items: personChoices,
+                                                      selectedId:
+                                                          _payerPersonUuid,
+                                                      onSelect: (pid) {
+                                                        _setAndPersist(() {
+                                                          _payerPersonUuid =
+                                                              pid;
+                                                        });
+                                                      },
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          )
+                                        : const SizedBox.shrink(
+                                            key: ValueKey('payer-person-empty'),
                                           ),
-                                          const SizedBox(height: 8),
-                                          AppPersonChoiceGrid(
-                                            items: personChoices,
-                                            selectedId: _payerPersonUuid,
-                                            onSelect: (pid) {
-                                              _setAndPersist(() {
-                                                _payerPersonUuid = pid;
-                                              });
-                                            },
-                                          ),
-                                        ],
-                                      ),
-                                    ),
                                   ),
-                                ],
+                                ),
                               ],
                             ),
                           ),
