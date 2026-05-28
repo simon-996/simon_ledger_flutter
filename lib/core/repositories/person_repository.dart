@@ -1,4 +1,5 @@
 import '../database/database_service.dart';
+import '../models/ledger.dart';
 import '../models/person.dart';
 import '../network/api_client.dart';
 import 'ledger_repository.dart';
@@ -67,7 +68,11 @@ class RemotePersonRepository implements PersonRepository {
           await _db.savePerson(person);
         }
         await _cacheLedgerPeople(ledgerUuid, people);
-        return people;
+        return _mergeCachedHistoricalPeople(
+          ledgerUuid,
+          people,
+          includeDeleted: includeDeleted,
+        );
       } catch (_) {
         return _cachedPeopleForLedger(
           ledgerUuid,
@@ -101,15 +106,64 @@ class RemotePersonRepository implements PersonRepository {
     final ledger = ledgers
         .where((ledger) => ledger.uuid == ledgerUuid)
         .firstOrNull;
-    if (ledger == null || ledger.personUuids.isEmpty) {
+    if (ledger == null) {
       return const [];
     }
 
-    final personUuidSet = ledger.personUuids.toSet();
+    final personUuidSet = await _cachedPersonUuidsForLedger(
+      ledger,
+      includeDeleted: includeDeleted,
+    );
+    if (personUuidSet.isEmpty) {
+      return const [];
+    }
+
     final people = await _db.getAllPeople(includeDeleted: includeDeleted);
     return people
         .where((person) => personUuidSet.contains(person.uuid))
         .toList();
+  }
+
+  Future<List<Person>> _mergeCachedHistoricalPeople(
+    String ledgerUuid,
+    List<Person> remotePeople, {
+    required bool includeDeleted,
+  }) async {
+    if (!includeDeleted) {
+      return remotePeople;
+    }
+
+    final cachedPeople = await _cachedPeopleForLedger(
+      ledgerUuid,
+      includeDeleted: true,
+    );
+    return {
+      for (final person in remotePeople) person.uuid: person,
+      for (final person in cachedPeople) person.uuid: person,
+    }.values.toList();
+  }
+
+  Future<Set<String>> _cachedPersonUuidsForLedger(
+    Ledger ledger, {
+    required bool includeDeleted,
+  }) async {
+    final personUuids = ledger.personUuids.toSet();
+    if (!includeDeleted) {
+      return personUuids;
+    }
+
+    final transactions = await _db.getTransactionsForLedger(
+      ledger.uuid,
+      includeDeleted: true,
+    );
+    for (final transaction in transactions) {
+      personUuids.addAll(transaction.personUuids);
+      final payerPersonUuid = transaction.payerPersonUuid;
+      if (payerPersonUuid != null && payerPersonUuid.isNotEmpty) {
+        personUuids.add(payerPersonUuid);
+      }
+    }
+    return personUuids;
   }
 
   Future<void> _savePersonLocally(Person person) async {

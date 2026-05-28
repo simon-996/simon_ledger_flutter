@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simon_ledger_flutter/core/database/database_service.dart';
 import 'package:simon_ledger_flutter/core/models/ledger.dart';
 import 'package:simon_ledger_flutter/core/models/person.dart';
+import 'package:simon_ledger_flutter/core/models/transaction_record.dart';
 import 'package:simon_ledger_flutter/core/network/api_client.dart';
 import 'package:simon_ledger_flutter/core/network/token_store.dart';
 import 'package:simon_ledger_flutter/core/repositories/ledger_repository.dart';
@@ -49,13 +50,13 @@ void main() {
       await database.savePerson(
         Person()
           ..uuid = 'person-1'
-          ..name = '张三'
+          ..name = '历史人员'
           ..avatar = '🙂',
       );
       await database.savePerson(
         Person()
           ..uuid = 'person-2'
-          ..name = '李四'
+          ..name = '其他人员'
           ..avatar = '😎',
       );
 
@@ -73,7 +74,61 @@ void main() {
 
       expect(people, hasLength(1));
       expect(people.single.uuid, 'person-1');
-      expect(people.single.name, '张三');
+      expect(people.single.name, '历史人员');
+    },
+  );
+
+  test(
+    'RemotePersonRepository keeps deleted people referenced by history offline',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final database = DatabaseService();
+      await database.saveLedger(
+        Ledger()
+          ..uuid = 'ledger-1'
+          ..name = '离线账本'
+          ..baseCurrencyCode = 'CNY'
+          ..exchangeRateToCNY = 1
+          ..personUuids = const [],
+      );
+      await database.savePerson(
+        Person()
+          ..uuid = 'person-1'
+          ..name = '历史人员'
+          ..avatar = '🙂'
+          ..isDeleted = true,
+      );
+      await database.saveTransaction(
+        TransactionRecord()
+          ..uuid = 'tx-1'
+          ..ledgerUuid = 'ledger-1'
+          ..type = 0
+          ..amount = 12
+          ..currencyCode = 'CNY'
+          ..category = '餐饮'
+          ..personUuids = ['person-1']
+          ..note = ''
+          ..createdAt = DateTime(2026, 5, 28),
+      );
+
+      final ledgerRepository = RemoteLedgerRepository(
+        apiClient: _OfflineApiClient(),
+        database: database,
+      );
+      final repository = RemotePersonRepository(
+        apiClient: _OfflineApiClient(),
+        ledgerRepository: ledgerRepository,
+        database: database,
+      );
+
+      final people = await repository.getAllPeople(
+        includeDeleted: true,
+        ledgerUuid: 'ledger-1',
+      );
+
+      expect(people, hasLength(1));
+      expect(people.single.uuid, 'person-1');
+      expect(people.single.isDeleted, isTrue);
     },
   );
 }
