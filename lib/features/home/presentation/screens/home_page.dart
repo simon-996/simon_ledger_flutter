@@ -72,6 +72,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                           onDelete: _deleteLedger,
                           onCreate: _openCreateLedger,
                           onSync: _syncLedger,
+                          autoSyncEnabled: _currentIndex == 1,
                         ),
                         error: (err, stack) => LedgerListTab(
                           ledgers: ledgers,
@@ -82,6 +83,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                           onDelete: _deleteLedger,
                           onCreate: _openCreateLedger,
                           onSync: _syncLedger,
+                          autoSyncEnabled: _currentIndex == 1,
                         ),
                         data: (stats) => LedgerListTab(
                           ledgers: ledgers,
@@ -92,6 +94,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                           onDelete: _deleteLedger,
                           onCreate: _openCreateLedger,
                           onSync: _syncLedger,
+                          autoSyncEnabled: _currentIndex == 1,
                         ),
                       ),
                       StatisticsTab(ledgers: ledgers),

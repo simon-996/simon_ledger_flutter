@@ -11,8 +11,9 @@ import '../../../../core/widgets/app_components.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
 import '../../../transactions/presentation/providers/transaction_provider.dart';
 import '../providers/ledger_provider.dart';
+import '../providers/ledger_stats_provider.dart';
 
-class LedgerListTab extends ConsumerWidget {
+class LedgerListTab extends ConsumerStatefulWidget {
   const LedgerListTab({
     super.key,
     required this.ledgers,
@@ -23,6 +24,7 @@ class LedgerListTab extends ConsumerWidget {
     required this.onDelete,
     required this.onCreate,
     required this.onSync,
+    required this.autoSyncEnabled,
   });
 
   final List<Ledger> ledgers;
@@ -33,9 +35,18 @@ class LedgerListTab extends ConsumerWidget {
   final ValueChanged<Ledger> onDelete;
   final VoidCallback onCreate;
   final ValueChanged<Ledger> onSync;
+  final bool autoSyncEnabled;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LedgerListTab> createState() => _LedgerListTabState();
+}
+
+class _LedgerListTabState extends ConsumerState<LedgerListTab> {
+  final Map<String, String> _autoSyncedPendingKeys = {};
+  final Set<String> _autoSyncingLedgerUuids = {};
+
+  @override
+  Widget build(BuildContext context) {
     final token = ref.watch(authTokenProvider).valueOrNull;
     final isCloudMode = token != null && token.isValid;
     final peopleById = isCloudMode
@@ -47,7 +58,13 @@ class LedgerListTab extends ConsumerWidget {
                 orElse: () => const <String, Person>{},
               );
 
-    if (ledgers.isEmpty) {
+    if (isCloudMode && widget.autoSyncEnabled && widget.ledgers.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _autoSyncPendingLedgers();
+      });
+    }
+
+    if (widget.ledgers.isEmpty) {
       return AppEmptyState(
         icon: Icons.account_balance_wallet_outlined,
         title: '还没有账本',
@@ -55,7 +72,7 @@ class LedgerListTab extends ConsumerWidget {
             ? '先创建一个云端账本，并设置默认币种。'
             : '先创建一个账本，并设置默认币种。数据仅保存在本机。',
         action: FilledButton.icon(
-          onPressed: onCreate,
+          onPressed: widget.onCreate,
           icon: const Icon(Icons.add_rounded),
           label: const Text('添加账本'),
         ),
@@ -70,7 +87,7 @@ class LedgerListTab extends ConsumerWidget {
         AppTheme.pagePadding,
         96,
       ),
-      itemCount: ledgers.length,
+      itemCount: widget.ledgers.length,
       onReorderItem: (oldIndex, newIndex) {
         if (isCloudMode) {
           return;
@@ -98,9 +115,9 @@ class LedgerListTab extends ConsumerWidget {
         );
       },
       itemBuilder: (context, index) {
-        final ledger = ledgers[index];
+        final ledger = widget.ledgers[index];
         final stats =
-            ledgerStats[ledger.uuid] ??
+            widget.ledgerStats[ledger.uuid] ??
             {'expense': 0.0, 'income': 0.0, 'balance': 0.0};
         final syncStatus = ref.watch(ledgerSyncStatusProvider(ledger.uuid));
         final delayMs = (index < 6 ? index : 6) * 45;
@@ -109,7 +126,7 @@ class LedgerListTab extends ConsumerWidget {
           key: ValueKey(ledger.uuid),
           direction: DismissDirection.endToStart,
           confirmDismiss: (direction) => _confirmDelete(context, ledger),
-          onDismissed: (_) => onDelete(ledger),
+          onDismissed: (_) => widget.onDelete(ledger),
           background: _DeleteBackground(),
           child: AppAnimatedEntry(
             delay: Duration(milliseconds: delayMs),
@@ -122,10 +139,10 @@ class LedgerListTab extends ConsumerWidget {
               isCloudMode: isCloudMode,
               index: index,
               syncStatus: syncStatus,
-              onTap: () => onTap(ledger),
-              onEdit: () => onEdit(ledger),
-              onShare: () => onShare(ledger),
-              onSync: () => onSync(ledger),
+              onTap: () => widget.onTap(ledger),
+              onEdit: () => widget.onEdit(ledger),
+              onShare: () => widget.onShare(ledger),
+              onSync: () => widget.onSync(ledger),
               canReorder: !isCloudMode,
               canShare: isCloudMode && _canShare(ledger.role),
               canSync: isCloudMode,
@@ -138,6 +155,53 @@ class LedgerListTab extends ConsumerWidget {
 
   bool _canShare(String? role) {
     return role == 'owner' || role == 'admin';
+  }
+
+  Future<void> _autoSyncPendingLedgers() async {
+    final database = ref.read(databaseProvider);
+    final repository = ref.read(transactionRepositoryProvider);
+
+    for (final ledger in widget.ledgers) {
+      if (_autoSyncingLedgerUuids.contains(ledger.uuid)) {
+        continue;
+      }
+
+      final transactions = await database.getTransactionsForLedger(
+        ledger.uuid,
+        includeDeleted: true,
+      );
+      final pending = transactions
+          .where((transaction) => transaction.pendingSync)
+          .toList();
+      if (pending.isEmpty) {
+        continue;
+      }
+
+      final pendingKey = pending
+          .map((transaction) {
+            return transaction.clientOperationId ?? transaction.uuid;
+          })
+          .toList()
+          .join('|');
+      if (_autoSyncedPendingKeys[ledger.uuid] == pendingKey) {
+        continue;
+      }
+
+      _autoSyncedPendingKeys[ledger.uuid] = pendingKey;
+      _autoSyncingLedgerUuids.add(ledger.uuid);
+      try {
+        await repository.syncPendingTransactions(ledger.uuid);
+      } catch (_) {
+        // Silent auto-sync: the card keeps showing pending/failed state.
+      } finally {
+        _autoSyncingLedgerUuids.remove(ledger.uuid);
+        if (mounted) {
+          ref.invalidate(ledgerSyncStatusProvider(ledger.uuid));
+          ref.invalidate(transactionNotifierProvider(ledger.uuid));
+          ref.invalidate(ledgerStatsProvider);
+        }
+      }
+    }
   }
 
   Future<bool?> _confirmDelete(BuildContext context, Ledger ledger) {
