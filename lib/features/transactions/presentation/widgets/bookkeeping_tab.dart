@@ -1312,6 +1312,32 @@ class _CurrencySelector extends StatelessWidget {
       );
     }
 
+    if (currencies.length == 2) {
+      return SizedBox(
+        height: 56,
+        child: Row(
+          children: [
+            for (var index = 0; index < currencies.length; index++) ...[
+              if (index > 0) const SizedBox(width: 8),
+              Expanded(
+                child: _CurrencyQuickItem(
+                  currency: currencies[index],
+                  selected: currencies[index] == selectedCurrency,
+                  fillWidth: true,
+                  onTap: () {
+                    final currency = currencies[index];
+                    if (currency != selectedCurrency) {
+                      onChanged(currency);
+                    }
+                  },
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
     return SizedBox(
       height: 56,
       child: ListView.separated(
