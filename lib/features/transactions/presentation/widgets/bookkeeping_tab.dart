@@ -1354,6 +1354,7 @@ class _CurrencyQuickItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final label = currency.trim().toUpperCase();
+    final displayName = _currencyDisplayName(label);
 
     return AnimatedContainer(
       width: fillWidth ? double.infinity : null,
@@ -1411,7 +1412,7 @@ class _CurrencyQuickItem extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      label == 'CNY' ? '人民币' : '账本币种',
+                      displayName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -1427,6 +1428,28 @@ class _CurrencyQuickItem extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _currencyDisplayName(String code) {
+    return switch (code) {
+      'CNY' => '人民币',
+      'USD' => '美元',
+      'EUR' => '欧元',
+      'GBP' => '英镑',
+      'JPY' => '日元',
+      'HKD' => '港币',
+      'TWD' => '新台币',
+      'MOP' => '澳门元',
+      'SGD' => '新加坡元',
+      'THB' => '泰铢',
+      'MYR' => '马来西亚林吉特',
+      'KRW' => '韩元',
+      'AUD' => '澳元',
+      'CAD' => '加元',
+      'NZD' => '新西兰元',
+      'CHF' => '瑞士法郎',
+      _ => code,
+    };
   }
 }
 
