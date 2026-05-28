@@ -42,11 +42,14 @@ class RemotePersonRepository implements PersonRepository {
   const RemotePersonRepository({
     required ApiClient apiClient,
     required LedgerRepository ledgerRepository,
+    required DatabaseService database,
   }) : _apiClient = apiClient,
-       _ledgerRepository = ledgerRepository;
+       _ledgerRepository = ledgerRepository,
+       _db = database;
 
   final ApiClient _apiClient;
   final LedgerRepository _ledgerRepository;
+  final DatabaseService _db;
 
   @override
   Future<List<Person>> getAllPeople({
@@ -54,45 +57,102 @@ class RemotePersonRepository implements PersonRepository {
     String? ledgerUuid,
   }) async {
     if (ledgerUuid != null) {
-      return _apiClient.get<List<Person>>(
-        '/api/ledgers/$ledgerUuid/people',
-        fromJson: (json) =>
-            (json! as List<dynamic>).map(_personFromJson).toList(),
-      );
-    }
-
-    final ledgers = await _ledgerRepository.getAllLedgers();
-    final people = <Person>[];
-    for (final ledger in ledgers) {
-      people.addAll(
-        await _apiClient.get<List<Person>>(
-          '/api/ledgers/${ledger.uuid}/people',
+      try {
+        final people = await _apiClient.get<List<Person>>(
+          '/api/ledgers/$ledgerUuid/people',
           fromJson: (json) =>
               (json! as List<dynamic>).map(_personFromJson).toList(),
-        ),
-      );
+        );
+        for (final person in people) {
+          await _db.savePerson(person);
+        }
+        await _cacheLedgerPeople(ledgerUuid, people);
+        return people;
+      } catch (_) {
+        return _cachedPeopleForLedger(
+          ledgerUuid,
+          includeDeleted: includeDeleted,
+        );
+      }
     }
-    return people;
+
+    try {
+      final ledgers = await _ledgerRepository.getAllLedgers();
+      final people = <Person>[];
+      for (final ledger in ledgers) {
+        people.addAll(
+          await getAllPeople(
+            includeDeleted: includeDeleted,
+            ledgerUuid: ledger.uuid,
+          ),
+        );
+      }
+      return people;
+    } catch (_) {
+      return _db.getAllPeople(includeDeleted: includeDeleted);
+    }
   }
 
-  @override
-  Future<void> savePerson(Person person, {String? ledgerUuid}) async {
-    if (ledgerUuid == null) {
-      throw ArgumentError('Remote person writes require ledgerUuid.');
+  Future<List<Person>> _cachedPeopleForLedger(
+    String ledgerUuid, {
+    required bool includeDeleted,
+  }) async {
+    final ledgers = await _db.getAllLedgers(includeDeleted: true);
+    final ledger = ledgers
+        .where((ledger) => ledger.uuid == ledgerUuid)
+        .firstOrNull;
+    if (ledger == null || ledger.personUuids.isEmpty) {
+      return const [];
     }
 
+    final personUuidSet = ledger.personUuids.toSet();
+    final people = await _db.getAllPeople(includeDeleted: includeDeleted);
+    return people
+        .where((person) => personUuidSet.contains(person.uuid))
+        .toList();
+  }
+
+  Future<void> _savePersonLocally(Person person) async {
+    await _db.savePerson(person);
+  }
+
+  Future<void> _deletePersonLocally(String uuid) async {
+    await _db.deletePerson(uuid);
+  }
+
+  Future<void> _cacheLedgerPeople(
+    String ledgerUuid,
+    List<Person> people,
+  ) async {
+    final ledgers = await _db.getAllLedgers(includeDeleted: true);
+    final ledger = ledgers
+        .where((ledger) => ledger.uuid == ledgerUuid)
+        .firstOrNull;
+    if (ledger == null) {
+      return;
+    }
+    ledger.personUuids = people.map((person) => person.uuid).toList();
+    await _db.saveLedger(ledger);
+  }
+
+  Future<void> _saveRemotePerson(Person person, String ledgerUuid) async {
     final data = {
       'name': person.name,
       'avatar': person.avatar,
       'linkedUserUuid': person.linkedUserUuid,
     };
     if (_looksLikeRemoteUuid(person.uuid)) {
-      await _apiClient.put<Person>(
+      final saved = await _apiClient.put<Person>(
         '/api/ledgers/$ledgerUuid/people/${person.uuid}',
         data: data,
         idempotencyKey: _operationKey('update-person', person.uuid),
         fromJson: _personFromJson,
       );
+      person
+        ..name = saved.name
+        ..avatar = saved.avatar
+        ..linkedUserUuid = saved.linkedUserUuid;
+      await _savePersonLocally(person);
       return;
     }
 
@@ -107,17 +167,28 @@ class RemotePersonRepository implements PersonRepository {
       ..name = saved.name
       ..avatar = saved.avatar
       ..linkedUserUuid = saved.linkedUserUuid;
+    await _savePersonLocally(person);
   }
 
   @override
-  Future<void> deletePerson(String uuid, {String? ledgerUuid}) {
+  Future<void> savePerson(Person person, {String? ledgerUuid}) async {
+    if (ledgerUuid == null) {
+      throw ArgumentError('Remote person writes require ledgerUuid.');
+    }
+
+    await _saveRemotePerson(person, ledgerUuid);
+  }
+
+  @override
+  Future<void> deletePerson(String uuid, {String? ledgerUuid}) async {
     if (ledgerUuid == null) {
       throw ArgumentError('Remote person deletes require ledgerUuid.');
     }
-    return _apiClient.deleteVoid(
+    await _apiClient.deleteVoid(
       '/api/ledgers/$ledgerUuid/people/$uuid',
       idempotencyKey: 'delete-person-$uuid',
     );
+    await _deletePersonLocally(uuid);
   }
 
   bool _looksLikeRemoteUuid(String uuid) {
