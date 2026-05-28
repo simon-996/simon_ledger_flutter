@@ -528,61 +528,57 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                         }).toList();
                         return AppAnimatedSwitcher(
                           child: AppSectionCard(
-                            key: ValueKey(
-                              'people-${selectedLedger.uuid}-$_transactionType',
-                            ),
+                            key: ValueKey('people-${selectedLedger.uuid}'),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                if (_transactionType == 0) ...[
-                                  SegmentedButton<bool>(
-                                    showSelectedIcon: false,
-                                    segments: const [
-                                      ButtonSegment(
-                                        value: false,
-                                        icon: Icon(
-                                          Icons.account_balance_wallet_outlined,
-                                        ),
-                                        label: Text('共同钱包'),
-                                      ),
-                                      ButtonSegment(
-                                        value: true,
-                                        icon: Icon(
-                                          Icons.person_outline_rounded,
-                                        ),
-                                        label: Text('某人代付'),
-                                      ),
-                                    ],
-                                    selected: {_payerPersonUuid != null},
-                                    onSelectionChanged: (selection) {
-                                      _setAndPersist(() {
-                                        if (selection.first) {
-                                          _payerPersonUuid ??=
-                                              _selectedPersonIds.isNotEmpty
-                                              ? _selectedPersonIds.first
-                                              : selectedLedger
-                                                    .personUuids
-                                                    .first;
-                                        } else {
-                                          _payerPersonUuid = null;
-                                        }
-                                      });
-                                    },
+                                AnimatedSize(
+                                  duration: AppMotion.normal,
+                                  curve: AppMotion.emphasized,
+                                  alignment: Alignment.topCenter,
+                                  child: AnimatedSwitcher(
+                                    duration: AppMotion.normal,
+                                    switchInCurve: AppMotion.emphasized,
+                                    switchOutCurve: Curves.easeInCubic,
+                                    transitionBuilder: _topFadeSizeTransition,
+                                    child: _transactionType == 0
+                                        ? Padding(
+                                            key: const ValueKey(
+                                              'payment-mode-panel',
+                                            ),
+                                            padding: const EdgeInsets.only(
+                                              bottom: 10,
+                                            ),
+                                            child: _PaymentModePanel(
+                                              paidByPerson:
+                                                  _payerPersonUuid != null,
+                                              description:
+                                                  _payerPersonUuid == null
+                                                  ? '使用人员将平均分摊该支出金额。'
+                                                  : '付款人先垫付，总额由使用人员平均分摊。',
+                                              onChanged: (paidByPerson) {
+                                                _setAndPersist(() {
+                                                  if (paidByPerson) {
+                                                    _payerPersonUuid ??=
+                                                        _selectedPersonIds
+                                                            .isNotEmpty
+                                                        ? _selectedPersonIds
+                                                              .first
+                                                        : selectedLedger
+                                                              .personUuids
+                                                              .first;
+                                                  } else {
+                                                    _payerPersonUuid = null;
+                                                  }
+                                                });
+                                              },
+                                            ),
+                                          )
+                                        : const SizedBox.shrink(
+                                            key: ValueKey('payment-mode-empty'),
+                                          ),
                                   ),
-                                  const SizedBox(height: 10),
-                                  Text(
-                                    _payerPersonUuid == null
-                                        ? '使用人员将平均分摊该支出金额。'
-                                        : '付款人先垫付，总额由使用人员平均分摊。',
-                                    style: Theme.of(context).textTheme.bodySmall
-                                        ?.copyWith(
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.onSurfaceVariant,
-                                        ),
-                                  ),
-                                  const SizedBox(height: 10),
-                                ],
+                                ),
                                 AppSectionHeader(
                                   title: _transactionType == 0
                                       ? '使用人员'
@@ -630,20 +626,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                                     duration: AppMotion.normal,
                                     switchInCurve: AppMotion.emphasized,
                                     switchOutCurve: Curves.easeInCubic,
-                                    transitionBuilder: (child, animation) {
-                                      final curved = CurvedAnimation(
-                                        parent: animation,
-                                        curve: AppMotion.emphasized,
-                                      );
-                                      return FadeTransition(
-                                        opacity: animation,
-                                        child: SizeTransition(
-                                          sizeFactor: curved,
-                                          alignment: Alignment.topCenter,
-                                          child: child,
-                                        ),
-                                      );
-                                    },
+                                    transitionBuilder: _topFadeSizeTransition,
                                     child:
                                         _transactionType == 0 &&
                                             _payerPersonUuid != null
@@ -854,6 +837,21 @@ class _SaveTransactionButton extends StatelessWidget {
       ),
     );
   }
+}
+
+Widget _topFadeSizeTransition(Widget child, Animation<double> animation) {
+  final curved = CurvedAnimation(
+    parent: animation,
+    curve: AppMotion.emphasized,
+  );
+  return FadeTransition(
+    opacity: animation,
+    child: SizeTransition(
+      sizeFactor: curved,
+      alignment: Alignment.topCenter,
+      child: child,
+    ),
+  );
 }
 
 class _QuickEntryHeader extends StatelessWidget {
@@ -1228,6 +1226,57 @@ class _TransactionTypeButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _PaymentModePanel extends StatelessWidget {
+  const _PaymentModePanel({
+    required this.paidByPerson,
+    required this.description,
+    required this.onChanged,
+  });
+
+  final bool paidByPerson;
+  final String description;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SegmentedButton<bool>(
+          showSelectedIcon: false,
+          segments: const [
+            ButtonSegment(
+              value: false,
+              icon: Icon(Icons.account_balance_wallet_outlined),
+              label: Text('共同钱包'),
+            ),
+            ButtonSegment(
+              value: true,
+              icon: Icon(Icons.person_outline_rounded),
+              label: Text('某人代付'),
+            ),
+          ],
+          selected: {paidByPerson},
+          onSelectionChanged: (selection) => onChanged(selection.first),
+        ),
+        const SizedBox(height: 10),
+        AnimatedSwitcher(
+          duration: AppMotion.fast,
+          child: Text(
+            description,
+            key: ValueKey(description),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
