@@ -747,22 +747,17 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
             ),
             child: AppAnimatedSwitcher(
               child: peopleAsyncValue.maybeWhen(
-                data: (peoplePool) => FilledButton.icon(
+                data: (peoplePool) => _SaveTransactionButton(
                   key: const ValueKey('save-enabled'),
                   onPressed: _selectedLedgerUuid == null
                       ? null
                       : () => _saveTransaction(peoplePool),
-                  icon: const Icon(Icons.check_rounded),
-                  label: const Text('保存记账'),
+                  loading: false,
                 ),
-                orElse: () => FilledButton.icon(
-                  key: const ValueKey('save-loading'),
+                orElse: () => const _SaveTransactionButton(
+                  key: ValueKey('save-loading'),
                   onPressed: null,
-                  icon: const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  label: const Text('加载中'),
+                  loading: true,
                 ),
               ),
             ),
@@ -780,6 +775,83 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     _amountController.text = '${parts[0]}.${parts[1].substring(0, 2)}';
     _amountController.selection = TextSelection.fromPosition(
       TextPosition(offset: _amountController.text.length),
+    );
+  }
+}
+
+class _SaveTransactionButton extends StatelessWidget {
+  const _SaveTransactionButton({
+    super.key,
+    required this.onPressed,
+    required this.loading,
+  });
+
+  final VoidCallback? onPressed;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final enabled = onPressed != null;
+
+    return AnimatedContainer(
+      duration: AppMotion.fast,
+      curve: Curves.easeOut,
+      height: 54,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: enabled
+            ? [
+                BoxShadow(
+                  color: colorScheme.primary.withValues(alpha: 0.18),
+                  blurRadius: 16,
+                  offset: const Offset(0, 8),
+                ),
+              ]
+            : const [],
+      ),
+      child: FilledButton(
+        onPressed: onPressed,
+        style: FilledButton.styleFrom(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          disabledBackgroundColor: colorScheme.surfaceContainerHighest,
+          disabledForegroundColor: colorScheme.onSurfaceVariant,
+          textStyle: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+        ),
+        child: AnimatedSwitcher(
+          duration: AppMotion.fast,
+          child: loading
+              ? Row(
+                  key: const ValueKey('save-loading-content'),
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    const Text('准备中'),
+                  ],
+                )
+              : const Row(
+                  key: ValueKey('save-ready-content'),
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.check_rounded, size: 22),
+                    SizedBox(width: 8),
+                    Text('保存记账'),
+                  ],
+                ),
+        ),
+      ),
     );
   }
 }
