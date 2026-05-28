@@ -265,6 +265,9 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
     final canManagePeople =
         !isCloudMode || personLedgerUuid != null || isDraftPeopleMode;
     final localProfile = ref.watch(localProfileProvider).valueOrNull;
+    final selectedPeopleCount =
+        _selectedPersonIds.length +
+        (_includeSelf && widget.existingLedger == null ? 1 : 0);
     final peopleAsyncValue = canManagePeople && !isDraftPeopleMode
         ? ref.watch(
             personNotifierProvider(
@@ -291,49 +294,9 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Icon(
-                      Icons.menu_book_rounded,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          widget.existingLedger == null ? '新建账本' : '编辑账本',
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        if (widget.existingLedger != null) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            widget.existingLedger!.displayCode,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
+              _SheetHeader(
+                isEditing: widget.existingLedger != null,
+                displayCode: widget.existingLedger?.displayCode,
               ),
               const SizedBox(height: 16),
               Flexible(
@@ -345,6 +308,17 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
+                            AppSectionHeader(
+                              title: '基础信息',
+                              trailing: Icon(
+                                Icons.tune_rounded,
+                                size: 18,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
                             TextField(
                               controller: _nameController,
                               focusNode: _nameFocus,
@@ -364,7 +338,12 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
                               rateController: _rateController,
                               onCurrencyChanged: (value) {
                                 if (value == null) return;
-                                setState(() => _baseCurrencyCode = value);
+                                setState(() {
+                                  _baseCurrencyCode = value;
+                                  if (value == 'CNY') {
+                                    _rateController.text = '1.0';
+                                  }
+                                });
                               },
                             ),
                           ],
@@ -377,36 +356,38 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
                           children: [
                             AppSectionHeader(
                               title: '账本人员',
-                              trailing: TextButton.icon(
-                                onPressed: canManagePeople
-                                    ? _addNewPerson
-                                    : null,
-                                icon: const Icon(
-                                  Icons.person_add_alt_1_rounded,
-                                  size: 18,
-                                ),
-                                label: const Text('新增'),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _CountPill(count: selectedPeopleCount),
+                                  const SizedBox(width: 8),
+                                  IconButton.filledTonal(
+                                    tooltip: '新增人员',
+                                    onPressed: canManagePeople
+                                        ? _addNewPerson
+                                        : null,
+                                    icon: const Icon(
+                                      Icons.person_add_alt_1_rounded,
+                                      size: 18,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            const SizedBox(height: 10),
+                            const SizedBox(height: 12),
                             if (widget.existingLedger == null) ...[
-                              SwitchListTile(
-                                contentPadding: EdgeInsets.zero,
-                                secondary: const Icon(
-                                  Icons.person_add_alt_1_rounded,
-                                ),
-                                title: Text(
-                                  '加入${localProfile?.normalizedNickname ?? '本人'}',
-                                ),
-                                subtitle: Text(
-                                  isCloudMode ? '创建时一次性加入账本' : '创建后自动把本地身份加入账本',
-                                ),
+                              _IncludeSelfTile(
+                                label:
+                                    '加入${localProfile?.normalizedNickname ?? '本人'}',
+                                description: isCloudMode
+                                    ? '创建时同步加入账本'
+                                    : '创建后自动加入本地身份',
                                 value: _includeSelf,
                                 onChanged: (value) {
                                   setState(() => _includeSelf = value);
                                 },
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 12),
                             ],
                             if (isDraftPeopleMode)
                               _DraftPeopleSelector(
@@ -424,14 +405,16 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
                                 onLongPress: _showPersonOptions,
                               )
                             else if (!canManagePeople)
-                              const Text('云端账本创建后，可再次编辑账本人员。')
+                              _InfoStrip(
+                                icon: Icons.cloud_done_outlined,
+                                text: '云端账本创建后，可再次编辑账本人员。',
+                              )
                             else
                               peopleAsyncValue!.when(
-                                loading: () => const Center(
-                                  child: CircularProgressIndicator(),
-                                ),
-                                error: (e, st) => Text(
-                                  FriendlyError.message(
+                                loading: () => const _PeopleLoadingState(),
+                                error: (e, st) => _InfoStrip(
+                                  icon: Icons.error_outline_rounded,
+                                  text: FriendlyError.message(
                                     e,
                                     fallback: '人员加载失败，请稍后重试。',
                                   ),
@@ -456,40 +439,21 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
                                         });
                                   }
 
-                                  return Wrap(
-                                    spacing: 8,
-                                    runSpacing: 8,
-                                    children: peoplePool.map((person) {
-                                      final isSelected = _selectedPersonIds
-                                          .contains(person.uuid);
-                                      return GestureDetector(
-                                        onLongPress: () =>
-                                            _showPersonOptions(person),
-                                        child: FilterChip(
-                                          avatar: Text(
-                                            person.avatar,
-                                            style: const TextStyle(
-                                              fontSize: 16,
-                                            ),
-                                          ),
-                                          label: Text(person.name),
-                                          selected: isSelected,
-                                          onSelected: (selected) {
-                                            setState(() {
-                                              if (selected) {
-                                                _selectedPersonIds.add(
-                                                  person.uuid,
-                                                );
-                                              } else {
-                                                _selectedPersonIds.remove(
-                                                  person.uuid,
-                                                );
-                                              }
-                                            });
-                                          },
-                                        ),
-                                      );
-                                    }).toList(),
+                                  return _PeopleSelector(
+                                    people: peoplePool,
+                                    selectedPersonIds: _selectedPersonIds,
+                                    onToggle: (person, selected) {
+                                      setState(() {
+                                        if (selected) {
+                                          _selectedPersonIds.add(person.uuid);
+                                        } else {
+                                          _selectedPersonIds.remove(
+                                            person.uuid,
+                                          );
+                                        }
+                                      });
+                                    },
+                                    onLongPress: _showPersonOptions,
                                   );
                                 },
                               ),
@@ -501,14 +465,10 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
                 ),
               ),
               const SizedBox(height: 14),
-              FilledButton(
+              _SubmitButton(
+                label: widget.existingLedger == null ? '创建账本' : '保存修改',
+                submitting: _submitting,
                 onPressed: canSubmit && !_submitting ? _submit : null,
-                child: _submitting
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Text(widget.existingLedger == null ? '创建' : '保存修改'),
               ),
             ],
           ),
@@ -582,6 +542,178 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
   }
 }
 
+class _SheetHeader extends StatelessWidget {
+  const _SheetHeader({required this.isEditing, this.displayCode});
+
+  final bool isEditing;
+  final String? displayCode;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Column(
+      children: [
+        Center(
+          child: Container(
+            width: 38,
+            height: 4,
+            decoration: BoxDecoration(
+              color: colorScheme.outlineVariant,
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: colorScheme.primaryContainer.withValues(alpha: 0.86),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(
+                isEditing ? Icons.edit_note_rounded : Icons.menu_book_rounded,
+                color: colorScheme.primary,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    isEditing ? '编辑账本' : '新建账本',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    isEditing ? (displayCode ?? '调整名称、币种和人员') : '设置名称、币种和初始参与人',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              tooltip: '关闭',
+              onPressed: () => Navigator.of(context).maybePop(),
+              icon: const Icon(Icons.close_rounded),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _CountPill extends StatelessWidget {
+  const _CountPill({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: colorScheme.primary.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        '$count 人',
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: colorScheme.primary,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _IncludeSelfTile extends StatelessWidget {
+  const _IncludeSelfTile({
+    required this.label,
+    required this.description,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String label;
+  final String description;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => onChanged(!value),
+      child: AnimatedContainer(
+        duration: AppMotion.fast,
+        curve: AppMotion.standard,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: value
+              ? colorScheme.primaryContainer.withValues(alpha: 0.5)
+              : colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: value ? colorScheme.primary : colorScheme.outlineVariant,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              value ? Icons.check_circle_rounded : Icons.person_outline_rounded,
+              color: value ? colorScheme.primary : colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    description,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Switch(value: value, onChanged: onChanged),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _DraftPeopleSelector extends StatelessWidget {
   const _DraftPeopleSelector({
     required this.people,
@@ -598,29 +730,235 @@ class _DraftPeopleSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (people.isEmpty) {
-      return Text(
-        '可先新增手动人员，创建账本时会一次保存。',
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-        ),
+      return const _InfoStrip(
+        icon: Icons.touch_app_outlined,
+        text: '点击右上角新增手动人员，创建账本时会一起保存。',
       );
     }
 
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: people.map((person) {
-        final isSelected = selectedPersonIds.contains(person.uuid);
-        return GestureDetector(
-          onLongPress: () => onLongPress(person),
-          child: FilterChip(
-            avatar: Text(person.avatar, style: const TextStyle(fontSize: 16)),
-            label: Text(person.name),
-            selected: isSelected,
-            onSelected: (selected) => onToggle(person, selected),
-          ),
+    return _PeopleSelector(
+      people: people,
+      selectedPersonIds: selectedPersonIds,
+      onToggle: onToggle,
+      onLongPress: onLongPress,
+    );
+  }
+}
+
+class _PeopleSelector extends StatelessWidget {
+  const _PeopleSelector({
+    required this.people,
+    required this.selectedPersonIds,
+    required this.onToggle,
+    required this.onLongPress,
+  });
+
+  final List<Person> people;
+  final Set<String> selectedPersonIds;
+  final void Function(Person person, bool selected) onToggle;
+  final ValueChanged<Person> onLongPress;
+
+  @override
+  Widget build(BuildContext context) {
+    if (people.isEmpty) {
+      return const _InfoStrip(
+        icon: Icons.group_add_outlined,
+        text: '暂无可选人员，点击右上角新增。',
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const spacing = 8.0;
+        final columns = constraints.maxWidth >= 360 ? 2 : 1;
+        final width =
+            (constraints.maxWidth - spacing * (columns - 1)) / columns;
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: people.map((person) {
+            final selected = selectedPersonIds.contains(person.uuid);
+            return SizedBox(
+              width: width,
+              child: _PersonSelectTile(
+                person: person,
+                selected: selected,
+                onTap: () => onToggle(person, !selected),
+                onLongPress: () => onLongPress(person),
+              ),
+            );
+          }).toList(),
         );
-      }).toList(),
+      },
+    );
+  }
+}
+
+class _PersonSelectTile extends StatelessWidget {
+  const _PersonSelectTile({
+    required this.person,
+    required this.selected,
+    required this.onTap,
+    required this.onLongPress,
+  });
+
+  final Person person;
+  final bool selected;
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        onLongPress: onLongPress,
+        child: AnimatedContainer(
+          duration: AppMotion.fast,
+          curve: AppMotion.standard,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          decoration: BoxDecoration(
+            color: selected
+                ? colorScheme.primaryContainer.withValues(alpha: 0.62)
+                : colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              width: selected ? 1.4 : 1,
+              color: selected
+                  ? colorScheme.primary
+                  : colorScheme.outlineVariant,
+            ),
+          ),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 17,
+                backgroundColor: selected
+                    ? colorScheme.primary.withValues(alpha: 0.12)
+                    : colorScheme.surfaceContainerHigh,
+                child: Text(
+                  person.avatar,
+                  style: const TextStyle(fontSize: 17),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  person.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: selected
+                        ? colorScheme.primary
+                        : colorScheme.onSurface,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                selected
+                    ? Icons.check_circle_rounded
+                    : Icons.radio_button_unchecked_rounded,
+                size: 21,
+                color: selected ? colorScheme.primary : colorScheme.outline,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoStrip extends StatelessWidget {
+  const _InfoStrip({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 19, color: colorScheme.onSurfaceVariant),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PeopleLoadingState extends StatelessWidget {
+  const _PeopleLoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      height: 52,
+      alignment: Alignment.center,
+      child: SizedBox(
+        width: 22,
+        height: 22,
+        child: CircularProgressIndicator(
+          strokeWidth: 2.3,
+          color: colorScheme.primary,
+        ),
+      ),
+    );
+  }
+}
+
+class _SubmitButton extends StatelessWidget {
+  const _SubmitButton({
+    required this.label,
+    required this.submitting,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool submitting;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 52,
+      child: FilledButton.icon(
+        onPressed: onPressed,
+        icon: submitting
+            ? const SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.check_rounded),
+        label: Text(label),
+      ),
     );
   }
 }
