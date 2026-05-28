@@ -17,6 +17,7 @@ import '../../../ledgers/presentation/providers/ledger_provider.dart';
 import '../../../ledgers/presentation/providers/ledger_stats_provider.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
 import '../../../statistics/presentation/widgets/statistics_tab.dart';
+import '../../../transactions/presentation/providers/transaction_provider.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -70,6 +71,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                           onShare: _shareLedger,
                           onDelete: _deleteLedger,
                           onCreate: _openCreateLedger,
+                          onSync: _syncLedger,
                         ),
                         error: (err, stack) => LedgerListTab(
                           ledgers: ledgers,
@@ -79,6 +81,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                           onShare: _shareLedger,
                           onDelete: _deleteLedger,
                           onCreate: _openCreateLedger,
+                          onSync: _syncLedger,
                         ),
                         data: (stats) => LedgerListTab(
                           ledgers: ledgers,
@@ -88,6 +91,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                           onShare: _shareLedger,
                           onDelete: _deleteLedger,
                           onCreate: _openCreateLedger,
+                          onSync: _syncLedger,
                         ),
                       ),
                       StatisticsTab(ledgers: ledgers),
@@ -269,6 +273,40 @@ class _HomePageState extends ConsumerState<HomePage> {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => LedgerDashboardPage(ledger: ledger)),
     );
+  }
+
+  Future<void> _syncLedger(Ledger ledger) async {
+    try {
+      final result = await ref
+          .read(transactionRepositoryProvider)
+          .syncPendingTransactions(ledger.uuid);
+      ref.invalidate(ledgerSyncStatusProvider(ledger.uuid));
+      ref.invalidate(transactionNotifierProvider(ledger.uuid));
+      ref.invalidate(ledgerStatsProvider);
+      if (!mounted) return;
+
+      final error = result.error;
+      if (error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              FriendlyError.message(error, fallback: '部分流水同步失败，请稍后重试。'),
+            ),
+          ),
+        );
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.synced > 0 ? '已同步 ${result.synced} 条流水' : '没有需要同步的流水',
+          ),
+        ),
+      );
+    } catch (error) {
+      _showWriteError(error);
+    }
   }
 
   Future<void> _shareLedger(Ledger ledger) async {

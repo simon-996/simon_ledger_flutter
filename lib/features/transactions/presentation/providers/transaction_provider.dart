@@ -5,6 +5,39 @@ import '../../../ledgers/presentation/providers/ledger_stats_provider.dart';
 
 part 'transaction_provider.g.dart';
 
+class LedgerSyncStatus {
+  const LedgerSyncStatus({
+    required this.pendingCount,
+    required this.failedCount,
+  });
+
+  final int pendingCount;
+  final int failedCount;
+
+  bool get hasPending => pendingCount > 0;
+  bool get hasFailed => failedCount > 0;
+}
+
+final ledgerSyncStatusProvider =
+    FutureProvider.family<LedgerSyncStatus, String>((ref, ledgerUuid) async {
+      final database = ref.watch(databaseProvider);
+      final transactions = await database.getTransactionsForLedger(
+        ledgerUuid,
+        includeDeleted: true,
+      );
+      final pending = transactions.where((transaction) {
+        return transaction.pendingSync;
+      }).toList();
+      final failedCount = pending.where((transaction) {
+        final error = transaction.syncError;
+        return error != null && error.isNotEmpty;
+      }).length;
+      return LedgerSyncStatus(
+        pendingCount: pending.length,
+        failedCount: failedCount,
+      );
+    });
+
 @riverpod
 class TransactionNotifier extends _$TransactionNotifier {
   @override
@@ -24,6 +57,7 @@ class TransactionNotifier extends _$TransactionNotifier {
     }
 
     // Invalidate ledger stats so the UI updates
+    ref.invalidate(ledgerSyncStatusProvider(ledgerUuid));
     ref.invalidate(ledgerStatsProvider);
     // Refresh local list
     ref.invalidateSelf();
@@ -33,6 +67,7 @@ class TransactionNotifier extends _$TransactionNotifier {
     final repository = ref.read(transactionRepositoryProvider);
     await repository.saveTransaction(transaction);
 
+    ref.invalidate(ledgerSyncStatusProvider(ledgerUuid));
     ref.invalidate(ledgerStatsProvider);
     ref.invalidateSelf();
   }
@@ -41,6 +76,16 @@ class TransactionNotifier extends _$TransactionNotifier {
     final repository = ref.read(transactionRepositoryProvider);
     await repository.deleteTransaction(ledgerUuid, uuid);
 
+    ref.invalidate(ledgerSyncStatusProvider(ledgerUuid));
+    ref.invalidate(ledgerStatsProvider);
+    ref.invalidateSelf();
+  }
+
+  Future<void> syncPending() async {
+    final repository = ref.read(transactionRepositoryProvider);
+    await repository.syncPendingTransactions(ledgerUuid);
+
+    ref.invalidate(ledgerSyncStatusProvider(ledgerUuid));
     ref.invalidate(ledgerStatsProvider);
     ref.invalidateSelf();
   }

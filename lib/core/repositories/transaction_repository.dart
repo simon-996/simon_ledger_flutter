@@ -18,6 +18,8 @@ abstract class TransactionRepository {
   Future<void> saveTransaction(TransactionRecord transaction);
 
   Future<void> deleteTransaction(String ledgerUuid, String uuid);
+
+  Future<TransactionSyncResult> syncPendingTransactions(String ledgerUuid);
 }
 
 class TransactionSyncResult {
@@ -62,6 +64,13 @@ class LocalTransactionRepository implements TransactionRepository {
   @override
   Future<void> deleteTransaction(String ledgerUuid, String uuid) {
     return _db.deleteTransaction(uuid);
+  }
+
+  @override
+  Future<TransactionSyncResult> syncPendingTransactions(
+    String ledgerUuid,
+  ) async {
+    return const TransactionSyncResult(synced: 0);
   }
 }
 
@@ -132,6 +141,7 @@ class RemoteTransactionRepository implements TransactionRepository {
     unawaited(syncPendingTransactions(transaction.ledgerUuid));
   }
 
+  @override
   Future<TransactionSyncResult> syncPendingTransactions(
     String ledgerUuid,
   ) async {

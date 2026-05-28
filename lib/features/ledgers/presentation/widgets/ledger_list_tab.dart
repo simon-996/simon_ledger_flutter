@@ -9,6 +9,7 @@ import '../../../../core/models/person_lookup.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
+import '../../../transactions/presentation/providers/transaction_provider.dart';
 import '../providers/ledger_provider.dart';
 
 class LedgerListTab extends ConsumerWidget {
@@ -21,6 +22,7 @@ class LedgerListTab extends ConsumerWidget {
     required this.onShare,
     required this.onDelete,
     required this.onCreate,
+    required this.onSync,
   });
 
   final List<Ledger> ledgers;
@@ -30,6 +32,7 @@ class LedgerListTab extends ConsumerWidget {
   final ValueChanged<Ledger> onShare;
   final ValueChanged<Ledger> onDelete;
   final VoidCallback onCreate;
+  final ValueChanged<Ledger> onSync;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -99,6 +102,7 @@ class LedgerListTab extends ConsumerWidget {
         final stats =
             ledgerStats[ledger.uuid] ??
             {'expense': 0.0, 'income': 0.0, 'balance': 0.0};
+        final syncStatus = ref.watch(ledgerSyncStatusProvider(ledger.uuid));
         final delayMs = (index < 6 ? index : 6) * 45;
 
         return Dismissible(
@@ -117,11 +121,14 @@ class LedgerListTab extends ConsumerWidget {
               peopleById: peopleById,
               isCloudMode: isCloudMode,
               index: index,
+              syncStatus: syncStatus,
               onTap: () => onTap(ledger),
               onEdit: () => onEdit(ledger),
               onShare: () => onShare(ledger),
+              onSync: () => onSync(ledger),
               canReorder: !isCloudMode,
               canShare: isCloudMode && _canShare(ledger.role),
+              canSync: isCloudMode,
             ),
           ),
         );
@@ -168,11 +175,14 @@ class _LedgerCard extends StatelessWidget {
     required this.peopleById,
     required this.isCloudMode,
     required this.index,
+    required this.syncStatus,
     required this.onTap,
     required this.onEdit,
     required this.onShare,
+    required this.onSync,
     required this.canReorder,
     required this.canShare,
+    required this.canSync,
   });
 
   final Ledger ledger;
@@ -182,16 +192,21 @@ class _LedgerCard extends StatelessWidget {
   final Map<String, Person> peopleById;
   final bool isCloudMode;
   final int index;
+  final AsyncValue<LedgerSyncStatus> syncStatus;
   final VoidCallback onTap;
   final VoidCallback onEdit;
   final VoidCallback onShare;
+  final VoidCallback onSync;
   final bool canReorder;
   final bool canShare;
+  final bool canSync;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final hasRate = ledger.exchangeRateToCNY != 1.0;
+    final syncStatusValue = syncStatus.valueOrNull;
+    final hasPendingSync = syncStatusValue?.hasPending == true;
     final localManualPeople = ledger.personUuids
         .map((uuid) => personOrFallback(peopleById, uuid, name: '人员'))
         .where((person) => person.linkedUserUuid == null && !person.isDeleted)
@@ -267,6 +282,8 @@ class _LedgerCard extends StatelessWidget {
                                   text:
                                       '1 ${ledger.baseCurrencyCode} = ${ledger.exchangeRateToCNY.toStringAsFixed(4)} CNY',
                                 ),
+                              if (hasPendingSync)
+                                _SyncMetaChip(status: syncStatusValue!),
                             ],
                           ),
                         ],
@@ -282,6 +299,12 @@ class _LedgerCard extends StatelessWidget {
                         tooltip: '分享邀请',
                         icon: const Icon(Icons.ios_share_rounded),
                         onPressed: onShare,
+                      ),
+                    if (canSync && hasPendingSync)
+                      IconButton(
+                        tooltip: '同步未同步流水',
+                        icon: const Icon(Icons.sync_rounded),
+                        onPressed: onSync,
                       ),
                     if (canReorder)
                       Tooltip(
@@ -600,6 +623,49 @@ class _MetaChip extends StatelessWidget {
           color: colorScheme.onSurfaceVariant,
           fontWeight: FontWeight.w700,
         ),
+      ),
+    );
+  }
+}
+
+class _SyncMetaChip extends StatelessWidget {
+  const _SyncMetaChip({required this.status});
+
+  final LedgerSyncStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final failed = status.hasFailed;
+    final color = failed ? colorScheme.error : colorScheme.tertiary;
+    final text = failed
+        ? '${status.failedCount}/${status.pendingCount} 条同步失败'
+        : '${status.pendingCount} 条待同步';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            failed ? Icons.error_outline_rounded : Icons.sync_rounded,
+            size: 14,
+            color: color,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
       ),
     );
   }
