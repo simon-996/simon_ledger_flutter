@@ -35,9 +35,14 @@ class LedgerListTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final token = ref.watch(authTokenProvider).valueOrNull;
     final isCloudMode = token != null && token.isValid;
-    final peopleById = ref
-        .watch(personNotifierProvider(includeDeleted: true))
-        .maybeWhen(data: peopleByUuid, orElse: () => const <String, Person>{});
+    final peopleById = isCloudMode
+        ? const <String, Person>{}
+        : ref
+              .watch(personNotifierProvider(includeDeleted: true))
+              .maybeWhen(
+                data: peopleByUuid,
+                orElse: () => const <String, Person>{},
+              );
 
     if (ledgers.isEmpty) {
       return AppEmptyState(
@@ -110,6 +115,7 @@ class LedgerListTab extends ConsumerWidget {
               expense: stats['expense'] ?? 0,
               balance: stats['balance'] ?? 0,
               peopleById: peopleById,
+              isCloudMode: isCloudMode,
               index: index,
               onTap: () => onTap(ledger),
               onEdit: () => onEdit(ledger),
@@ -160,6 +166,7 @@ class _LedgerCard extends StatelessWidget {
     required this.expense,
     required this.balance,
     required this.peopleById,
+    required this.isCloudMode,
     required this.index,
     required this.onTap,
     required this.onEdit,
@@ -173,6 +180,7 @@ class _LedgerCard extends StatelessWidget {
   final double expense;
   final double balance;
   final Map<String, Person> peopleById;
+  final bool isCloudMode;
   final int index;
   final VoidCallback onTap;
   final VoidCallback onEdit;
@@ -184,7 +192,7 @@ class _LedgerCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final hasRate = ledger.exchangeRateToCNY != 1.0;
-    final manualPeople = ledger.personUuids
+    final localManualPeople = ledger.personUuids
         .map((uuid) => personOrFallback(peopleById, uuid, name: '人员'))
         .where((person) => person.linkedUserUuid == null)
         .toList();
@@ -294,10 +302,13 @@ class _LedgerCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 16),
-                if (ledger.members.isNotEmpty || manualPeople.isNotEmpty) ...[
+                if (ledger.members.isNotEmpty ||
+                    ledger.personUuids.isNotEmpty) ...[
                   _LedgerPeopleRows(
+                    ledger: ledger,
                     sharedMembers: ledger.members,
-                    manualPeople: manualPeople,
+                    localManualPeople: localManualPeople,
+                    isCloudMode: isCloudMode,
                   ),
                   const SizedBox(height: 14),
                 ],
@@ -339,12 +350,16 @@ class _LedgerCard extends StatelessWidget {
 
 class _LedgerPeopleRows extends StatelessWidget {
   const _LedgerPeopleRows({
+    required this.ledger,
     required this.sharedMembers,
-    required this.manualPeople,
+    required this.localManualPeople,
+    required this.isCloudMode,
   });
 
+  final Ledger ledger;
   final List<LedgerMemberSummary> sharedMembers;
-  final List<Person> manualPeople;
+  final List<Person> localManualPeople;
+  final bool isCloudMode;
 
   @override
   Widget build(BuildContext context) {
@@ -362,19 +377,12 @@ class _LedgerPeopleRows extends StatelessWidget {
               );
             }).toList(),
           ),
-        if (sharedMembers.isNotEmpty && manualPeople.isNotEmpty)
-          const SizedBox(height: 8),
-        if (manualPeople.isNotEmpty)
-          _LedgerPeopleLine(
-            label: '账本人员',
-            children: manualPeople.map((person) {
-              return _LedgerPersonChip(
-                avatar: person.avatar,
-                name: person.name,
-                tooltip: person.name,
-              );
-            }).toList(),
-          ),
+        _ManualPeopleLine(
+          ledger: ledger,
+          localManualPeople: localManualPeople,
+          isCloudMode: isCloudMode,
+          topPadding: sharedMembers.isNotEmpty ? 8 : 0,
+        ),
       ],
     );
   }
@@ -387,6 +395,100 @@ class _LedgerPeopleRows extends StatelessWidget {
       'viewer' => ' · 查看',
       _ => '',
     };
+  }
+}
+
+class _ManualPeopleLine extends ConsumerWidget {
+  const _ManualPeopleLine({
+    required this.ledger,
+    required this.localManualPeople,
+    required this.isCloudMode,
+    required this.topPadding,
+  });
+
+  final Ledger ledger;
+  final List<Person> localManualPeople;
+  final bool isCloudMode;
+  final double topPadding;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!isCloudMode) {
+      return _buildLine(localManualPeople);
+    }
+
+    final peopleAsyncValue = ref.watch(
+      personNotifierProvider(includeDeleted: false, ledgerUuid: ledger.uuid),
+    );
+
+    return peopleAsyncValue.maybeWhen(
+      data: (people) {
+        final manualPeople = people
+            .where((person) => ledger.personUuids.contains(person.uuid))
+            .where((person) => person.linkedUserUuid == null)
+            .toList();
+        return _buildLine(manualPeople);
+      },
+      loading: () => _buildLoading(context),
+      orElse: () => _buildLine(
+        ledger.personUuids
+            .map((uuid) => personOrFallback(const {}, uuid, name: '人员'))
+            .toList(),
+      ),
+    );
+  }
+
+  Widget _buildLine(List<Person> manualPeople) {
+    if (manualPeople.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: EdgeInsets.only(top: topPadding),
+      child: _LedgerPeopleLine(
+        label: '账本人员',
+        children: manualPeople.map((person) {
+          return _LedgerPersonChip(
+            avatar: person.avatar,
+            name: person.name,
+            tooltip: person.name,
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildLoading(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: EdgeInsets.only(top: topPadding),
+      child: _LedgerPeopleLine(
+        label: '账本人员',
+        children: [
+          Container(
+            width: 72,
+            height: 30,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.68),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: colorScheme.outlineVariant.withValues(alpha: 0.72),
+              ),
+            ),
+            child: SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: colorScheme.primary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

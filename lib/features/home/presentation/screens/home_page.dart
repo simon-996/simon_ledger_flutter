@@ -216,6 +216,11 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     try {
       await ref.read(ledgerNotifierProvider.notifier).updateLedger(ledger);
+      await _syncRemoteLedgerPeopleSelection(
+        ledger.uuid,
+        oldPersonUuids,
+        result.personIds,
+      );
     } catch (e) {
       ledger.name = oldName;
       ledger.baseCurrencyCode = oldBaseCurrencyCode;
@@ -223,6 +228,31 @@ class _HomePageState extends ConsumerState<HomePage> {
       ledger.personUuids = oldPersonUuids;
       _showWriteError(e);
     }
+  }
+
+  Future<void> _syncRemoteLedgerPeopleSelection(
+    String ledgerUuid,
+    List<String> oldPersonUuids,
+    List<String> newPersonUuids,
+  ) async {
+    final token = await ref.read(authTokenProvider.future);
+    if (token == null || !token.isValid) {
+      return;
+    }
+
+    final removedPersonUuids = oldPersonUuids
+        .where((uuid) => !newPersonUuids.contains(uuid))
+        .toList();
+    if (removedPersonUuids.isEmpty) {
+      return;
+    }
+
+    final personRepository = ref.read(personRepositoryProvider);
+    for (final personUuid in removedPersonUuids) {
+      await personRepository.deletePerson(personUuid, ledgerUuid: ledgerUuid);
+    }
+    ref.invalidate(personNotifierProvider);
+    ref.invalidate(ledgerNotifierProvider);
   }
 
   void _deleteLedger(Ledger ledger) async {
