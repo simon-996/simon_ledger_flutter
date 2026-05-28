@@ -4,8 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/di/providers.dart';
 import '../../../../core/models/ledger.dart';
 import '../../../../core/models/money.dart';
+import '../../../../core/models/person.dart';
+import '../../../../core/models/person_lookup.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
+import '../../../people_pool/presentation/providers/person_provider.dart';
 import '../providers/ledger_provider.dart';
 
 class LedgerListTab extends ConsumerWidget {
@@ -32,6 +35,9 @@ class LedgerListTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final token = ref.watch(authTokenProvider).valueOrNull;
     final isCloudMode = token != null && token.isValid;
+    final peopleById = ref
+        .watch(personNotifierProvider(includeDeleted: true))
+        .maybeWhen(data: peopleByUuid, orElse: () => const <String, Person>{});
 
     if (ledgers.isEmpty) {
       return AppEmptyState(
@@ -103,6 +109,7 @@ class LedgerListTab extends ConsumerWidget {
               income: stats['income'] ?? 0,
               expense: stats['expense'] ?? 0,
               balance: stats['balance'] ?? 0,
+              peopleById: peopleById,
               index: index,
               onTap: () => onTap(ledger),
               onEdit: () => onEdit(ledger),
@@ -152,6 +159,7 @@ class _LedgerCard extends StatelessWidget {
     required this.income,
     required this.expense,
     required this.balance,
+    required this.peopleById,
     required this.index,
     required this.onTap,
     required this.onEdit,
@@ -164,6 +172,7 @@ class _LedgerCard extends StatelessWidget {
   final double income;
   final double expense;
   final double balance;
+  final Map<String, Person> peopleById;
   final int index;
   final VoidCallback onTap;
   final VoidCallback onEdit;
@@ -175,6 +184,10 @@ class _LedgerCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final hasRate = ledger.exchangeRateToCNY != 1.0;
+    final manualPeople = ledger.personUuids
+        .map((uuid) => personOrFallback(peopleById, uuid, name: '人员'))
+        .where((person) => person.linkedUserUuid == null)
+        .toList();
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -281,8 +294,11 @@ class _LedgerCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 16),
-                if (ledger.members.isNotEmpty) ...[
-                  _LedgerMembersRow(ledger: ledger),
+                if (ledger.members.isNotEmpty || manualPeople.isNotEmpty) ...[
+                  _LedgerPeopleRows(
+                    sharedMembers: ledger.members,
+                    manualPeople: manualPeople,
+                  ),
                   const SizedBox(height: 14),
                 ],
                 Row(
@@ -321,59 +337,45 @@ class _LedgerCard extends StatelessWidget {
   }
 }
 
-class _LedgerMembersRow extends StatelessWidget {
-  const _LedgerMembersRow({required this.ledger});
+class _LedgerPeopleRows extends StatelessWidget {
+  const _LedgerPeopleRows({
+    required this.sharedMembers,
+    required this.manualPeople,
+  });
 
-  final Ledger ledger;
+  final List<LedgerMemberSummary> sharedMembers;
+  final List<Person> manualPeople;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: ledger.members.map((member) {
-        return Tooltip(
-          message: '${member.displayName}${_roleLabel(member.role)}',
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 156),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.68),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(
-                color: colorScheme.outlineVariant.withValues(alpha: 0.72),
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircleAvatar(
-                  radius: 13,
-                  backgroundColor: colorScheme.surfaceContainerHighest,
-                  child: Text(
-                    member.displayAvatar,
-                    style: const TextStyle(fontSize: 13),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    member.displayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: colorScheme.onSurface,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (sharedMembers.isNotEmpty)
+          _LedgerPeopleLine(
+            label: '共享成员',
+            children: sharedMembers.map((member) {
+              return _LedgerPersonChip(
+                avatar: member.displayAvatar,
+                name: member.displayName,
+                tooltip: '${member.displayName}${_roleLabel(member.role)}',
+              );
+            }).toList(),
           ),
-        );
-      }).toList(),
+        if (sharedMembers.isNotEmpty && manualPeople.isNotEmpty)
+          const SizedBox(height: 8),
+        if (manualPeople.isNotEmpty)
+          _LedgerPeopleLine(
+            label: '账本人员',
+            children: manualPeople.map((person) {
+              return _LedgerPersonChip(
+                avatar: person.avatar,
+                name: person.name,
+                tooltip: person.name,
+              );
+            }).toList(),
+          ),
+      ],
     );
   }
 
@@ -385,6 +387,93 @@ class _LedgerMembersRow extends StatelessWidget {
       'viewer' => ' · 查看',
       _ => '',
     };
+  }
+}
+
+class _LedgerPeopleLine extends StatelessWidget {
+  const _LedgerPeopleLine({required this.label, required this.children});
+
+  final String label;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 62,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 7),
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(child: Wrap(spacing: 8, runSpacing: 8, children: children)),
+      ],
+    );
+  }
+}
+
+class _LedgerPersonChip extends StatelessWidget {
+  const _LedgerPersonChip({
+    required this.avatar,
+    required this.name,
+    required this.tooltip,
+  });
+
+  final String avatar;
+  final String name;
+  final String tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Tooltip(
+      message: tooltip,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 156),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.68),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.72),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(
+              radius: 13,
+              backgroundColor: colorScheme.surfaceContainerHighest,
+              child: Text(avatar, style: const TextStyle(fontSize: 13)),
+            ),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: colorScheme.onSurface,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
