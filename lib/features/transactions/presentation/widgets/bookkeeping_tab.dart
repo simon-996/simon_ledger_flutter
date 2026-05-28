@@ -925,6 +925,10 @@ class _LedgerPickerItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final metadataStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
+      color: colorScheme.onSurfaceVariant.withValues(alpha: 0.72),
+      fontWeight: FontWeight.w500,
+    );
 
     return Material(
       color: selected
@@ -959,43 +963,97 @@ class _LedgerPickerItem extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      ledger.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            ledger.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w900),
+                          ),
+                        ),
+                        if (selected) ...[
+                          const SizedBox(width: 8),
+                          Icon(
+                            Icons.check_circle_rounded,
+                            color: colorScheme.primary,
+                            size: 20,
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      [
-                        ledger.displayCode,
-                        ledger.baseCurrencyCode,
-                        if (ledger.isShared) '${ledger.memberCount} 人共享',
-                      ].join(' · '),
+                      ledger.displayCode,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: metadataStyle,
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        _LedgerMetaChip(
+                          icon: Icons.currency_exchange_rounded,
+                          label: ledger.baseCurrencyCode,
+                        ),
+                        if (ledger.isShared)
+                          _LedgerMetaChip(
+                            icon: Icons.group_outlined,
+                            label: '${ledger.memberCount} 人共享',
+                          )
+                        else
+                          const _LedgerMetaChip(
+                            icon: Icons.person_outline_rounded,
+                            label: '个人账本',
+                          ),
+                      ],
                     ),
                   ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              AnimatedOpacity(
-                opacity: selected ? 1 : 0,
-                duration: AppMotion.fast,
-                child: Icon(
-                  Icons.check_circle_rounded,
-                  color: colorScheme.primary,
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _LedgerMetaChip extends StatelessWidget {
+  const _LedgerMetaChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: colorScheme.onSurfaceVariant),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }
