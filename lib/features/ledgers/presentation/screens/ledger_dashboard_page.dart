@@ -475,17 +475,45 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                                   ),
                                   child: AppSectionHeader(
                                     title: '人员结余',
-                                    trailing: _selectedFilterPersonUuids.isEmpty
-                                        ? null
-                                        : TextButton(
-                                            onPressed: () {
-                                              setState(
-                                                _selectedFilterPersonUuids
-                                                    .clear,
-                                              );
-                                            },
-                                            child: const Text('清除筛选'),
-                                          ),
+                                    trailing: SizedBox(
+                                      height: 32,
+                                      child: AnimatedSwitcher(
+                                        duration: AppMotion.fast,
+                                        child:
+                                            _selectedFilterPersonUuids.isEmpty
+                                            ? const SizedBox(
+                                                key: ValueKey(
+                                                  'empty-filter-action',
+                                                ),
+                                                width: 1,
+                                              )
+                                            : TextButton(
+                                                key: const ValueKey(
+                                                  'clear-filter-action',
+                                                ),
+                                                style: TextButton.styleFrom(
+                                                  minimumSize: const Size(
+                                                    0,
+                                                    32,
+                                                  ),
+                                                  tapTargetSize:
+                                                      MaterialTapTargetSize
+                                                          .shrinkWrap,
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 10,
+                                                      ),
+                                                ),
+                                                onPressed: () {
+                                                  setState(
+                                                    _selectedFilterPersonUuids
+                                                        .clear,
+                                                  );
+                                                },
+                                                child: const Text('清除筛选'),
+                                              ),
+                                      ),
+                                    ),
                                   ),
                                 ),
                                 SizedBox(
