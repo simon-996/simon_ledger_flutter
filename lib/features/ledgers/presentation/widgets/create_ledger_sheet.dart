@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/di/providers.dart';
 import '../../../../core/models/ledger.dart';
+import '../../../../core/models/local_profile.dart';
 import '../../../../core/models/person.dart';
 import '../../../../core/network/friendly_error.dart';
+import '../../../../core/repositories/auth_repository.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../people_pool/presentation/widgets/person_edit_dialog.dart';
@@ -37,14 +39,16 @@ class CreateLedgerSheet extends ConsumerStatefulWidget {
 }
 
 class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
+  static const _draftSelfPersonUuid = '__self__';
+
   late final TextEditingController _nameController;
   late final TextEditingController _rateController;
   final FocusNode _nameFocus = FocusNode();
   late String _baseCurrencyCode;
-  late bool _includeSelf;
 
   final Set<String> _selectedPersonIds = {};
   final List<Person> _draftPeople = [];
+  bool _draftSelfDeselected = false;
   bool _submitting = false;
 
   @override
@@ -57,7 +61,6 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
     _rateController = TextEditingController(
       text: widget.existingLedger?.exchangeRateToCNY.toString() ?? '1.0',
     );
-    _includeSelf = widget.existingLedger == null;
 
     if (widget.existingLedger != null) {
       _selectedPersonIds.addAll(widget.existingLedger!.personUuids);
@@ -219,6 +222,10 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
   }
 
   void _showPersonOptions(Person person) {
+    if (person.uuid == _draftSelfPersonUuid) {
+      return;
+    }
+
     showModalBottomSheet(
       context: context,
       builder: (context) => SafeArea(
@@ -264,10 +271,13 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
     final isDraftPeopleMode = isCloudMode && widget.existingLedger == null;
     final canManagePeople =
         !isCloudMode || personLedgerUuid != null || isDraftPeopleMode;
-    final localProfile = ref.watch(localProfileProvider).valueOrNull;
-    final selectedPeopleCount =
-        _selectedPersonIds.length +
-        (_includeSelf && widget.existingLedger == null ? 1 : 0);
+    final localProfileAsync = ref.watch(localProfileProvider);
+    final localProfile = localProfileAsync.valueOrNull;
+    final currentUser = ref.watch(currentUserProvider).valueOrNull;
+    final effectiveSelectedPersonIds = _effectiveSelectedPersonIds(
+      isDraftPeopleMode,
+    );
+    final selectedPeopleCount = effectiveSelectedPersonIds.length;
     final peopleAsyncValue = canManagePeople && !isDraftPeopleMode
         ? ref.watch(
             personNotifierProvider(
@@ -375,31 +385,19 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
                               ),
                             ),
                             const SizedBox(height: 12),
-                            if (widget.existingLedger == null) ...[
-                              _IncludeSelfTile(
-                                label:
-                                    '加入${localProfile?.normalizedNickname ?? '本人'}',
-                                description: isCloudMode
-                                    ? '创建时同步加入账本'
-                                    : '创建后自动加入本地身份',
-                                value: _includeSelf,
-                                onChanged: (value) {
-                                  setState(() => _includeSelf = value);
-                                },
-                              ),
-                              const SizedBox(height: 12),
-                            ],
                             if (isDraftPeopleMode)
                               _DraftPeopleSelector(
-                                people: _draftPeople,
-                                selectedPersonIds: _selectedPersonIds,
+                                people: [
+                                  _buildDraftSelfPerson(
+                                    localProfile,
+                                    currentUser,
+                                  ),
+                                  ..._draftPeople,
+                                ],
+                                selectedPersonIds: effectiveSelectedPersonIds,
                                 onToggle: (person, selected) {
                                   setState(() {
-                                    if (selected) {
-                                      _selectedPersonIds.add(person.uuid);
-                                    } else {
-                                      _selectedPersonIds.remove(person.uuid);
-                                    }
+                                    _togglePersonSelection(person, selected);
                                   });
                                 },
                                 onLongPress: _showPersonOptions,
@@ -420,37 +418,21 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
                                   ),
                                 ),
                                 data: (peoplePool) {
-                                  if (widget.existingLedger == null &&
-                                      _selectedPersonIds.isEmpty &&
-                                      !_includeSelf &&
-                                      peoplePool.isNotEmpty) {
-                                    WidgetsBinding.instance
-                                        .addPostFrameCallback((_) {
-                                          if (!mounted) return;
-                                          final self = peoplePool.firstWhere(
-                                            (p) => p.name == '自己',
-                                            orElse: () => peoplePool.first,
-                                          );
-                                          setState(
-                                            () => _selectedPersonIds.add(
-                                              self.uuid,
-                                            ),
-                                          );
-                                        });
-                                  }
+                                  _selectDefaultSelfPerson(
+                                    peoplePool,
+                                    localProfile,
+                                    currentUser,
+                                  );
 
                                   return _PeopleSelector(
                                     people: peoplePool,
                                     selectedPersonIds: _selectedPersonIds,
                                     onToggle: (person, selected) {
                                       setState(() {
-                                        if (selected) {
-                                          _selectedPersonIds.add(person.uuid);
-                                        } else {
-                                          _selectedPersonIds.remove(
-                                            person.uuid,
-                                          );
-                                        }
+                                        _togglePersonSelection(
+                                          person,
+                                          selected,
+                                        );
                                       });
                                     },
                                     onLongPress: _showPersonOptions,
@@ -509,7 +491,7 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
         exchangeRateToCNY: rate,
         personIds: _selectedPersonIds.toList(),
         people: people,
-        includeSelf: _includeSelf,
+        includeSelf: _shouldIncludeSelfFallback,
       ),
     );
   }
@@ -522,7 +504,7 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
     final selectedPeople = _draftPeople
         .where((person) => _selectedPersonIds.contains(person.uuid))
         .toList();
-    if (!_includeSelf) {
+    if (_draftSelfDeselected) {
       return selectedPeople;
     }
 
@@ -539,6 +521,87 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
         ..linkedUserUuid = user.uuid,
       ...selectedPeople,
     ];
+  }
+
+  bool get _shouldIncludeSelfFallback {
+    if (widget.existingLedger != null) {
+      return false;
+    }
+    if (_isDraftPeopleMode) {
+      return !_draftSelfDeselected;
+    }
+    return false;
+  }
+
+  Set<String> _effectiveSelectedPersonIds(bool isDraftPeopleMode) {
+    if (!isDraftPeopleMode || widget.existingLedger != null) {
+      return _selectedPersonIds;
+    }
+    if (_draftSelfDeselected) {
+      return _selectedPersonIds;
+    }
+    return {_draftSelfPersonUuid, ..._selectedPersonIds};
+  }
+
+  Person _buildDraftSelfPerson(LocalProfile? profile, AuthUser? user) {
+    return Person()
+      ..uuid = _draftSelfPersonUuid
+      ..name = profile?.normalizedNickname ?? user?.nickname ?? '本人'
+      ..avatar = profile?.personAvatar ?? user?.avatar ?? '😎'
+      ..linkedUserUuid = user?.uuid;
+  }
+
+  void _togglePersonSelection(Person person, bool selected) {
+    if (person.uuid == _draftSelfPersonUuid) {
+      _draftSelfDeselected = !selected;
+      return;
+    }
+    if (selected) {
+      _selectedPersonIds.add(person.uuid);
+    } else {
+      _selectedPersonIds.remove(person.uuid);
+    }
+  }
+
+  void _selectDefaultSelfPerson(
+    List<Person> peoplePool,
+    LocalProfile? localProfile,
+    AuthUser? currentUser,
+  ) {
+    if (widget.existingLedger != null ||
+        _isDraftPeopleMode ||
+        _selectedPersonIds.isNotEmpty ||
+        peoplePool.isEmpty) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _selectedPersonIds.isNotEmpty) return;
+      final self = _findSelfPerson(peoplePool, localProfile, currentUser);
+      if (self == null) return;
+      setState(() => _selectedPersonIds.add(self.uuid));
+    });
+  }
+
+  Person? _findSelfPerson(
+    List<Person> peoplePool,
+    LocalProfile? localProfile,
+    AuthUser? currentUser,
+  ) {
+    final nickname = localProfile?.normalizedNickname.trim();
+    for (final person in peoplePool) {
+      final isSelfUuid = person.uuid == 'self' || person.uuid == 'p1';
+      final isLinkedUser =
+          currentUser != null && person.linkedUserUuid == currentUser.uuid;
+      final isProfileName =
+          nickname != null &&
+          nickname.isNotEmpty &&
+          person.name.trim() == nickname;
+      if (isSelfUuid || isLinkedUser || isProfileName || person.name == '自己') {
+        return person;
+      }
+    }
+    return peoplePool.firstOrNull;
   }
 }
 
@@ -636,78 +699,6 @@ class _CountPill extends StatelessWidget {
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
           color: colorScheme.primary,
           fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
-  }
-}
-
-class _IncludeSelfTile extends StatelessWidget {
-  const _IncludeSelfTile({
-    required this.label,
-    required this.description,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final String label;
-  final String description;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: () => onChanged(!value),
-      child: AnimatedContainer(
-        duration: AppMotion.fast,
-        curve: AppMotion.standard,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: value
-              ? colorScheme.primaryContainer.withValues(alpha: 0.5)
-              : colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: value ? colorScheme.primary : colorScheme.outlineVariant,
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              value ? Icons.check_circle_rounded : Icons.person_outline_rounded,
-              color: value ? colorScheme.primary : colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    description,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Switch(value: value, onChanged: onChanged),
-          ],
         ),
       ),
     );
