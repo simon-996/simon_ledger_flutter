@@ -443,7 +443,26 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                               decoration: InputDecoration(
                                 labelText: '金额',
                                 hintText: '0.00',
+                                hintStyle: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant
+                                          .withValues(alpha: 0.62),
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                 prefixText: '${_selectedCurrency ?? 'CNY'} ',
+                                prefixStyle: Theme.of(context)
+                                    .textTheme
+                                    .labelLarge
+                                    ?.copyWith(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
+                                      fontWeight: FontWeight.w800,
+                                    ),
                               ),
                               onChanged: _limitAmountPrecision,
                             ),
@@ -1442,16 +1461,6 @@ class _CurrencyQuickItem extends StatelessWidget {
                   ? MainAxisAlignment.center
                   : MainAxisAlignment.start,
               children: [
-                Icon(
-                  label == 'CNY'
-                      ? Icons.currency_yuan_rounded
-                      : Icons.currency_exchange_rounded,
-                  size: 18,
-                  color: selected
-                      ? colorScheme.primary
-                      : colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 6),
                 Flexible(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
