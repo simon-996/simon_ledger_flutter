@@ -25,12 +25,18 @@ class Ledger {
 
   String? syncedRemoteUuid;
 
+  bool pendingSync = false;
+
+  String? syncError;
+
   bool get isShared => memberCount > 1 || members.length > 1;
 
   bool get isLocalTemporary => !_looksLikeRemoteUuid(uuid);
 
   bool get hasSyncedRemoteCopy =>
       syncedRemoteUuid != null && syncedRemoteUuid!.isNotEmpty;
+
+  String get remoteSyncUuid => hasSyncedRemoteCopy ? syncedRemoteUuid! : uuid;
 
   String get displayCode {
     final normalizedUuid = uuid.trim();

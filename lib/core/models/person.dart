@@ -10,4 +10,10 @@ class Person {
   String? linkedUserUuid;
 
   bool isDeleted = false; // Soft delete flag
+
+  bool pendingSync = false;
+
+  String? syncError;
+
+  String? pendingLedgerUuid;
 }

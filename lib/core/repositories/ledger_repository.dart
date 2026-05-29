@@ -71,6 +71,7 @@ class RemoteLedgerRepository implements LedgerRepository {
   Future<List<Ledger>> getAllLedgers({bool includeDeleted = false}) async {
     try {
       await _syncPendingLocalLedgers();
+      await _syncPendingLedgerWrites();
       final ledgers = await _apiClient.get<List<Ledger>>(
         '/api/ledgers',
         fromJson: (json) =>
@@ -123,29 +124,49 @@ class RemoteLedgerRepository implements LedgerRepository {
       'exchangeRateToCny': ledger.exchangeRateToCNY,
     };
 
-    if (!_looksLikeRemoteUuid(ledger.uuid)) {
-      final saved = await _apiClient.post<Ledger>(
-        '/api/ledgers',
-        data: data,
-        idempotencyKey: ledger.uuid,
-        fromJson: _ledgerFromJson,
-      );
+    await _db.saveLedger(
       ledger
-        ..uuid = saved.uuid
-        ..name = saved.name
-        ..baseCurrencyCode = saved.baseCurrencyCode
-        ..exchangeRateToCNY = saved.exchangeRateToCNY;
-      await _db.saveLedger(ledger);
+        ..pendingSync = true
+        ..syncError = null,
+    );
+
+    if (!ledger.hasSyncedRemoteCopy && !_looksLikeRemoteUuid(ledger.uuid)) {
+      try {
+        final saved = await _apiClient.post<Ledger>(
+          '/api/ledgers',
+          data: data,
+          idempotencyKey: ledger.uuid,
+          fromJson: _ledgerFromJson,
+        );
+        ledger
+          ..syncedRemoteUuid = saved.uuid
+          ..name = saved.name
+          ..baseCurrencyCode = saved.baseCurrencyCode
+          ..exchangeRateToCNY = saved.exchangeRateToCNY
+          ..pendingSync = false
+          ..syncError = null;
+        await _db.saveLedger(ledger);
+      } catch (error) {
+        await _db.saveLedger(ledger..syncError = error.toString());
+      }
       return;
     }
 
-    await _apiClient.put<Ledger>(
-      '/api/ledgers/${ledger.uuid}',
-      data: data,
-      idempotencyKey: _operationKey('update-ledger', ledger.uuid),
-      fromJson: _ledgerFromJson,
-    );
-    await _db.saveLedger(ledger);
+    try {
+      await _apiClient.put<Ledger>(
+        '/api/ledgers/${ledger.remoteSyncUuid}',
+        data: data,
+        idempotencyKey: _operationKey('update-ledger', ledger.remoteSyncUuid),
+        fromJson: _ledgerFromJson,
+      );
+      await _db.saveLedger(
+        ledger
+          ..pendingSync = false
+          ..syncError = null,
+      );
+    } catch (error) {
+      await _db.saveLedger(ledger..syncError = error.toString());
+    }
   }
 
   @override
@@ -198,13 +219,15 @@ class RemoteLedgerRepository implements LedgerRepository {
   }
 
   Future<void> _syncPendingLocalLedgers() async {
-    final cachedLedgers = await _db.getAllLedgers(includeDeleted: false);
+    final cachedLedgers = await _db.getAllLedgers(includeDeleted: true);
     final cachedPeople = await _db.getAllPeople(includeDeleted: false);
     final peopleByUuid = {
       for (final person in cachedPeople) person.uuid: person,
     };
     for (final ledger in cachedLedgers) {
-      if (_looksLikeRemoteUuid(ledger.uuid) || ledger.hasSyncedRemoteCopy) {
+      if (_looksLikeRemoteUuid(ledger.uuid) ||
+          ledger.hasSyncedRemoteCopy ||
+          ledger.isDeleted) {
         continue;
       }
 
@@ -217,8 +240,28 @@ class RemoteLedgerRepository implements LedgerRepository {
       final remoteLedgerUuid = created.ledger.uuid;
       ledger
         ..uuid = localLedgerUuid
-        ..syncedRemoteUuid = remoteLedgerUuid;
+        ..syncedRemoteUuid = remoteLedgerUuid
+        ..pendingSync = false
+        ..syncError = null;
       await _db.saveLedger(ledger);
+    }
+  }
+
+  Future<void> _syncPendingLedgerWrites() async {
+    final cachedLedgers = await _db.getAllLedgers(includeDeleted: true);
+    for (final ledger in cachedLedgers) {
+      if (!ledger.pendingSync) {
+        continue;
+      }
+      if (ledger.isDeleted) {
+        try {
+          await _deleteRemoteLedger(ledger);
+        } catch (error) {
+          await _db.saveLedger(ledger..syncError = error.toString());
+        }
+      } else {
+        await saveLedger(ledger);
+      }
     }
   }
 
@@ -241,11 +284,42 @@ class RemoteLedgerRepository implements LedgerRepository {
 
   @override
   Future<void> deleteLedger(String uuid) async {
-    await _apiClient.deleteVoid(
-      '/api/ledgers/$uuid',
-      idempotencyKey: 'delete-ledger-$uuid',
-    );
     await _db.deleteLedger(uuid);
+    final ledgers = await _db.getAllLedgers(includeDeleted: true);
+    final ledger = ledgers.where((item) => item.uuid == uuid).firstOrNull;
+    if (ledger == null) {
+      return;
+    }
+    await _db.saveLedger(
+      ledger
+        ..pendingSync = true
+        ..syncError = null,
+    );
+    try {
+      await _deleteRemoteLedger(ledger);
+    } catch (error) {
+      await _db.saveLedger(ledger..syncError = error.toString());
+    }
+  }
+
+  Future<void> _deleteRemoteLedger(Ledger ledger) async {
+    if (!_looksLikeRemoteUuid(ledger.remoteSyncUuid)) {
+      await _db.saveLedger(
+        ledger
+          ..pendingSync = false
+          ..syncError = null,
+      );
+      return;
+    }
+    await _apiClient.deleteVoid(
+      '/api/ledgers/${ledger.remoteSyncUuid}',
+      idempotencyKey: 'delete-ledger-${ledger.remoteSyncUuid}',
+    );
+    await _db.saveLedger(
+      ledger
+        ..pendingSync = false
+        ..syncError = null,
+    );
   }
 
   static Ledger _ledgerFromJson(Object? json) {

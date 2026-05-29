@@ -346,6 +346,15 @@ class _LedgerCard extends StatelessWidget {
                                       : '本地临时 · 待同步',
                                   emphasized: !ledger.hasSyncedRemoteCopy,
                                 ),
+                              if (isCloudMode &&
+                                  ledger.pendingSync &&
+                                  !ledger.isLocalTemporary)
+                                _MetaChip(
+                                  text: ledger.syncError?.isNotEmpty == true
+                                      ? '账本同步失败'
+                                      : '账本待同步',
+                                  emphasized: true,
+                                ),
                               if (ledger.isShared)
                                 _MetaChip(
                                   text: '共享中 · ${ledger.memberCount} 人',

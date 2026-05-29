@@ -108,6 +108,67 @@ void main() {
   );
 
   test(
+    'RemoteLedgerRepository saves remote ledger edits locally while offline',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final database = DatabaseService();
+      await database.saveLedger(
+        Ledger()
+          ..uuid = _remoteLedgerUuid
+          ..name = '旧名称'
+          ..baseCurrencyCode = 'CNY'
+          ..exchangeRateToCNY = 1,
+      );
+      final repository = RemoteLedgerRepository(
+        apiClient: _OfflineApiClient(),
+        database: database,
+      );
+
+      await repository.saveLedger(
+        Ledger()
+          ..uuid = _remoteLedgerUuid
+          ..name = '新名称'
+          ..baseCurrencyCode = 'CNY'
+          ..exchangeRateToCNY = 1,
+      );
+
+      final ledger = (await database.getAllLedgers()).single;
+      expect(ledger.name, '新名称');
+      expect(ledger.pendingSync, isTrue);
+      expect(ledger.syncError, isNotEmpty);
+    },
+  );
+
+  test(
+    'RemoteLedgerRepository deletes remote ledger locally while offline',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final database = DatabaseService();
+      await database.saveLedger(
+        Ledger()
+          ..uuid = _remoteLedgerUuid
+          ..name = '云端账本'
+          ..baseCurrencyCode = 'CNY'
+          ..exchangeRateToCNY = 1,
+      );
+      final repository = RemoteLedgerRepository(
+        apiClient: _OfflineApiClient(),
+        database: database,
+      );
+
+      await repository.deleteLedger(_remoteLedgerUuid);
+
+      expect(await database.getAllLedgers(), isEmpty);
+      final deleted = (await database.getAllLedgers(
+        includeDeleted: true,
+      )).single;
+      expect(deleted.isDeleted, isTrue);
+      expect(deleted.pendingSync, isTrue);
+      expect(deleted.syncError, isNotEmpty);
+    },
+  );
+
+  test(
     'RemotePersonRepository falls back to cached ledger people offline',
     () async {
       SharedPreferences.setMockInitialValues({});
@@ -150,6 +211,34 @@ void main() {
       expect(people.single.name, '历史人员');
     },
   );
+
+  test('RemotePersonRepository saves person locally while offline', () async {
+    SharedPreferences.setMockInitialValues({});
+    final database = DatabaseService();
+    final ledgerRepository = RemoteLedgerRepository(
+      apiClient: _OfflineApiClient(),
+      database: database,
+    );
+    final repository = RemotePersonRepository(
+      apiClient: _OfflineApiClient(),
+      ledgerRepository: ledgerRepository,
+      database: database,
+    );
+
+    await repository.savePerson(
+      Person()
+        ..uuid = 'local-person-1'
+        ..name = '离线人员'
+        ..avatar = '🙂',
+      ledgerUuid: _remoteLedgerUuid,
+    );
+
+    final person = (await database.getAllPeople()).single;
+    expect(person.name, '离线人员');
+    expect(person.pendingSync, isTrue);
+    expect(person.pendingLedgerUuid, _remoteLedgerUuid);
+    expect(person.syncError, isNotEmpty);
+  });
 
   test(
     'RemotePersonRepository keeps deleted people referenced by history offline',
@@ -225,6 +314,21 @@ class _OfflineApiClient extends ApiClient {
     String? idempotencyKey,
     T Function(Object? json)? fromJson,
   }) {
+    throw Exception('offline');
+  }
+
+  @override
+  Future<T> put<T>(
+    String path, {
+    Object? data,
+    String? idempotencyKey,
+    T Function(Object? json)? fromJson,
+  }) {
+    throw Exception('offline');
+  }
+
+  @override
+  Future<void> deleteVoid(String path, {Object? data, String? idempotencyKey}) {
     throw Exception('offline');
   }
 }
