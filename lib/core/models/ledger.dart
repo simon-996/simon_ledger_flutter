@@ -23,7 +23,14 @@ class Ledger {
 
   List<LedgerMemberSummary> members = [];
 
+  String? syncedRemoteUuid;
+
   bool get isShared => memberCount > 1 || members.length > 1;
+
+  bool get isLocalTemporary => !_looksLikeRemoteUuid(uuid);
+
+  bool get hasSyncedRemoteCopy =>
+      syncedRemoteUuid != null && syncedRemoteUuid!.isNotEmpty;
 
   String get displayCode {
     final normalizedUuid = uuid.trim();
@@ -34,6 +41,10 @@ class Ledger {
   }
 
   String get displayNameWithCode => '$name · $displayCode';
+
+  bool _looksLikeRemoteUuid(String value) {
+    return RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(value);
+  }
 }
 
 class LedgerMemberSummary {

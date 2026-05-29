@@ -121,6 +121,7 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
             {'expense': 0.0, 'income': 0.0, 'balance': 0.0};
         final syncStatus = ref.watch(ledgerSyncStatusProvider(ledger.uuid));
         final delayMs = (index < 6 ? index : 6) * 45;
+        final isLocalTemporary = isCloudMode && ledger.isLocalTemporary;
 
         return Dismissible(
           key: ValueKey(ledger.uuid),
@@ -144,8 +145,9 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
               onShare: () => widget.onShare(ledger),
               onSync: () => widget.onSync(ledger),
               canReorder: !isCloudMode,
-              canShare: isCloudMode && _canShare(ledger.role),
-              canSync: isCloudMode,
+              canShare:
+                  isCloudMode && !isLocalTemporary && _canShare(ledger.role),
+              canSync: isCloudMode && !isLocalTemporary,
             ),
           ),
         );
@@ -337,6 +339,13 @@ class _LedgerCard extends StatelessWidget {
                             runSpacing: 6,
                             children: [
                               _MetaChip(text: ledger.baseCurrencyCode),
+                              if (isCloudMode && ledger.isLocalTemporary)
+                                _MetaChip(
+                                  text: ledger.hasSyncedRemoteCopy
+                                      ? '本地临时 · 已同步'
+                                      : '本地临时 · 待同步',
+                                  emphasized: !ledger.hasSyncedRemoteCopy,
+                                ),
                               if (ledger.isShared)
                                 _MetaChip(
                                   text: '共享中 · ${ledger.memberCount} 人',
@@ -667,9 +676,10 @@ class _LedgerPersonChip extends StatelessWidget {
 }
 
 class _MetaChip extends StatelessWidget {
-  const _MetaChip({required this.text});
+  const _MetaChip({required this.text, this.emphasized = false});
 
   final String text;
+  final bool emphasized;
 
   @override
   Widget build(BuildContext context) {
@@ -678,13 +688,17 @@ class _MetaChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.7),
+        color: emphasized
+            ? colorScheme.tertiaryContainer.withValues(alpha: 0.7)
+            : colorScheme.surfaceContainerHigh.withValues(alpha: 0.7),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         text,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: colorScheme.onSurfaceVariant,
+          color: emphasized
+              ? colorScheme.onTertiaryContainer
+              : colorScheme.onSurfaceVariant,
           fontWeight: FontWeight.w700,
         ),
       ),

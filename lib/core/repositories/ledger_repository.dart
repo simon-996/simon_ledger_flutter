@@ -70,34 +70,35 @@ class RemoteLedgerRepository implements LedgerRepository {
   @override
   Future<List<Ledger>> getAllLedgers({bool includeDeleted = false}) async {
     try {
+      await _syncPendingLocalLedgers();
       final ledgers = await _apiClient.get<List<Ledger>>(
         '/api/ledgers',
         fromJson: (json) =>
             (json! as List<dynamic>).map(_ledgerFromJson).toList(),
       );
-      if (ledgers.isEmpty) {
-        return ledgers;
-      }
       final cachedLedgers = await _db.getAllLedgers(includeDeleted: true);
       final cachedPeopleByLedgerUuid = {
         for (final ledger in cachedLedgers) ledger.uuid: ledger.personUuids,
       };
 
-      try {
-        final peopleByLedger = await _apiClient.get<Map<String, List<String>>>(
-          '/api/ledgers/people',
-          queryParameters: {
-            'ledgerUuids': ledgers.map((ledger) => ledger.uuid).join(','),
-          },
-          fromJson: _peopleByLedgerFromJson,
-        );
-        for (final ledger in ledgers) {
-          ledger.personUuids = peopleByLedger[ledger.uuid] ?? const [];
-        }
-      } catch (_) {
-        for (final ledger in ledgers) {
-          ledger.personUuids =
-              cachedPeopleByLedgerUuid[ledger.uuid] ?? const [];
+      if (ledgers.isNotEmpty) {
+        try {
+          final peopleByLedger = await _apiClient
+              .get<Map<String, List<String>>>(
+                '/api/ledgers/people',
+                queryParameters: {
+                  'ledgerUuids': ledgers.map((ledger) => ledger.uuid).join(','),
+                },
+                fromJson: _peopleByLedgerFromJson,
+              );
+          for (final ledger in ledgers) {
+            ledger.personUuids = peopleByLedger[ledger.uuid] ?? const [];
+          }
+        } catch (_) {
+          for (final ledger in ledgers) {
+            ledger.personUuids =
+                cachedPeopleByLedgerUuid[ledger.uuid] ?? const [];
+          }
         }
       }
 
@@ -105,7 +106,10 @@ class RemoteLedgerRepository implements LedgerRepository {
         ledgers[index].sortOrder = index;
         await _db.saveLedger(ledgers[index]);
       }
-      return ledgers;
+      final localTemporaryLedgers = await _localTemporaryLedgers(
+        includeDeleted: includeDeleted,
+      );
+      return [...localTemporaryLedgers, ...ledgers];
     } catch (_) {
       return _db.getAllLedgers(includeDeleted: includeDeleted);
     }
@@ -149,6 +153,22 @@ class RemoteLedgerRepository implements LedgerRepository {
     Ledger ledger,
     List<Person> people,
   ) async {
+    try {
+      return await _createLedgerWithPeopleRemote(ledger, people);
+    } catch (_) {
+      for (final person in people) {
+        await _db.savePerson(person);
+      }
+      ledger.personUuids = people.map((person) => person.uuid).toList();
+      await _db.saveLedger(ledger);
+      return CreatedLedgerWithPeople(ledger: ledger, people: people);
+    }
+  }
+
+  Future<CreatedLedgerWithPeople> _createLedgerWithPeopleRemote(
+    Ledger ledger,
+    List<Person> people,
+  ) async {
     final saved = await _apiClient.post<CreatedLedgerWithPeople>(
       '/api/ledgers/with-people',
       data: {
@@ -161,7 +181,7 @@ class RemoteLedgerRepository implements LedgerRepository {
       fromJson: _createdLedgerWithPeopleFromJson,
     );
 
-    ledger
+    final remoteLedger = ledger
       ..uuid = saved.ledger.uuid
       ..name = saved.ledger.name
       ..baseCurrencyCode = saved.ledger.baseCurrencyCode
@@ -170,11 +190,45 @@ class RemoteLedgerRepository implements LedgerRepository {
       ..role = saved.ledger.role
       ..memberCount = saved.ledger.memberCount
       ..members = saved.ledger.members;
-    await _db.saveLedger(ledger);
+    await _db.saveLedger(remoteLedger);
     for (final person in saved.people) {
       await _db.savePerson(person);
     }
-    return CreatedLedgerWithPeople(ledger: ledger, people: saved.people);
+    return CreatedLedgerWithPeople(ledger: remoteLedger, people: saved.people);
+  }
+
+  Future<void> _syncPendingLocalLedgers() async {
+    final cachedLedgers = await _db.getAllLedgers(includeDeleted: false);
+    final cachedPeople = await _db.getAllPeople(includeDeleted: false);
+    final peopleByUuid = {
+      for (final person in cachedPeople) person.uuid: person,
+    };
+    for (final ledger in cachedLedgers) {
+      if (_looksLikeRemoteUuid(ledger.uuid) || ledger.hasSyncedRemoteCopy) {
+        continue;
+      }
+
+      final people = ledger.personUuids
+          .map((uuid) => peopleByUuid[uuid])
+          .whereType<Person>()
+          .toList();
+      final localLedgerUuid = ledger.uuid;
+      final created = await _createLedgerWithPeopleRemote(ledger, people);
+      final remoteLedgerUuid = created.ledger.uuid;
+      ledger
+        ..uuid = localLedgerUuid
+        ..syncedRemoteUuid = remoteLedgerUuid;
+      await _db.saveLedger(ledger);
+    }
+  }
+
+  Future<List<Ledger>> _localTemporaryLedgers({
+    required bool includeDeleted,
+  }) async {
+    final cachedLedgers = await _db.getAllLedgers(
+      includeDeleted: includeDeleted,
+    );
+    return cachedLedgers.where((ledger) => ledger.isLocalTemporary).toList();
   }
 
   bool _looksLikeRemoteUuid(String uuid) {

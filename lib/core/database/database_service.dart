@@ -269,7 +269,8 @@ class DatabaseService {
       ..members = (json['members'] as List<dynamic>? ?? [])
           .whereType<Map<dynamic, dynamic>>()
           .map((value) => _ledgerMemberFromJson(value.cast<String, dynamic>()))
-          .toList();
+          .toList()
+      ..syncedRemoteUuid = json['syncedRemoteUuid']?.toString();
   }
 
   static Map<String, dynamic> _ledgerToJson(Ledger ledger) {
@@ -285,6 +286,7 @@ class DatabaseService {
       'role': ledger.role,
       'memberCount': ledger.memberCount,
       'members': ledger.members.map(_ledgerMemberToJson).toList(),
+      'syncedRemoteUuid': ledger.syncedRemoteUuid,
     };
   }
 

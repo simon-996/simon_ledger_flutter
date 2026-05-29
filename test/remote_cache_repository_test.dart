@@ -35,6 +35,79 @@ void main() {
   });
 
   test(
+    'RemoteLedgerRepository creates ledger locally when cloud create is offline',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final database = DatabaseService();
+      final repository = RemoteLedgerRepository(
+        apiClient: _OfflineApiClient(),
+        database: database,
+      );
+
+      await repository.createLedgerWithPeople(
+        Ledger()
+          ..uuid = 'local-ledger-1'
+          ..name = '离线新账本'
+          ..baseCurrencyCode = 'CNY'
+          ..exchangeRateToCNY = 1,
+        [
+          Person()
+            ..uuid = 'local-person-1'
+            ..name = '本人'
+            ..avatar = '😎',
+        ],
+      );
+
+      final ledgers = await database.getAllLedgers();
+      final people = await database.getAllPeople();
+
+      expect(ledgers.single.uuid, 'local-ledger-1');
+      expect(ledgers.single.isLocalTemporary, isTrue);
+      expect(ledgers.single.syncedRemoteUuid, isNull);
+      expect(ledgers.single.personUuids, ['local-person-1']);
+      expect(people.single.uuid, 'local-person-1');
+    },
+  );
+
+  test(
+    'RemoteLedgerRepository keeps local temporary ledger after syncing remote copy',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final database = DatabaseService();
+      await database.savePerson(
+        Person()
+          ..uuid = 'local-person-1'
+          ..name = '本人'
+          ..avatar = '😎',
+      );
+      await database.saveLedger(
+        Ledger()
+          ..uuid = 'local-ledger-1'
+          ..name = '离线新账本'
+          ..baseCurrencyCode = 'CNY'
+          ..exchangeRateToCNY = 1
+          ..personUuids = ['local-person-1'],
+      );
+
+      final repository = RemoteLedgerRepository(
+        apiClient: _LedgerCreateApiClient(),
+        database: database,
+      );
+
+      final ledgers = await repository.getAllLedgers();
+      final cachedLedgers = await database.getAllLedgers();
+
+      expect(ledgers.map((ledger) => ledger.uuid), contains('local-ledger-1'));
+      expect(ledgers.map((ledger) => ledger.uuid), contains(_remoteLedgerUuid));
+      final localLedger = cachedLedgers.firstWhere(
+        (ledger) => ledger.uuid == 'local-ledger-1',
+      );
+      expect(localLedger.syncedRemoteUuid, _remoteLedgerUuid);
+      expect(localLedger.isLocalTemporary, isTrue);
+    },
+  );
+
+  test(
     'RemotePersonRepository falls back to cached ledger people offline',
     () async {
       SharedPreferences.setMockInitialValues({});
@@ -143,5 +216,82 @@ class _OfflineApiClient extends ApiClient {
     T Function(Object? json)? fromJson,
   }) {
     throw Exception('offline');
+  }
+
+  @override
+  Future<T> post<T>(
+    String path, {
+    Object? data,
+    String? idempotencyKey,
+    T Function(Object? json)? fromJson,
+  }) {
+    throw Exception('offline');
+  }
+}
+
+const _remoteLedgerUuid = '0123456789abcdef0123456789abcdef';
+const _remotePersonUuid = 'abcdef0123456789abcdef0123456789';
+
+class _LedgerCreateApiClient extends ApiClient {
+  _LedgerCreateApiClient() : super(tokenStore: TokenStore());
+
+  @override
+  Future<T> get<T>(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+    T Function(Object? json)? fromJson,
+  }) async {
+    if (path == '/api/ledgers') {
+      return fromJson!(<Map<String, dynamic>>[
+        {
+          'uuid': _remoteLedgerUuid,
+          'name': '离线新账本',
+          'baseCurrencyCode': 'CNY',
+          'exchangeRateToCny': 1,
+          'role': 'owner',
+          'memberCount': 1,
+          'members': const [],
+        },
+      ]);
+    }
+    if (path == '/api/ledgers/people') {
+      return fromJson!({
+        _remoteLedgerUuid: [
+          {'uuid': _remotePersonUuid},
+        ],
+      });
+    }
+    throw UnimplementedError(path);
+  }
+
+  @override
+  Future<T> post<T>(
+    String path, {
+    Object? data,
+    String? idempotencyKey,
+    T Function(Object? json)? fromJson,
+  }) async {
+    if (path != '/api/ledgers/with-people') {
+      throw UnimplementedError(path);
+    }
+    return fromJson!({
+      'ledger': {
+        'uuid': _remoteLedgerUuid,
+        'name': '离线新账本',
+        'baseCurrencyCode': 'CNY',
+        'exchangeRateToCny': 1,
+        'role': 'owner',
+        'memberCount': 1,
+        'members': const [],
+      },
+      'people': [
+        {
+          'uuid': _remotePersonUuid,
+          'name': '本人',
+          'avatar': '😎',
+          'linkedUserUuid': null,
+        },
+      ],
+    });
   }
 }
