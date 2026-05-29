@@ -13,6 +13,7 @@ class ShareLedgerImageWidget extends StatelessWidget {
     required this.transactions,
     this.summaryTransactions,
     required this.peoplePool,
+    this.includeTransactions = true,
     this.pageIndex,
     this.totalPages,
   });
@@ -21,6 +22,7 @@ class ShareLedgerImageWidget extends StatelessWidget {
   final List<TransactionRecord> transactions;
   final List<TransactionRecord>? summaryTransactions;
   final List<Person> peoplePool;
+  final bool includeTransactions;
   final int? pageIndex;
   final int? totalPages;
 
@@ -171,101 +173,118 @@ class ShareLedgerImageWidget extends StatelessWidget {
                 }).toList(),
               ),
             ),
-          const SizedBox(height: 16),
-          // Transactions List
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              children: transactions.map((t) {
-                final dateStr =
-                    '${t.createdAt.year}-${t.createdAt.month.toString().padLeft(2, '0')}-${t.createdAt.day.toString().padLeft(2, '0')} ${t.createdAt.hour.toString().padLeft(2, '0')}:${t.createdAt.minute.toString().padLeft(2, '0')}';
-                final peopleAvatars = avatarsForPeople(
-                  personMap,
-                  t.personUuids,
-                  fallbackAvatar: '👤',
-                );
+          if (includeTransactions) ...[
+            const SizedBox(height: 16),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: transactions.isEmpty
+                  ? const Padding(
+                      padding: EdgeInsets.all(18),
+                      child: Center(
+                        child: Text(
+                          '暂无流水明细',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF6B7280),
+                          ),
+                        ),
+                      ),
+                    )
+                  : Column(
+                      children: transactions.map((t) {
+                        final dateStr =
+                            '${t.createdAt.year}-${t.createdAt.month.toString().padLeft(2, '0')}-${t.createdAt.day.toString().padLeft(2, '0')} ${t.createdAt.hour.toString().padLeft(2, '0')}:${t.createdAt.minute.toString().padLeft(2, '0')}';
+                        final peopleAvatars = avatarsForPeople(
+                          personMap,
+                          t.personUuids,
+                          fallbackAvatar: '👤',
+                        );
 
-                return Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  decoration: const BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(color: Color(0xFFF3F4F6), width: 1),
-                    ),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Text(
-                                  t.category,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    peopleAvatars,
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      color: Color(0xFF4B5563),
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              dateStr,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFF9CA3AF),
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          decoration: const BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(
+                                color: Color(0xFFF3F4F6),
+                                width: 1,
                               ),
                             ),
-                            if (t.note.isNotEmpty) ...[
-                              const SizedBox(height: 2),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text(
+                                          t.category,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            peopleAvatars,
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              color: Color(0xFF4B5563),
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      dateStr,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Color(0xFF9CA3AF),
+                                      ),
+                                    ),
+                                    if (t.note.isNotEmpty) ...[
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        t.note,
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          color: Color(0xFF6B7280),
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
                               Text(
-                                t.note,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: Color(0xFF6B7280),
-                                  fontStyle: FontStyle.italic,
+                                formatTransactionPrimaryAmount(t),
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                  color: t.type == 0
+                                      ? const Color(0xFFEF4444)
+                                      : const Color(0xFF10B981),
                                 ),
                               ),
                             ],
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        formatTransactionPrimaryAmount(t),
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          color: t.type == 0
-                              ? const Color(0xFFEF4444)
-                              : const Color(0xFF10B981),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
+                          ),
+                        );
+                      }).toList(),
+                    ),
             ),
-          ),
+          ],
           const SizedBox(height: 24),
           // Footer
           const Center(

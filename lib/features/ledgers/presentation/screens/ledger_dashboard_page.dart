@@ -28,29 +28,10 @@ class LedgerDashboardPage extends ConsumerStatefulWidget {
 }
 
 class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
-  bool _isSelectionMode = false;
-  final Set<String> _selectedTransactionUuids = {};
   final Set<String> _selectedFilterPersonUuids = {};
   final ScreenshotController _screenshotController = ScreenshotController();
   bool _isGeneratingImage = false;
   String _displayCurrency = 'CNY';
-
-  void _toggleSelectionMode() {
-    setState(() {
-      _isSelectionMode = !_isSelectionMode;
-      _selectedTransactionUuids.clear();
-    });
-  }
-
-  void _toggleSelection(String uuid) {
-    setState(() {
-      if (_selectedTransactionUuids.contains(uuid)) {
-        _selectedTransactionUuids.remove(uuid);
-      } else {
-        _selectedTransactionUuids.add(uuid);
-      }
-    });
-  }
 
   void _toggleFilterSelection(String uuid) {
     setState(() {
@@ -62,26 +43,74 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
     });
   }
 
-  Future<void> _shareSelected(
+  Future<void> _showShareOptions(
     List<TransactionRecord> allTransactions,
     List<Person> peoplePool,
   ) async {
-    if (_selectedTransactionUuids.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('请至少选择一条明细')));
+    final transactions = _visibleTransactions(allTransactions);
+    final includeTransactions = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('分享账本', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 6),
+              Text(
+                _selectedFilterPersonUuids.isEmpty
+                    ? '选择导出的图片内容'
+                    : '当前已按人员筛选，将按当前筛选结果导出',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 16),
+              _ShareOptionTile(
+                icon: Icons.account_balance_wallet_outlined,
+                title: '只分享账本概览',
+                subtitle: '包含结余、收入支出和人员结算',
+                onTap: () => Navigator.of(context).pop(false),
+              ),
+              const SizedBox(height: 10),
+              _ShareOptionTile(
+                icon: Icons.receipt_long_outlined,
+                title: '分享概览和流水',
+                subtitle: transactions.isEmpty
+                    ? '当前没有流水，会导出空明细状态'
+                    : '包含当前 ${transactions.length} 条流水明细',
+                onTap: () => Navigator.of(context).pop(true),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (includeTransactions == null || !mounted) {
       return;
     }
 
+    await _exportLedgerImage(
+      transactions: transactions,
+      peoplePool: peoplePool,
+      includeTransactions: includeTransactions,
+    );
+  }
+
+  Future<void> _exportLedgerImage({
+    required List<TransactionRecord> transactions,
+    required List<Person> peoplePool,
+    required bool includeTransactions,
+  }) async {
     setState(() {
       _isGeneratingImage = true;
     });
 
     try {
-      final selectedTransactions = allTransactions
-          .where((t) => _selectedTransactionUuids.contains(t.uuid))
-          .toList();
-
       final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
       final pixelRatio = devicePixelRatio.clamp(1.0, 2.0).toDouble();
 
@@ -102,35 +131,45 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
       }
 
       const maxTransactionsPerImage = 25;
-      final pageCount = (selectedTransactions.length / maxTransactionsPerImage)
-          .ceil()
-          .clamp(1, 9999);
-      final total = selectedTransactions.length;
+      final pageCount = includeTransactions
+          ? (transactions.length / maxTransactionsPerImage).ceil().clamp(
+              1,
+              9999,
+            )
+          : 1;
+      final total = transactions.length;
       final base = total ~/ pageCount;
       final remainder = total % pageCount;
 
       final pages = <List<TransactionRecord>>[];
-      var start = 0;
-      for (var i = 0; i < pageCount; i++) {
-        final size = base + (i < remainder ? 1 : 0);
-        if (size <= 0) continue;
-        pages.add(selectedTransactions.sublist(start, start + size));
-        start += size;
+      if (includeTransactions) {
+        var start = 0;
+        for (var i = 0; i < pageCount; i++) {
+          final size = base + (i < remainder ? 1 : 0);
+          pages.add(
+            size <= 0 ? const [] : transactions.sublist(start, start + size),
+          );
+          start += size;
+        }
+      } else {
+        pages.add(const []);
       }
 
       if (!mounted) return;
 
       final nowMs = DateTime.now().millisecondsSinceEpoch;
+      String? firstImageName;
       for (var i = 0; i < pages.length; i++) {
         if (!mounted) return;
         final imageBytes = await _screenshotController.captureFromLongWidget(
           ShareLedgerImageWidget(
             ledger: widget.ledger,
             transactions: pages[i],
-            summaryTransactions: selectedTransactions,
+            summaryTransactions: transactions,
             peoplePool: peoplePool,
-            pageIndex: i + 1,
-            totalPages: pages.length,
+            includeTransactions: includeTransactions,
+            pageIndex: includeTransactions ? i + 1 : null,
+            totalPages: includeTransactions ? pages.length : null,
           ),
           context: context,
           pixelRatio: pixelRatio,
@@ -138,10 +177,9 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
           delay: const Duration(milliseconds: 100),
         );
 
-        await Gal.putImageBytes(
-          imageBytes,
-          name: 'SimonLedger_${nowMs}_p${i + 1}of${pages.length}',
-        );
+        final imageName = 'SimonLedger_${nowMs}_p${i + 1}of${pages.length}';
+        firstImageName ??= imageName;
+        await Gal.putImageBytes(imageBytes, name: imageName);
       }
 
       if (mounted) {
@@ -155,7 +193,11 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
               label: '打开相册',
               onPressed: () async {
                 try {
-                  await GalleryLauncher.openGalleryApp();
+                  if (firstImageName != null) {
+                    await GalleryLauncher.openImageByName(firstImageName);
+                  } else {
+                    await GalleryLauncher.openGalleryApp();
+                  }
                 } catch (e) {
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -170,7 +212,6 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
             ),
           ),
         );
-        _toggleSelectionMode();
       }
     } catch (e) {
       if (mounted) {
@@ -203,83 +244,41 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: _isSelectionMode
-            ? Text(
-                '已选择 ${_selectedTransactionUuids.length} 项',
-                overflow: TextOverflow.ellipsis,
-              )
-            : _LedgerAppBarTitle(ledger: widget.ledger),
-        leading: _isSelectionMode
-            ? IconButton(
-                tooltip: '退出选择',
-                icon: const Icon(Icons.close),
-                onPressed: _toggleSelectionMode,
-              )
-            : null,
-        actions: _isSelectionMode
-            ? [
-                IconButton(
-                  tooltip: '全选',
-                  icon: const Icon(Icons.select_all),
-                  onPressed: () {
-                    transactionsAsyncValue.whenData((transactions) {
-                      setState(() {
-                        if (_selectedTransactionUuids.length ==
-                            transactions.length) {
-                          _selectedTransactionUuids.clear();
-                        } else {
-                          _selectedTransactionUuids.addAll(
-                            transactions.map((t) => t.uuid),
-                          );
-                        }
-                      });
-                    });
-                  },
-                ),
-                peopleAsyncValue.when(
-                  data: (peoplePool) => transactionsAsyncValue.when(
-                    data: (transactions) => _isGeneratingImage
-                        ? const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 16.0),
-                            child: Center(
-                              child: SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              ),
-                            ),
-                          )
-                        : IconButton(
-                            tooltip: '保存长图',
-                            icon: const Icon(Icons.share),
-                            onPressed: () =>
-                                _shareSelected(transactions, peoplePool),
-                          ),
-                    loading: () => const SizedBox(),
-                    error: (err, st) => const SizedBox(),
-                  ),
-                  loading: () => const SizedBox(),
-                  error: (err, st) => const SizedBox(),
-                ),
-              ]
-            : [
-                IconButton(
-                  tooltip: '选择并分享',
-                  icon: const Icon(Icons.share),
-                  onPressed: _toggleSelectionMode,
-                ),
-                IconButton(
-                  tooltip: '刷新',
-                  icon: const Icon(Icons.refresh),
-                  onPressed: () {
-                    ref.invalidate(
-                      transactionNotifierProvider(widget.ledger.uuid),
-                    );
-                  },
-                ),
-              ],
+        title: _LedgerAppBarTitle(ledger: widget.ledger),
+        actions: [
+          peopleAsyncValue.when(
+            data: (peoplePool) => transactionsAsyncValue.when(
+              data: (transactions) => _isGeneratingImage
+                  ? const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: Center(
+                        child: SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                    )
+                  : IconButton(
+                      tooltip: '分享账本图片',
+                      icon: const Icon(Icons.share),
+                      onPressed: () =>
+                          _showShareOptions(transactions, peoplePool),
+                    ),
+              loading: () => const SizedBox(),
+              error: (err, st) => const SizedBox(),
+            ),
+            loading: () => const SizedBox(),
+            error: (err, st) => const SizedBox(),
+          ),
+          IconButton(
+            tooltip: '刷新',
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              ref.invalidate(transactionNotifierProvider(widget.ledger.uuid));
+            },
+          ),
+        ],
       ),
       body: transactionsAsyncValue.when(
         loading: () => const AppLoadingState(
@@ -653,22 +652,12 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                                 personMap,
                                 t.personUuids,
                               );
-                              final selected =
-                                  _isSelectionMode &&
-                                  _selectedTransactionUuids.contains(t.uuid);
 
                               final delayMs = (index < 8 ? index : 8) * 28;
                               return AppAnimatedEntry(
                                 delay: Duration(milliseconds: delayMs),
                                 child: AppTransactionTile(
-                                  selected: selected,
-                                  leading: _isSelectionMode
-                                      ? Checkbox(
-                                          value: selected,
-                                          onChanged: (_) =>
-                                              _toggleSelection(t.uuid),
-                                        )
-                                      : null,
+                                  selected: false,
                                   category: t.category,
                                   date: dateStr,
                                   people: peopleStr,
@@ -684,17 +673,8 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                                   isExpense: t.type == 0,
                                   syncStatus: _syncStatusFor(t),
                                   syncError: t.syncError,
-                                  onLongPress: () {
-                                    if (!_isSelectionMode) {
-                                      _toggleSelectionMode();
-                                      _toggleSelection(t.uuid);
-                                    }
-                                  },
+                                  onLongPress: null,
                                   onTap: () {
-                                    if (_isSelectionMode) {
-                                      _toggleSelection(t.uuid);
-                                      return;
-                                    }
                                     showModalBottomSheet(
                                       context: context,
                                       isScrollControlled: true,
@@ -735,6 +715,21 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
     return TransactionSyncStatus.pending;
   }
 
+  List<TransactionRecord> _visibleTransactions(
+    List<TransactionRecord> transactions,
+  ) {
+    return List<TransactionRecord>.from(
+      _selectedFilterPersonUuids.isEmpty
+          ? transactions
+          : transactions.where(
+              (t) =>
+                  t.personUuids.any(_selectedFilterPersonUuids.contains) ||
+                  (t.payerPersonUuid != null &&
+                      _selectedFilterPersonUuids.contains(t.payerPersonUuid)),
+            ),
+    )..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
+
   List<String> _dashboardPersonIds(List<TransactionRecord> transactions) {
     final ids = <String>{
       ...widget.ledger.personUuids,
@@ -745,6 +740,76 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
           transaction.payerPersonUuid!,
     };
     return ids.toList();
+  }
+}
+
+class _ShareOptionTile extends StatelessWidget {
+  const _ShareOptionTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Material(
+      color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: colorScheme.onPrimaryContainer),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

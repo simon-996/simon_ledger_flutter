@@ -15,4 +15,15 @@ class GalleryLauncher {
     }
     await Gal.open();
   }
+
+  static Future<void> openImageByName(String imageName) async {
+    if (kIsWeb) return;
+    if (Platform.isAndroid) {
+      await _channel.invokeMethod<void>('openImageByName', {
+        'imageName': imageName,
+      });
+      return;
+    }
+    await Gal.open();
+  }
 }
