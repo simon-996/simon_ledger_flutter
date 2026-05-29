@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:screenshot/screenshot.dart';
-import 'package:gal/gal.dart';
 import '../../../../core/common/gallery_launcher.dart';
+import '../../../../core/common/image_saver.dart';
 import '../../../../core/models/ledger.dart';
 import '../../../../core/models/money.dart';
 import '../../../../core/models/person.dart';
@@ -114,20 +114,17 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
       final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
       final pixelRatio = devicePixelRatio.clamp(1.0, 2.0).toDouble();
 
-      final hasAccess = await Gal.hasAccess();
+      final hasAccess = await ImageSaver.ensureAccess();
       if (!hasAccess) {
-        final request = await Gal.requestAccess();
-        if (!request) {
-          if (mounted) {
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(const SnackBar(content: Text('需要相册权限才能保存图片')));
-            setState(() {
-              _isGeneratingImage = false;
-            });
-          }
-          return;
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('需要相册权限才能保存图片')));
+          setState(() {
+            _isGeneratingImage = false;
+          });
         }
+        return;
       }
 
       const maxTransactionsPerImage = 25;
@@ -179,37 +176,46 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
 
         final imageName = 'SimonLedger_${nowMs}_p${i + 1}of${pages.length}';
         firstImageName ??= imageName;
-        await Gal.putImageBytes(imageBytes, name: imageName);
+        await ImageSaver.saveImageBytes(imageBytes, name: imageName);
       }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              pages.length > 1 ? '已保存 ${pages.length} 张到相册' : '长图已保存到相册',
+              ImageSaver.canOpenSavedImage
+                  ? (pages.length > 1 ? '已保存 ${pages.length} 张到相册' : '长图已保存到相册')
+                  : (pages.length > 1
+                        ? '已下载 ${pages.length} 张分享图片'
+                        : '分享图片已下载'),
             ),
             duration: const Duration(seconds: 6),
-            action: SnackBarAction(
-              label: '打开相册',
-              onPressed: () async {
-                try {
-                  if (firstImageName != null) {
-                    await GalleryLauncher.openImageByName(firstImageName);
-                  } else {
-                    await GalleryLauncher.openGalleryApp();
-                  }
-                } catch (e) {
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        FriendlyError.message(e, fallback: '无法打开相册，请手动查看。'),
-                      ),
-                    ),
-                  );
-                }
-              },
-            ),
+            action: ImageSaver.canOpenSavedImage
+                ? SnackBarAction(
+                    label: '打开相册',
+                    onPressed: () async {
+                      try {
+                        if (firstImageName != null) {
+                          await GalleryLauncher.openImageByName(firstImageName);
+                        } else {
+                          await GalleryLauncher.openGalleryApp();
+                        }
+                      } catch (e) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              FriendlyError.message(
+                                e,
+                                fallback: '无法打开相册，请手动查看。',
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                  )
+                : null,
           ),
         );
       }
