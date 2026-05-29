@@ -59,26 +59,32 @@ class TransactionNotifier extends _$TransactionNotifier {
     // Invalidate ledger stats so the UI updates
     ref.invalidate(ledgerSyncStatusProvider(ledgerUuid));
     ref.invalidate(ledgerStatsProvider);
-    // Refresh local list
-    ref.invalidateSelf();
   }
 
   Future<void> updateTransaction(TransactionRecord transaction) async {
     final repository = ref.read(transactionRepositoryProvider);
     await repository.saveTransaction(transaction);
+    final current = state.valueOrNull;
+    if (current != null) {
+      state = AsyncValue.data(_upsertTransaction(current, transaction));
+    }
 
     ref.invalidate(ledgerSyncStatusProvider(ledgerUuid));
     ref.invalidate(ledgerStatsProvider);
-    ref.invalidateSelf();
   }
 
   Future<void> deleteTransaction(String uuid) async {
     final repository = ref.read(transactionRepositoryProvider);
     await repository.deleteTransaction(ledgerUuid, uuid);
+    final current = state.valueOrNull;
+    if (current != null) {
+      state = AsyncValue.data(
+        current.where((transaction) => transaction.uuid != uuid).toList(),
+      );
+    }
 
     ref.invalidate(ledgerSyncStatusProvider(ledgerUuid));
     ref.invalidate(ledgerStatsProvider);
-    ref.invalidateSelf();
   }
 
   Future<void> syncPending() async {
@@ -88,5 +94,20 @@ class TransactionNotifier extends _$TransactionNotifier {
     ref.invalidate(ledgerSyncStatusProvider(ledgerUuid));
     ref.invalidate(ledgerStatsProvider);
     ref.invalidateSelf();
+  }
+
+  List<TransactionRecord> _upsertTransaction(
+    List<TransactionRecord> transactions,
+    TransactionRecord transaction,
+  ) {
+    final items = List<TransactionRecord>.from(transactions);
+    final index = items.indexWhere((item) => item.uuid == transaction.uuid);
+    if (index == -1) {
+      items.insert(0, transaction);
+    } else {
+      items[index] = transaction;
+    }
+    items.sort((left, right) => right.createdAt.compareTo(left.createdAt));
+    return items;
   }
 }

@@ -22,15 +22,40 @@ class PersonNotifier extends _$PersonNotifier {
   Future<void> addOrUpdatePerson(Person person) async {
     final repository = ref.read(personRepositoryProvider);
     await repository.savePerson(person, ledgerUuid: ledgerUuid);
-    // Invalidate both true and false variants of the provider
-    // Since Riverpod caches parameters separately
-    ref.invalidate(personNotifierProvider);
+    final current = state.valueOrNull;
+    if (current != null) {
+      state = AsyncValue.data(_upsertPerson(current, person));
+    }
   }
 
   Future<void> deletePerson(String uuid) async {
     final repository = ref.read(personRepositoryProvider);
     await repository.deletePerson(uuid, ledgerUuid: ledgerUuid);
-    // Invalidate both true and false variants
-    ref.invalidate(personNotifierProvider);
+    final current = state.valueOrNull;
+    if (current != null) {
+      if (includeDeleted) {
+        state = AsyncValue.data(
+          current.map((person) {
+            if (person.uuid != uuid) return person;
+            return person..isDeleted = true;
+          }).toList(),
+        );
+      } else {
+        state = AsyncValue.data(
+          current.where((person) => person.uuid != uuid).toList(),
+        );
+      }
+    }
+  }
+
+  List<Person> _upsertPerson(List<Person> people, Person person) {
+    final items = List<Person>.from(people);
+    final index = items.indexWhere((item) => item.uuid == person.uuid);
+    if (index == -1) {
+      items.add(person);
+    } else {
+      items[index] = person;
+    }
+    return items;
   }
 }

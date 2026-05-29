@@ -22,8 +22,7 @@ class LedgerNotifier extends _$LedgerNotifier {
       ledger.sortOrder = currentLedgers.last.sortOrder + 1;
     }
     await repository.saveLedger(ledger);
-    // Refresh the state
-    ref.invalidateSelf();
+    state = AsyncValue.data(_upsertLedger(currentLedgers, ledger));
   }
 
   Future<void> addLedgerWithPeople(Ledger ledger, List<Person> people) async {
@@ -32,15 +31,15 @@ class LedgerNotifier extends _$LedgerNotifier {
     if (currentLedgers.isNotEmpty) {
       ledger.sortOrder = currentLedgers.last.sortOrder + 1;
     }
-    await repository.createLedgerWithPeople(ledger, people);
-    ref.invalidateSelf();
+    final created = await repository.createLedgerWithPeople(ledger, people);
+    state = AsyncValue.data(_upsertLedger(currentLedgers, created.ledger));
   }
 
   Future<void> updateLedger(Ledger ledger) async {
     final repository = ref.read(ledgerRepositoryProvider);
+    final currentLedgers = state.valueOrNull ?? [];
     await repository.saveLedger(ledger);
-    // Refresh the state
-    ref.invalidateSelf();
+    state = AsyncValue.data(_upsertLedger(currentLedgers, ledger));
   }
 
   Future<void> reorderLedgers(int oldIndex, int newIndex) async {
@@ -78,12 +77,23 @@ class LedgerNotifier extends _$LedgerNotifier {
 
     try {
       await repository.deleteLedger(uuid);
-      ref.invalidateSelf();
     } catch (_) {
       if (previousLedgers != null) {
         state = AsyncValue.data(previousLedgers);
       }
       rethrow;
     }
+  }
+
+  List<Ledger> _upsertLedger(List<Ledger> ledgers, Ledger ledger) {
+    final items = List<Ledger>.from(ledgers);
+    final index = items.indexWhere((item) => item.uuid == ledger.uuid);
+    if (index == -1) {
+      items.add(ledger);
+    } else {
+      items[index] = ledger;
+    }
+    items.sort((left, right) => left.sortOrder.compareTo(right.sortOrder));
+    return items;
   }
 }
