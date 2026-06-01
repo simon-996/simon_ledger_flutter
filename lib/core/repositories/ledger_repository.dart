@@ -11,6 +11,16 @@ class CreatedLedgerWithPeople {
   final List<Person> people;
 }
 
+class _LedgerPeopleBatch {
+  const _LedgerPeopleBatch({
+    required this.peopleByLedgerUuid,
+    required this.people,
+  });
+
+  final Map<String, List<String>> peopleByLedgerUuid;
+  final List<Person> people;
+}
+
 abstract class LedgerRepository {
   Future<List<Ledger>> getCachedLedgers({bool includeDeleted = false});
 
@@ -104,16 +114,19 @@ class RemoteLedgerRepository implements LedgerRepository {
 
       if (ledgers.isNotEmpty) {
         try {
-          final peopleByLedger = await _apiClient
-              .get<Map<String, List<String>>>(
-                '/api/ledgers/people',
-                queryParameters: {
-                  'ledgerUuids': ledgers.map((ledger) => ledger.uuid).join(','),
-                },
-                fromJson: _peopleByLedgerFromJson,
-              );
+          final peopleBatch = await _apiClient.get<_LedgerPeopleBatch>(
+            '/api/ledgers/people',
+            queryParameters: {
+              'ledgerUuids': ledgers.map((ledger) => ledger.uuid).join(','),
+            },
+            fromJson: _ledgerPeopleBatchFromJson,
+          );
+          for (final person in peopleBatch.people) {
+            await _db.savePerson(person);
+          }
           for (final ledger in ledgers) {
-            ledger.personUuids = peopleByLedger[ledger.uuid] ?? const [];
+            ledger.personUuids =
+                peopleBatch.peopleByLedgerUuid[ledger.uuid] ?? const [];
           }
         } catch (_) {
           for (final ledger in ledgers) {
@@ -414,13 +427,21 @@ class RemoteLedgerRepository implements LedgerRepository {
     );
   }
 
-  static Map<String, List<String>> _peopleByLedgerFromJson(Object? json) {
+  static _LedgerPeopleBatch _ledgerPeopleBatchFromJson(Object? json) {
     final map = json! as Map<String, dynamic>;
-    return map.map((ledgerUuid, peopleJson) {
-      final personUuids = (peopleJson as List<dynamic>)
-          .map((person) => (person as Map<String, dynamic>)['uuid'].toString())
+    final peopleByUuid = <String, Person>{};
+    final peopleByLedgerUuid = map.map((ledgerUuid, peopleJson) {
+      final people = (peopleJson as List<dynamic>)
+          .map(_personFromJson)
           .toList();
-      return MapEntry(ledgerUuid, personUuids);
+      for (final person in people) {
+        peopleByUuid[person.uuid] = person;
+      }
+      return MapEntry(ledgerUuid, people.map((person) => person.uuid).toList());
     });
+    return _LedgerPeopleBatch(
+      peopleByLedgerUuid: peopleByLedgerUuid,
+      people: peopleByUuid.values.toList(),
+    );
   }
 }

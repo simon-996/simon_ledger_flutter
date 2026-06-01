@@ -497,24 +497,19 @@ class _ManualPeopleLine extends ConsumerWidget {
       return _buildLine(localManualPeople);
     }
 
-    final peopleAsyncValue = ref.watch(
-      personNotifierProvider(includeDeleted: false, ledgerUuid: ledger.uuid),
-    );
-
-    return peopleAsyncValue.maybeWhen(
-      data: (people) {
+    return FutureBuilder<List<Person>>(
+      future: ref.watch(databaseProvider).getAllPeople(),
+      builder: (context, snapshot) {
+        final people = snapshot.data;
+        if (people == null) {
+          return _buildLoading(context);
+        }
         final manualPeople = people
             .where((person) => ledger.personUuids.contains(person.uuid))
             .where((person) => person.linkedUserUuid == null)
             .toList();
         return _buildLine(manualPeople);
       },
-      loading: () => _buildLoading(context),
-      orElse: () => _buildLine(
-        ledger.personUuids
-            .map((uuid) => personOrFallback(const {}, uuid, name: '人员'))
-            .toList(),
-      ),
     );
   }
 

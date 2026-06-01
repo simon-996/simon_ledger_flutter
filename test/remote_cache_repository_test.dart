@@ -34,6 +34,25 @@ void main() {
     expect(ledgers.single.personUuids, ['person-1']);
   });
 
+  test('RemoteLedgerRepository caches people from batch ledger list', () async {
+    SharedPreferences.setMockInitialValues({});
+    final database = DatabaseService();
+    final apiClient = _LedgerCreateApiClient();
+    final repository = RemoteLedgerRepository(
+      apiClient: apiClient,
+      database: database,
+    );
+
+    final ledgers = await repository.getAllLedgers();
+    final people = await database.getAllPeople();
+
+    expect(apiClient.getPaths, ['/api/ledgers', '/api/ledgers/people']);
+    expect(ledgers.single.personUuids, [_remotePersonUuid]);
+    expect(people.single.uuid, _remotePersonUuid);
+    expect(people.single.name, '本人');
+    expect(people.single.avatar, '😎');
+  });
+
   test(
     'RemoteLedgerRepository creates ledger locally when cloud create is offline',
     () async {
@@ -399,12 +418,15 @@ const _remotePersonUuid = 'abcdef0123456789abcdef0123456789';
 class _LedgerCreateApiClient extends ApiClient {
   _LedgerCreateApiClient() : super(tokenStore: TokenStore());
 
+  final List<String> getPaths = [];
+
   @override
   Future<T> get<T>(
     String path, {
     Map<String, dynamic>? queryParameters,
     T Function(Object? json)? fromJson,
   }) async {
+    getPaths.add(path);
     if (path == '/api/ledgers') {
       return fromJson!(<Map<String, dynamic>>[
         {
@@ -421,7 +443,12 @@ class _LedgerCreateApiClient extends ApiClient {
     if (path == '/api/ledgers/people') {
       return fromJson!({
         _remoteLedgerUuid: [
-          {'uuid': _remotePersonUuid},
+          {
+            'uuid': _remotePersonUuid,
+            'name': '本人',
+            'avatar': '😎',
+            'linkedUserUuid': null,
+          },
         ],
       });
     }
