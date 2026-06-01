@@ -116,8 +116,8 @@ void main() {
       final ledgers = await repository.getAllLedgers();
       final cachedLedgers = await database.getAllLedgers();
 
-      expect(ledgers.map((ledger) => ledger.uuid), contains('local-ledger-1'));
-      expect(ledgers.map((ledger) => ledger.uuid), contains(_remoteLedgerUuid));
+      expect(ledgers, hasLength(1));
+      expect(ledgers.single.uuid, 'local-ledger-1');
       final localLedger = cachedLedgers.firstWhere(
         (ledger) => ledger.uuid == 'local-ledger-1',
       );
@@ -127,6 +127,9 @@ void main() {
         (person) => person.uuid == 'local-person-1',
       );
       expect(localPerson.syncedRemoteUuid, _remotePersonUuid);
+      final cachedVisibleLedgers = await repository.getCachedLedgers();
+      expect(cachedVisibleLedgers, hasLength(1));
+      expect(cachedVisibleLedgers.single.uuid, 'local-ledger-1');
     },
   );
 

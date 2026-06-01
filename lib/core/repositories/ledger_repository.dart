@@ -94,8 +94,9 @@ class RemoteLedgerRepository implements LedgerRepository {
   final SyncIdentityResolver _identityResolver;
 
   @override
-  Future<List<Ledger>> getCachedLedgers({bool includeDeleted = false}) {
-    return _db.getAllLedgers(includeDeleted: includeDeleted);
+  Future<List<Ledger>> getCachedLedgers({bool includeDeleted = false}) async {
+    final ledgers = await _db.getAllLedgers(includeDeleted: includeDeleted);
+    return _mergeSyncedLocalTemporaryLedgers(ledgers);
   }
 
   @override
@@ -143,9 +144,12 @@ class RemoteLedgerRepository implements LedgerRepository {
       final localTemporaryLedgers = await _localTemporaryLedgers(
         includeDeleted: includeDeleted,
       );
-      return [...localTemporaryLedgers, ...ledgers];
+      return _mergeSyncedLocalTemporaryLedgers([
+        ...localTemporaryLedgers,
+        ...ledgers,
+      ]);
     } catch (_) {
-      return _db.getAllLedgers(includeDeleted: includeDeleted);
+      return getCachedLedgers(includeDeleted: includeDeleted);
     }
   }
 
@@ -322,6 +326,23 @@ class RemoteLedgerRepository implements LedgerRepository {
       includeDeleted: includeDeleted,
     );
     return cachedLedgers.where((ledger) => ledger.isLocalTemporary).toList();
+  }
+
+  List<Ledger> _mergeSyncedLocalTemporaryLedgers(List<Ledger> ledgers) {
+    final localTemporaryLedgers = ledgers
+        .where((ledger) => ledger.isLocalTemporary)
+        .toList();
+    final syncedRemoteUuids = localTemporaryLedgers
+        .where((ledger) => ledger.hasSyncedRemoteCopy)
+        .map((ledger) => ledger.remoteSyncUuid)
+        .toSet();
+    return [
+      ...localTemporaryLedgers,
+      ...ledgers.where((ledger) {
+        return !ledger.isLocalTemporary &&
+            !syncedRemoteUuids.contains(ledger.uuid);
+      }),
+    ];
   }
 
   bool _looksLikeRemoteUuid(String uuid) {
