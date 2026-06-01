@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../database/database_service.dart';
 import '../models/ledger.dart';
 import '../models/person.dart';
@@ -166,6 +168,15 @@ class RemoteLedgerRepository implements LedgerRepository {
       'exchangeRateToCny': ledger.exchangeRateToCNY,
     };
 
+    if (ledger.isLocalOnly) {
+      await _db.saveLedger(
+        ledger
+          ..pendingSync = false
+          ..syncError = null,
+      );
+      return;
+    }
+
     await _db.saveLedger(
       ledger
         ..pendingSync = true
@@ -216,16 +227,17 @@ class RemoteLedgerRepository implements LedgerRepository {
     Ledger ledger,
     List<Person> people,
   ) async {
-    try {
-      return await _createLedgerWithPeopleRemote(ledger, people);
-    } catch (_) {
-      for (final person in people) {
-        await _db.savePerson(person);
-      }
-      ledger.personUuids = people.map((person) => person.uuid).toList();
-      await _db.saveLedger(ledger);
-      return CreatedLedgerWithPeople(ledger: ledger, people: people);
+    for (final person in people) {
+      await _db.savePerson(person);
     }
+    ledger
+      ..personUuids = people.map((person) => person.uuid).toList()
+      ..cloudPolicy = LedgerCloudPolicy.uploadRequested
+      ..pendingSync = true
+      ..syncError = null;
+    await _db.saveLedger(ledger);
+    unawaited(syncPendingWrites(ledgerUuid: ledger.uuid).catchError((_) {}));
+    return CreatedLedgerWithPeople(ledger: ledger, people: people);
   }
 
   Future<CreatedLedgerWithPeople> _createLedgerWithPeopleRemote(
@@ -244,20 +256,7 @@ class RemoteLedgerRepository implements LedgerRepository {
       fromJson: _createdLedgerWithPeopleFromJson,
     );
 
-    final remoteLedger = ledger
-      ..uuid = saved.ledger.uuid
-      ..name = saved.ledger.name
-      ..baseCurrencyCode = saved.ledger.baseCurrencyCode
-      ..exchangeRateToCNY = saved.ledger.exchangeRateToCNY
-      ..personUuids = saved.people.map((person) => person.uuid).toList()
-      ..role = saved.ledger.role
-      ..memberCount = saved.ledger.memberCount
-      ..members = saved.ledger.members;
-    await _db.saveLedger(remoteLedger);
-    for (final person in saved.people) {
-      await _db.savePerson(person);
-    }
-    return CreatedLedgerWithPeople(ledger: remoteLedger, people: saved.people);
+    return saved;
   }
 
   Future<void> _syncPendingLocalLedgers({String? ledgerUuid}) async {
@@ -272,6 +271,7 @@ class RemoteLedgerRepository implements LedgerRepository {
       }
       if (_looksLikeRemoteUuid(ledger.uuid) ||
           ledger.hasSyncedRemoteCopy ||
+          !ledger.shouldUploadToCloud ||
           ledger.isDeleted) {
         continue;
       }
@@ -293,6 +293,7 @@ class RemoteLedgerRepository implements LedgerRepository {
       ledger
         ..uuid = localLedgerUuid
         ..syncedRemoteUuid = remoteLedgerUuid
+        ..cloudPolicy = LedgerCloudPolicy.cloudManaged
         ..pendingSync = false
         ..syncError = null;
       await _db.saveLedger(ledger);
@@ -389,6 +390,9 @@ class RemoteLedgerRepository implements LedgerRepository {
     if (ledger == null) {
       return;
     }
+    if (ledger.isLocalOnly) {
+      return;
+    }
     await _db.saveLedger(
       ledger
         ..pendingSync = true
@@ -429,6 +433,7 @@ class RemoteLedgerRepository implements LedgerRepository {
       ..baseCurrencyCode = map['baseCurrencyCode'].toString()
       ..exchangeRateToCNY =
           (map['exchangeRateToCny'] as num?)?.toDouble() ?? 1.0
+      ..cloudPolicy = LedgerCloudPolicy.cloudManaged
       ..role = map['role']?.toString()
       ..memberCount = (map['memberCount'] as num?)?.toInt() ?? 1
       ..members = (map['members'] as List<dynamic>? ?? [])

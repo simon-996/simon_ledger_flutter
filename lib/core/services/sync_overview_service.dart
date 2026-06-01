@@ -8,6 +8,7 @@ class SyncOverview {
     required this.personPendingCount,
     required this.transactionPendingCount,
     required this.failedCount,
+    required this.localOnlyLedgerCount,
     this.lastSuccessfulSyncAt,
   });
 
@@ -15,6 +16,7 @@ class SyncOverview {
   final int personPendingCount;
   final int transactionPendingCount;
   final int failedCount;
+  final int localOnlyLedgerCount;
   final DateTime? lastSuccessfulSyncAt;
 
   int get pendingCount =>
@@ -35,13 +37,24 @@ class SyncOverviewService {
       ledgers.map((ledger) => ledger.uuid).toList(),
       includeDeleted: true,
     );
+    final syncableLedgerUuids = {
+      for (final ledger in ledgers)
+        if (ledger.shouldUploadToCloud || ledger.isCloudManaged) ledger.uuid,
+    };
     final pendingLedgers = ledgers.where((ledger) {
-      return ledger.pendingSync ||
-          (ledger.isLocalTemporary && !ledger.hasSyncedRemoteCopy);
+      return syncableLedgerUuids.contains(ledger.uuid) &&
+          (ledger.pendingSync || ledger.shouldUploadToCloud);
     }).toList();
-    final pendingPeople = people.where((person) => person.pendingSync).toList();
+    final pendingPeople = people.where((person) {
+      return person.pendingSync &&
+          syncableLedgerUuids.contains(person.pendingLedgerUuid);
+    }).toList();
     final pendingTransactions = transactions
-        .where((transaction) => transaction.pendingSync)
+        .where(
+          (transaction) =>
+              transaction.pendingSync &&
+              syncableLedgerUuids.contains(transaction.ledgerUuid),
+        )
         .toList();
     final prefs = await SharedPreferences.getInstance();
 
@@ -49,6 +62,9 @@ class SyncOverviewService {
       ledgerPendingCount: pendingLedgers.length,
       personPendingCount: pendingPeople.length,
       transactionPendingCount: pendingTransactions.length,
+      localOnlyLedgerCount: ledgers
+          .where((ledger) => ledger.isLocalOnly)
+          .length,
       failedCount:
           pendingLedgers.where((ledger) => _hasError(ledger.syncError)).length +
           pendingPeople.where((person) => _hasError(person.syncError)).length +

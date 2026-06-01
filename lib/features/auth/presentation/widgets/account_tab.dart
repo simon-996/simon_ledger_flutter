@@ -159,6 +159,10 @@ class _SyncCenterCardState extends ConsumerState<_SyncCenterCard> {
                     label: '流水',
                     count: overview.transactionPendingCount,
                   ),
+                  _SyncCountChip(
+                    label: '仅本地账本',
+                    count: overview.localOnlyLedgerCount,
+                  ),
                 ],
               ),
               const SizedBox(height: 10),

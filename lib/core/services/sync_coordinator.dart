@@ -63,16 +63,23 @@ class SyncCoordinator {
       ledgers.map((ledger) => ledger.uuid).toList(),
       includeDeleted: true,
     );
+    final syncableLedgerUuids = {
+      for (final ledger in ledgers)
+        if (ledger.shouldUploadToCloud || ledger.isCloudManaged) ledger.uuid,
+    };
     final ledgerUuids = <String>{
       for (final ledger in ledgers)
-        if (ledger.pendingSync ||
-            (ledger.isLocalTemporary && !ledger.hasSyncedRemoteCopy))
+        if (syncableLedgerUuids.contains(ledger.uuid) &&
+            (ledger.pendingSync || ledger.shouldUploadToCloud))
           ledger.uuid,
       for (final person in people)
-        if (person.pendingSync && person.pendingLedgerUuid != null)
+        if (person.pendingSync &&
+            syncableLedgerUuids.contains(person.pendingLedgerUuid))
           person.pendingLedgerUuid!,
       for (final transaction in transactions)
-        if (transaction.pendingSync) transaction.ledgerUuid,
+        if (transaction.pendingSync &&
+            syncableLedgerUuids.contains(transaction.ledgerUuid))
+          transaction.ledgerUuid,
     };
     if (ledgerUuids.isEmpty) return false;
 

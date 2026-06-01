@@ -126,6 +126,9 @@ class RemoteTransactionRepository implements TransactionRepository {
       ledgerUuid,
       includeDeleted: includeDeleted,
     );
+    if (await _isLocalOnlyLedger(ledgerUuid)) {
+      return localTransactions;
+    }
 
     try {
       await syncPendingTransactions(ledgerUuid);
@@ -163,6 +166,14 @@ class RemoteTransactionRepository implements TransactionRepository {
 
   @override
   Future<void> saveTransaction(TransactionRecord transaction) async {
+    if (await _isLocalOnlyLedger(transaction.ledgerUuid)) {
+      await _db.saveTransaction(
+        transaction
+          ..pendingSync = false
+          ..syncError = null,
+      );
+      return;
+    }
     final local = _localPendingTransaction(transaction);
     await _db.saveTransaction(local);
     transaction
@@ -176,6 +187,9 @@ class RemoteTransactionRepository implements TransactionRepository {
   Future<TransactionSyncResult> syncPendingTransactions(
     String ledgerUuid,
   ) async {
+    if (await _isLocalOnlyLedger(ledgerUuid)) {
+      return const TransactionSyncResult(synced: 0);
+    }
     final transactions = await _db.getTransactionsForLedger(
       ledgerUuid,
       includeDeleted: true,
@@ -269,7 +283,9 @@ class RemoteTransactionRepository implements TransactionRepository {
 
     transaction
       ..isDeleted = true
-      ..pendingSync = _looksLikeRemoteUuid(transaction.uuid)
+      ..pendingSync =
+          !await _isLocalOnlyLedger(ledgerUuid) &&
+          _looksLikeRemoteUuid(transaction.uuid)
       ..syncError = null;
     await _db.saveTransaction(transaction);
   }
@@ -300,6 +316,14 @@ class RemoteTransactionRepository implements TransactionRepository {
 
   static bool _looksLikeRemoteUuid(String uuid) {
     return RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(uuid);
+  }
+
+  Future<bool> _isLocalOnlyLedger(String ledgerUuid) async {
+    final ledgers = await _db.getAllLedgers(includeDeleted: true);
+    final ledger = ledgers
+        .where((ledger) => ledger.uuid == ledgerUuid)
+        .firstOrNull;
+    return ledger?.isLocalOnly == true;
   }
 
   Future<List<TransactionRecord>> _fetchRemoteTransactions(

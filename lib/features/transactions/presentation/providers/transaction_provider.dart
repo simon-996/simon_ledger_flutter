@@ -43,8 +43,8 @@ final ledgerSyncStatusProvider =
           .firstOrNull;
       final ledgerPending =
           ledger != null &&
-          (ledger.pendingSync ||
-              (ledger.isLocalTemporary && !ledger.hasSyncedRemoteCopy));
+          (ledger.shouldUploadToCloud || ledger.pendingSync) &&
+          !ledger.isLocalOnly;
       final people = await database.getAllPeople(includeDeleted: true);
       final pendingPeople = people.where((person) {
         return person.pendingSync && person.pendingLedgerUuid == ledgerUuid;

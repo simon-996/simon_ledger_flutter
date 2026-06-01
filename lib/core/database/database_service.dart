@@ -338,6 +338,7 @@ class DatabaseService {
           .map((value) => _ledgerMemberFromJson(value.cast<String, dynamic>()))
           .toList()
       ..syncedRemoteUuid = json['syncedRemoteUuid']?.toString()
+      ..cloudPolicy = _ledgerCloudPolicyFromJson(json['cloudPolicy'])
       ..pendingSync = json['pendingSync'] == true
       ..syncError = json['syncError']?.toString();
   }
@@ -356,9 +357,17 @@ class DatabaseService {
       'memberCount': ledger.memberCount,
       'members': ledger.members.map(_ledgerMemberToJson).toList(),
       'syncedRemoteUuid': ledger.syncedRemoteUuid,
+      'cloudPolicy': ledger.cloudPolicy.name,
       'pendingSync': ledger.pendingSync,
       'syncError': ledger.syncError,
     };
+  }
+
+  static LedgerCloudPolicy _ledgerCloudPolicyFromJson(Object? value) {
+    return LedgerCloudPolicy.values.where((policy) {
+          return policy.name == value?.toString();
+        }).firstOrNull ??
+        LedgerCloudPolicy.localOnly;
   }
 
   static LedgerMemberSummary _ledgerMemberFromJson(Map<String, dynamic> json) {

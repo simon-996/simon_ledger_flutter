@@ -91,6 +91,12 @@ class RemotePersonRepository implements PersonRepository {
     String? ledgerUuid,
   }) async {
     if (ledgerUuid != null) {
+      if (await _isLocalOnlyLedger(ledgerUuid)) {
+        return _cachedPeopleForLedger(
+          ledgerUuid,
+          includeDeleted: includeDeleted,
+        );
+      }
       try {
         await syncPendingPeople(ledgerUuid);
         final remoteLedgerUuid = await _identityResolver.resolveLedgerUuid(
@@ -227,6 +233,15 @@ class RemotePersonRepository implements PersonRepository {
   }
 
   Future<void> _saveRemotePerson(Person person, String ledgerUuid) async {
+    if (await _isLocalOnlyLedger(ledgerUuid)) {
+      await _savePersonLocally(
+        person
+          ..pendingSync = false
+          ..syncError = null
+          ..pendingLedgerUuid = null,
+      );
+      return;
+    }
     await _savePersonLocally(
       person
         ..pendingSync = true
@@ -312,6 +327,9 @@ class RemotePersonRepository implements PersonRepository {
       throw ArgumentError('Remote person deletes require ledgerUuid.');
     }
     await _deletePersonLocally(uuid);
+    if (await _isLocalOnlyLedger(ledgerUuid)) {
+      return;
+    }
     final people = await _db.getAllPeople(includeDeleted: true);
     final person = people.where((item) => item.uuid == uuid).firstOrNull;
     if (person == null) return;
@@ -337,6 +355,9 @@ class RemotePersonRepository implements PersonRepository {
 
   @override
   Future<void> syncPendingPeople(String ledgerUuid) async {
+    if (await _isLocalOnlyLedger(ledgerUuid)) {
+      return;
+    }
     final people = await _db.getAllPeople(includeDeleted: true);
     final pending = people.where((person) {
       return person.pendingSync && person.pendingLedgerUuid == ledgerUuid;
@@ -374,6 +395,14 @@ class RemotePersonRepository implements PersonRepository {
 
   bool _looksLikeRemoteUuid(String uuid) {
     return RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(uuid);
+  }
+
+  Future<bool> _isLocalOnlyLedger(String ledgerUuid) async {
+    final ledgers = await _db.getAllLedgers(includeDeleted: true);
+    final ledger = ledgers
+        .where((ledger) => ledger.uuid == ledgerUuid)
+        .firstOrNull;
+    return ledger?.isLocalOnly == true;
   }
 
   String _operationKey(String prefix, String uuid) {

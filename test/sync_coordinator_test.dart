@@ -57,6 +57,28 @@ void main() {
     expect(calls, isEmpty);
   });
 
+  test('does not upload local-only ledger during automatic sync', () async {
+    final calls = <String>[];
+    final database = DatabaseService();
+    await database.saveLedger(
+      Ledger()
+        ..uuid = 'local-ledger'
+        ..name = 'local only'
+        ..baseCurrencyCode = 'CNY',
+    );
+    final coordinator = SyncCoordinator(
+      ledgerRepository: _LedgerRepository(calls),
+      personRepository: _PersonRepository(calls),
+      transactionRepository: _TransactionRepository(calls),
+      database: database,
+    );
+
+    final changed = await coordinator.syncAllPending();
+
+    expect(changed, isFalse);
+    expect(calls, isEmpty);
+  });
+
   test('syncs all when local cache has a pending transaction', () async {
     final calls = <String>[];
     final database = DatabaseService();

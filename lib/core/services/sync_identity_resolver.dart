@@ -42,7 +42,11 @@ class SyncIdentityResolver {
   }) async {
     final ledger = await _findLedger(localUuid);
     if (ledger == null) return;
-    await _database.saveLedger(ledger..syncedRemoteUuid = remoteUuid);
+    await _database.saveLedger(
+      ledger
+        ..syncedRemoteUuid = remoteUuid
+        ..cloudPolicy = LedgerCloudPolicy.cloudManaged,
+    );
   }
 
   Future<void> recordPersonMapping({

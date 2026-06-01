@@ -113,8 +113,33 @@ void main() {
       expect(ledgers.single.uuid, 'local-ledger-1');
       expect(ledgers.single.isLocalTemporary, isTrue);
       expect(ledgers.single.syncedRemoteUuid, isNull);
+      expect(ledgers.single.cloudPolicy, LedgerCloudPolicy.uploadRequested);
       expect(ledgers.single.personUuids, ['local-person-1']);
       expect(people.single.uuid, 'local-person-1');
+    },
+  );
+
+  test(
+    'RemoteLedgerRepository does not upload local-only ledger automatically',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final database = DatabaseService();
+      await database.saveLedger(
+        Ledger()
+          ..uuid = 'local-only-ledger'
+          ..name = '仅本地账本'
+          ..baseCurrencyCode = 'CNY',
+      );
+      final apiClient = _LedgerCreateApiClient();
+      final repository = RemoteLedgerRepository(
+        apiClient: apiClient,
+        database: database,
+      );
+
+      await repository.syncPendingWrites();
+
+      expect(apiClient.postPaths, isEmpty);
+      expect((await database.getAllLedgers()).single.syncedRemoteUuid, isNull);
     },
   );
 
@@ -135,6 +160,7 @@ void main() {
           ..name = '离线新账本'
           ..baseCurrencyCode = 'CNY'
           ..exchangeRateToCNY = 1
+          ..cloudPolicy = LedgerCloudPolicy.uploadRequested
           ..personUuids = ['local-person-1'],
       );
 
@@ -179,6 +205,7 @@ void main() {
           ..uuid = 'local-ledger-1'
           ..name = '待导入账本'
           ..baseCurrencyCode = 'CNY'
+          ..cloudPolicy = LedgerCloudPolicy.uploadRequested
           ..personUuids = ['local-person-1'],
       );
       await database.saveLedger(
@@ -362,6 +389,42 @@ void main() {
   });
 
   test(
+    'RemotePersonRepository keeps local-only ledger person on device',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final database = DatabaseService();
+      await database.saveLedger(
+        Ledger()
+          ..uuid = 'local-only-ledger'
+          ..name = '仅本地'
+          ..baseCurrencyCode = 'CNY',
+      );
+      final apiClient = _PersonCreateApiClient();
+      final ledgerRepository = RemoteLedgerRepository(
+        apiClient: apiClient,
+        database: database,
+      );
+      final repository = RemotePersonRepository(
+        apiClient: apiClient,
+        ledgerRepository: ledgerRepository,
+        database: database,
+      );
+
+      await repository.savePerson(
+        Person()
+          ..uuid = 'local-person'
+          ..name = '本地人员',
+        ledgerUuid: 'local-only-ledger',
+      );
+
+      final person = (await database.getAllPeople()).single;
+      expect(person.pendingSync, isFalse);
+      expect(person.pendingLedgerUuid, isNull);
+      expect(apiClient.postPaths, isEmpty);
+    },
+  );
+
+  test(
     'RemotePersonRepository uploads person through mapped remote ledger',
     () async {
       SharedPreferences.setMockInitialValues({});
@@ -518,6 +581,7 @@ class _LedgerCreateApiClient extends ApiClient {
   _LedgerCreateApiClient() : super(tokenStore: TokenStore());
 
   final List<String> getPaths = [];
+  final List<String> postPaths = [];
 
   @override
   Future<T> get<T>(
@@ -561,6 +625,7 @@ class _LedgerCreateApiClient extends ApiClient {
     String? idempotencyKey,
     T Function(Object? json)? fromJson,
   }) async {
+    postPaths.add(path);
     if (path != '/api/ledgers/with-people') {
       throw UnimplementedError(path);
     }

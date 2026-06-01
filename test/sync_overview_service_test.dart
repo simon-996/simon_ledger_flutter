@@ -14,7 +14,8 @@ void main() {
       Ledger()
         ..uuid = 'local-ledger'
         ..name = '离线账本'
-        ..baseCurrencyCode = 'CNY',
+        ..baseCurrencyCode = 'CNY'
+        ..cloudPolicy = LedgerCloudPolicy.uploadRequested,
     );
     await database.savePerson(
       Person()

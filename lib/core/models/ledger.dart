@@ -1,3 +1,5 @@
+enum LedgerCloudPolicy { localOnly, uploadRequested, cloudManaged }
+
 class Ledger {
   int id = 0;
 
@@ -25,6 +27,8 @@ class Ledger {
 
   String? syncedRemoteUuid;
 
+  LedgerCloudPolicy cloudPolicy = LedgerCloudPolicy.localOnly;
+
   bool pendingSync = false;
 
   String? syncError;
@@ -35,6 +39,17 @@ class Ledger {
 
   bool get hasSyncedRemoteCopy =>
       syncedRemoteUuid != null && syncedRemoteUuid!.isNotEmpty;
+
+  bool get shouldUploadToCloud =>
+      cloudPolicy == LedgerCloudPolicy.uploadRequested;
+
+  bool get isCloudManaged =>
+      cloudPolicy == LedgerCloudPolicy.cloudManaged ||
+      hasSyncedRemoteCopy ||
+      !isLocalTemporary;
+
+  bool get isLocalOnly =>
+      cloudPolicy == LedgerCloudPolicy.localOnly && !isCloudManaged;
 
   String get remoteSyncUuid => hasSyncedRemoteCopy ? syncedRemoteUuid! : uuid;
 

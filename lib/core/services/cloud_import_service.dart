@@ -85,6 +85,12 @@ class CloudImportService {
         ),
       );
 
+      await _database.saveLedger(
+        ledger
+          ..cloudPolicy = LedgerCloudPolicy.uploadRequested
+          ..pendingSync = true
+          ..syncError = null,
+      );
       final result = await _syncCoordinator.syncLedger(
         ledger.uuid,
         force: true,
@@ -116,7 +122,9 @@ class CloudImportService {
     if (remoteUuid == null || remoteUuid.isEmpty) {
       return;
     }
-    ledger.syncedRemoteUuid = remoteUuid;
+    ledger
+      ..syncedRemoteUuid = remoteUuid
+      ..cloudPolicy = LedgerCloudPolicy.cloudManaged;
     await _database.saveLedger(ledger);
   }
 

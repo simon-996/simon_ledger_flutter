@@ -162,6 +162,32 @@ void main() {
         expect(cached.single.pendingSync, isFalse);
       },
     );
+
+    test('keeps local-only ledger transaction on device', () async {
+      SharedPreferences.setMockInitialValues({});
+      final apiClient = _FakeApiClient([]);
+      final database = DatabaseService();
+      await database.saveLedger(
+        Ledger()
+          ..uuid = 'local-only-ledger'
+          ..name = '仅本地'
+          ..baseCurrencyCode = 'CNY',
+      );
+      final repository = RemoteTransactionRepository(
+        apiClient: apiClient,
+        database: database,
+      );
+
+      await repository.saveTransaction(
+        _transaction()..ledgerUuid = 'local-only-ledger',
+      );
+
+      final transaction = (await database.getTransactionsForLedger(
+        'local-only-ledger',
+      )).single;
+      expect(transaction.pendingSync, isFalse);
+      expect(apiClient.postPaths, isEmpty);
+    });
   });
 }
 

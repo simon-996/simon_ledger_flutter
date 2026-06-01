@@ -311,8 +311,10 @@ class _LedgerCard extends StatelessWidget {
                                 _MetaChip(
                                   text: ledger.hasSyncedRemoteCopy
                                       ? '本地已同步'
-                                      : '本地待同步',
-                                  emphasized: !ledger.hasSyncedRemoteCopy,
+                                      : ledger.shouldUploadToCloud
+                                      ? '等待上传'
+                                      : '仅本地',
+                                  emphasized: ledger.shouldUploadToCloud,
                                 ),
                               if (ledger.isShared)
                                 _MetaChip(text: '${ledger.memberCount} 人共享'),
