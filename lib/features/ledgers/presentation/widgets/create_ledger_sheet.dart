@@ -99,7 +99,12 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
     if (result != null && mounted) {
       try {
         await ref
-            .read(personNotifierProvider(ledgerUuid: ledgerUuid).notifier)
+            .read(
+              personNotifierProvider(
+                includeDeleted: false,
+                ledgerUuid: ledgerUuid,
+              ).notifier,
+            )
             .addOrUpdatePerson(result);
 
         setState(() {
@@ -139,7 +144,12 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
     if (result != null && mounted) {
       try {
         await ref
-            .read(personNotifierProvider(ledgerUuid: ledgerUuid).notifier)
+            .read(
+              personNotifierProvider(
+                includeDeleted: false,
+                ledgerUuid: ledgerUuid,
+              ).notifier,
+            )
             .addOrUpdatePerson(result);
       } catch (e) {
         _showWriteError(e);
@@ -181,7 +191,10 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
       try {
         await ref
             .read(
-              personNotifierProvider(ledgerUuid: _personLedgerUuid).notifier,
+              personNotifierProvider(
+                includeDeleted: false,
+                ledgerUuid: _personLedgerUuid,
+              ).notifier,
             )
             .deletePerson(person.uuid);
         setState(() {

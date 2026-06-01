@@ -481,8 +481,14 @@ void main() {
       );
 
       final person = (await database.getAllPeople()).single;
+      final ledger = (await database.getAllLedgers()).single;
+      final cachedPeople = await repository.getCachedPeople(
+        ledgerUuid: 'local-only-ledger',
+      );
       expect(person.pendingSync, isFalse);
       expect(person.pendingLedgerUuid, isNull);
+      expect(ledger.personUuids, ['local-person']);
+      expect(cachedPeople.single.uuid, 'local-person');
       expect(apiClient.postPaths, isEmpty);
     },
   );

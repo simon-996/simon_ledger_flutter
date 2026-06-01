@@ -327,6 +327,7 @@ class RemotePersonRepository implements PersonRepository {
           ..syncError = null
           ..pendingLedgerUuid = null,
       );
+      await _attachPersonToLedger(ledgerUuid, person.uuid);
       return;
     }
     await _savePersonLocally(
@@ -335,6 +336,7 @@ class RemotePersonRepository implements PersonRepository {
         ..syncError = null
         ..pendingLedgerUuid = ledgerUuid,
     );
+    await _attachPersonToLedger(ledgerUuid, person.uuid);
     unawaited(_saveRemotePerson(person, ledgerUuid));
   }
 
@@ -420,6 +422,21 @@ class RemotePersonRepository implements PersonRepository {
         .where((ledger) => ledger.uuid == ledgerUuid)
         .firstOrNull;
     return ledger?.isLocalOnly == true;
+  }
+
+  Future<void> _attachPersonToLedger(
+    String ledgerUuid,
+    String personUuid,
+  ) async {
+    final ledgers = await _db.getAllLedgers(includeDeleted: true);
+    final ledger = ledgers
+        .where((ledger) => ledger.uuid == ledgerUuid)
+        .firstOrNull;
+    if (ledger == null || ledger.personUuids.contains(personUuid)) {
+      return;
+    }
+    ledger.personUuids = [...ledger.personUuids, personUuid];
+    await _db.saveLedger(ledger);
   }
 
   String _operationKey(String prefix, String uuid) {
