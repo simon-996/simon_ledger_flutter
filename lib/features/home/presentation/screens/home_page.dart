@@ -318,14 +318,17 @@ class _HomePageState extends ConsumerState<HomePage> {
           .read(inviteRepositoryProvider)
           .createInvite(ledger.uuid);
       if (!mounted) return;
-      final text = 'Simon Ledger 邀请码：${invite.code}';
-      await Clipboard.setData(ClipboardData(text: invite.code));
+      final text =
+          '邀请你加入 Simon Ledger 账本“${ledger.name}”。\n'
+          '邀请码：${invite.code}\n'
+          '登录后在“我的”页面输入邀请码即可加入。';
+      await Clipboard.setData(ClipboardData(text: text));
       if (!mounted) return;
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('分享账本'),
-          content: SelectableText('$text\n\n对方登录后使用邀请码加入：${ledger.name}'),
+          content: SelectableText(text),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
@@ -333,15 +336,15 @@ class _HomePageState extends ConsumerState<HomePage> {
             ),
             FilledButton.icon(
               onPressed: () async {
-                await Clipboard.setData(ClipboardData(text: invite.code));
+                await Clipboard.setData(ClipboardData(text: text));
                 if (context.mounted) {
                   ScaffoldMessenger.of(
                     context,
-                  ).showSnackBar(const SnackBar(content: Text('邀请码已复制')));
+                  ).showSnackBar(const SnackBar(content: Text('邀请文本已复制')));
                 }
               },
               icon: const Icon(Icons.copy_rounded),
-              label: const Text('复制'),
+              label: const Text('复制邀请文本'),
             ),
           ],
         ),
