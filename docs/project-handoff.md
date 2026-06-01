@@ -1,7 +1,7 @@
 # Simon Ledger 项目接手说明
 
 > 每次开始维护 Simon Ledger 前先阅读本文档。本文档描述当前产品目标、已实现能力、实际架构、离线同步原则、三端差异、验证方式和已知待办。  
-> 实施历史与逐项进度见 `docs/backend-integration-todolist.md`，真实服务验收步骤见 `docs/backend-acceptance-checklist.md`。
+> 实施历史与逐项进度见 `docs/backend-integration-todolist.md`，高频使用体验优化见 `docs/high-frequency-user-optimization-todolist.md`，真实服务验收步骤见 `docs/backend-acceptance-checklist.md`。
 
 ## 1. 项目位置与仓库
 

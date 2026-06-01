@@ -32,6 +32,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
   String? _selectedCurrency;
   String? _payerPersonUuid;
   int _transactionType = 0;
+  bool _successDialogVisible = false;
 
   final _amountController = TextEditingController();
   final _noteController = TextEditingController();
@@ -195,9 +196,11 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     String category,
     Iterable<Person> people,
   ) {
-    showGeneralDialog(
+    _successDialogVisible = true;
+    showGeneralDialog<void>(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
       barrierColor: Colors.black45,
       transitionDuration: const Duration(milliseconds: 360),
       pageBuilder: (context, animation, secondaryAnimation) {
@@ -273,12 +276,16 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
           ),
         );
       },
-    );
+    ).whenComplete(() {
+      _successDialogVisible = false;
+    });
 
     Future.delayed(const Duration(milliseconds: 1400), () {
-      if (mounted && Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
-      }
+      if (!mounted || !_successDialogVisible) return;
+      final navigator = Navigator.of(context, rootNavigator: true);
+      if (!navigator.canPop()) return;
+      _successDialogVisible = false;
+      navigator.pop();
     });
   }
 
