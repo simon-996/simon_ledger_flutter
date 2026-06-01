@@ -6,6 +6,11 @@ import '../network/api_client.dart';
 import '../services/sync_identity_resolver.dart';
 
 abstract class TransactionRepository {
+  Future<List<TransactionRecord>> getCachedTransactionsForLedger(
+    String ledgerUuid, {
+    bool includeDeleted = false,
+  });
+
   Future<List<TransactionRecord>> getTransactionsForLedger(
     String ledgerUuid, {
     bool includeDeleted = false,
@@ -34,6 +39,17 @@ class LocalTransactionRepository implements TransactionRepository {
   const LocalTransactionRepository(this._db);
 
   final DatabaseService _db;
+
+  @override
+  Future<List<TransactionRecord>> getCachedTransactionsForLedger(
+    String ledgerUuid, {
+    bool includeDeleted = false,
+  }) {
+    return _db.getTransactionsForLedger(
+      ledgerUuid,
+      includeDeleted: includeDeleted,
+    );
+  }
 
   @override
   Future<List<TransactionRecord>> getTransactionsForLedger(
@@ -89,6 +105,17 @@ class RemoteTransactionRepository implements TransactionRepository {
   final ApiClient _apiClient;
   final DatabaseService _db;
   final SyncIdentityResolver _identityResolver;
+
+  @override
+  Future<List<TransactionRecord>> getCachedTransactionsForLedger(
+    String ledgerUuid, {
+    bool includeDeleted = false,
+  }) {
+    return _db.getTransactionsForLedger(
+      ledgerUuid,
+      includeDeleted: includeDeleted,
+    );
+  }
 
   @override
   Future<List<TransactionRecord>> getTransactionsForLedger(

@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../../core/di/providers.dart';
 import '../../../../core/models/transaction_record.dart';
+import '../../../../core/repositories/transaction_repository.dart';
 import '../../../ledgers/presentation/providers/ledger_stats_provider.dart';
 
 part 'transaction_provider.g.dart';
@@ -44,7 +47,25 @@ class TransactionNotifier extends _$TransactionNotifier {
   Future<List<TransactionRecord>> build(String ledgerUuid) async {
     await ref.watch(authTokenProvider.future);
     final repository = ref.watch(transactionRepositoryProvider);
-    return await repository.getTransactionsForLedger(ledgerUuid);
+    if (repository is! RemoteTransactionRepository) {
+      return repository.getTransactionsForLedger(ledgerUuid);
+    }
+
+    var disposed = false;
+    ref.onDispose(() => disposed = true);
+    unawaited(_refreshRemote(repository, isDisposed: () => disposed));
+    return repository.getCachedTransactionsForLedger(ledgerUuid);
+  }
+
+  Future<void> _refreshRemote(
+    RemoteTransactionRepository repository, {
+    required bool Function() isDisposed,
+  }) async {
+    final transactions = await repository.getTransactionsForLedger(ledgerUuid);
+    if (isDisposed()) return;
+    state = AsyncValue.data(transactions);
+    ref.invalidate(ledgerSyncStatusProvider(ledgerUuid));
+    ref.invalidate(ledgerStatsProvider);
   }
 
   Future<void> addTransaction(TransactionRecord transaction) async {

@@ -102,6 +102,12 @@ class _TransactionRepository implements TransactionRepository {
   }) async => [];
 
   @override
+  Future<List<TransactionRecord>> getCachedTransactionsForLedger(
+    String ledgerUuid, {
+    bool includeDeleted = false,
+  }) async => [];
+
+  @override
   Future<List<TransactionRecord>> getTransactionsForLedgers(
     List<String> ledgerUuids, {
     bool includeDeleted = false,
