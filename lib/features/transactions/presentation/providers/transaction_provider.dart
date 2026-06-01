@@ -10,12 +10,25 @@ part 'transaction_provider.g.dart';
 
 class LedgerSyncStatus {
   const LedgerSyncStatus({
-    required this.pendingCount,
-    required this.failedCount,
+    required this.ledgerPendingCount,
+    required this.personPendingCount,
+    required this.transactionPendingCount,
+    required this.ledgerFailedCount,
+    required this.personFailedCount,
+    required this.transactionFailedCount,
   });
 
-  final int pendingCount;
-  final int failedCount;
+  final int ledgerPendingCount;
+  final int personPendingCount;
+  final int transactionPendingCount;
+  final int ledgerFailedCount;
+  final int personFailedCount;
+  final int transactionFailedCount;
+
+  int get pendingCount =>
+      ledgerPendingCount + personPendingCount + transactionPendingCount;
+  int get failedCount =>
+      ledgerFailedCount + personFailedCount + transactionFailedCount;
 
   bool get hasPending => pendingCount > 0;
   bool get hasFailed => failedCount > 0;
@@ -24,6 +37,18 @@ class LedgerSyncStatus {
 final ledgerSyncStatusProvider =
     FutureProvider.family<LedgerSyncStatus, String>((ref, ledgerUuid) async {
       final database = ref.watch(databaseProvider);
+      final ledgers = await database.getAllLedgers(includeDeleted: true);
+      final ledger = ledgers
+          .where((ledger) => ledger.uuid == ledgerUuid)
+          .firstOrNull;
+      final ledgerPending =
+          ledger != null &&
+          (ledger.pendingSync ||
+              (ledger.isLocalTemporary && !ledger.hasSyncedRemoteCopy));
+      final people = await database.getAllPeople(includeDeleted: true);
+      final pendingPeople = people.where((person) {
+        return person.pendingSync && person.pendingLedgerUuid == ledgerUuid;
+      }).toList();
       final transactions = await database.getTransactionsForLedger(
         ledgerUuid,
         includeDeleted: true,
@@ -36,8 +61,16 @@ final ledgerSyncStatusProvider =
         return error != null && error.isNotEmpty;
       }).length;
       return LedgerSyncStatus(
-        pendingCount: pending.length,
-        failedCount: failedCount,
+        ledgerPendingCount: ledgerPending ? 1 : 0,
+        personPendingCount: pendingPeople.length,
+        transactionPendingCount: pending.length,
+        ledgerFailedCount: ledgerPending && ledger.syncError?.isNotEmpty == true
+            ? 1
+            : 0,
+        personFailedCount: pendingPeople.where((person) {
+          return person.syncError?.isNotEmpty == true;
+        }).length,
+        transactionFailedCount: failedCount,
       );
     });
 

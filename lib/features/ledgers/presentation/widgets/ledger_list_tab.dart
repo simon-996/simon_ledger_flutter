@@ -143,7 +143,7 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
               canReorder: true,
               canShare:
                   isCloudMode && !isLocalTemporary && _canShare(ledger.role),
-              canSync: isCloudMode && !isLocalTemporary,
+              canSync: isCloudMode,
             ),
           ),
         );
@@ -317,15 +317,6 @@ class _LedgerCard extends StatelessWidget {
                                       ? '本地临时 · 已同步'
                                       : '本地临时 · 待同步',
                                   emphasized: !ledger.hasSyncedRemoteCopy,
-                                ),
-                              if (isCloudMode &&
-                                  ledger.pendingSync &&
-                                  !ledger.isLocalTemporary)
-                                _MetaChip(
-                                  text: ledger.syncError?.isNotEmpty == true
-                                      ? '账本同步失败'
-                                      : '账本待同步',
-                                  emphasized: true,
                                 ),
                               if (ledger.isShared)
                                 _MetaChip(
@@ -692,9 +683,15 @@ class _SyncMetaChip extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final failed = status.hasFailed;
     final color = failed ? colorScheme.error : colorScheme.tertiary;
+    final details = [
+      if (status.ledgerPendingCount > 0) '账本 ${status.ledgerPendingCount}',
+      if (status.personPendingCount > 0) '人员 ${status.personPendingCount}',
+      if (status.transactionPendingCount > 0)
+        '流水 ${status.transactionPendingCount}',
+    ].join(' · ');
     final text = failed
-        ? '${status.failedCount}/${status.pendingCount} 条同步失败'
-        : '${status.pendingCount} 条待同步';
+        ? '${status.failedCount} 项同步失败 · $details'
+        : '待同步 · $details';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
