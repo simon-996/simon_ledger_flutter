@@ -13,6 +13,8 @@ final cachedPeopleProvider = FutureProvider<List<Person>>((ref) {
 
 @riverpod
 class PersonNotifier extends _$PersonNotifier {
+  int _mutationVersion = 0;
+
   @override
   Future<List<Person>> build({
     bool includeDeleted = false,
@@ -40,15 +42,17 @@ class PersonNotifier extends _$PersonNotifier {
     RemotePersonRepository repository, {
     required bool Function() isDisposed,
   }) async {
+    final mutationVersion = _mutationVersion;
     final people = await repository.getAllPeople(
       includeDeleted: includeDeleted,
       ledgerUuid: ledgerUuid,
     );
-    if (isDisposed()) return;
+    if (isDisposed() || mutationVersion != _mutationVersion) return;
     state = AsyncValue.data(people);
   }
 
   Future<void> addOrUpdatePerson(Person person) async {
+    _mutationVersion += 1;
     final repository = ref.read(personRepositoryProvider);
     await repository.savePerson(person, ledgerUuid: ledgerUuid);
     ref.invalidate(cachedPeopleProvider);
@@ -59,6 +63,7 @@ class PersonNotifier extends _$PersonNotifier {
   }
 
   Future<void> deletePerson(String uuid) async {
+    _mutationVersion += 1;
     final repository = ref.read(personRepositoryProvider);
     await repository.deletePerson(uuid, ledgerUuid: ledgerUuid);
     ref.invalidate(cachedPeopleProvider);

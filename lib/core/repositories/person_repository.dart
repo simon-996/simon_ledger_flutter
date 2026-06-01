@@ -104,6 +104,9 @@ class RemotePersonRepository implements PersonRepository {
         final remoteLedgerUuid = await _identityResolver.resolveLedgerUuid(
           ledgerUuid,
         );
+        final cachedPersonUuidsBeforeRefresh = await _ledgerPersonUuids(
+          ledgerUuid,
+        );
         final people = await _apiClient.get<List<Person>>(
           '/api/ledgers/$remoteLedgerUuid/people',
           fromJson: (json) =>
@@ -112,8 +115,12 @@ class RemotePersonRepository implements PersonRepository {
         for (final person in people) {
           await _db.savePerson(person);
         }
-        await _cacheLedgerPeople(ledgerUuid, people);
-        return _mergeCachedHistoricalPeople(
+        await _cacheLedgerPeople(
+          ledgerUuid,
+          people,
+          cachedPersonUuidsBeforeRefresh: cachedPersonUuidsBeforeRefresh,
+        );
+        return _mergeCachedPeople(
           ledgerUuid,
           people,
           includeDeleted: includeDeleted,
@@ -169,18 +176,14 @@ class RemotePersonRepository implements PersonRepository {
         .toList();
   }
 
-  Future<List<Person>> _mergeCachedHistoricalPeople(
+  Future<List<Person>> _mergeCachedPeople(
     String ledgerUuid,
     List<Person> remotePeople, {
     required bool includeDeleted,
   }) async {
-    if (!includeDeleted) {
-      return remotePeople;
-    }
-
     final cachedPeople = await _cachedPeopleForLedger(
       ledgerUuid,
-      includeDeleted: true,
+      includeDeleted: includeDeleted,
     );
     return {
       for (final person in remotePeople) person.uuid: person,
@@ -221,8 +224,9 @@ class RemotePersonRepository implements PersonRepository {
 
   Future<void> _cacheLedgerPeople(
     String ledgerUuid,
-    List<Person> people,
-  ) async {
+    List<Person> remotePeople, {
+    required Set<String> cachedPersonUuidsBeforeRefresh,
+  }) async {
     final ledgers = await _db.getAllLedgers(includeDeleted: true);
     final ledger = ledgers
         .where((ledger) => ledger.uuid == ledgerUuid)
@@ -230,8 +234,31 @@ class RemotePersonRepository implements PersonRepository {
     if (ledger == null) {
       return;
     }
-    ledger.personUuids = people.map((person) => person.uuid).toList();
+    final activePeople = await _db.getAllPeople();
+    final activePersonUuids = activePeople.map((person) => person.uuid).toSet();
+    final localPersonUuidsAddedDuringRefresh = ledger.personUuids
+        .where((uuid) => !cachedPersonUuidsBeforeRefresh.contains(uuid))
+        .where(activePersonUuids.contains);
+    final pendingPersonUuids = activePeople
+        .where(
+          (person) =>
+              person.pendingSync && person.pendingLedgerUuid == ledgerUuid,
+        )
+        .map((person) => person.uuid);
+    ledger.personUuids = {
+      ...remotePeople.map((person) => person.uuid),
+      ...localPersonUuidsAddedDuringRefresh,
+      ...pendingPersonUuids,
+    }.toList();
     await _db.saveLedger(ledger);
+  }
+
+  Future<Set<String>> _ledgerPersonUuids(String ledgerUuid) async {
+    final ledgers = await _db.getAllLedgers(includeDeleted: true);
+    final ledger = ledgers
+        .where((ledger) => ledger.uuid == ledgerUuid)
+        .firstOrNull;
+    return ledger?.personUuids.toSet() ?? const {};
   }
 
   Future<void> _saveRemotePerson(Person person, String ledgerUuid) async {

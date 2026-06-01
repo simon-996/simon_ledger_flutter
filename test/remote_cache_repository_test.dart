@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simon_ledger_flutter/core/database/database_service.dart';
@@ -603,6 +605,57 @@ void main() {
       expect(people.single.isDeleted, isTrue);
     },
   );
+
+  test(
+    'RemotePersonRepository preserves person added while stale refresh is pending',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final database = DatabaseService();
+      await database.saveLedger(
+        Ledger()
+          ..uuid = _remoteLedgerUuid
+          ..name = '云端账本'
+          ..baseCurrencyCode = 'CNY'
+          ..personUuids = [_remotePersonUuid],
+      );
+      await database.savePerson(
+        Person()
+          ..uuid = _remotePersonUuid
+          ..name = '已有人员',
+      );
+      final apiClient = _StalePeopleRefreshApiClient();
+      final ledgerRepository = RemoteLedgerRepository(
+        apiClient: apiClient,
+        database: database,
+      );
+      final repository = RemotePersonRepository(
+        apiClient: apiClient,
+        ledgerRepository: ledgerRepository,
+        database: database,
+      );
+
+      final refresh = repository.getAllPeople(ledgerUuid: _remoteLedgerUuid);
+      await apiClient.getStarted.future;
+      await repository.savePerson(
+        Person()
+          ..uuid = 'local-person'
+          ..name = '刚添加的人员',
+        ledgerUuid: _remoteLedgerUuid,
+      );
+      await apiClient.postCompleted.future;
+      await _flushBackgroundTasks();
+      apiClient.releaseGet.complete();
+
+      final people = await refresh;
+      final ledger = (await database.getAllLedgers()).single;
+
+      expect(ledger.personUuids, [_remotePersonUuid, _secondRemotePersonUuid]);
+      expect(people.map((person) => person.uuid), [
+        _remotePersonUuid,
+        _secondRemotePersonUuid,
+      ]);
+    },
+  );
 }
 
 class _OfflineApiClient extends ApiClient {
@@ -651,6 +704,7 @@ Future<void> _flushBackgroundTasks() async {
 const _remoteLedgerUuid = '0123456789abcdef0123456789abcdef';
 const _anotherRemoteLedgerUuid = 'fedcba9876543210fedcba9876543210';
 const _remotePersonUuid = 'abcdef0123456789abcdef0123456789';
+const _secondRemotePersonUuid = '1234567890abcdef1234567890abcdef';
 
 class _LedgerCreateApiClient extends ApiClient {
   _LedgerCreateApiClient() : super(tokenStore: TokenStore());
@@ -743,6 +797,54 @@ class _PersonCreateApiClient extends ApiClient {
       'uuid': _remotePersonUuid,
       'name': '离线人员',
       'avatar': '🙂',
+      'linkedUserUuid': null,
+    });
+  }
+}
+
+class _StalePeopleRefreshApiClient extends ApiClient {
+  _StalePeopleRefreshApiClient() : super(tokenStore: TokenStore());
+
+  final getStarted = Completer<void>();
+  final releaseGet = Completer<void>();
+  final postCompleted = Completer<void>();
+
+  @override
+  Future<T> get<T>(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+    T Function(Object? json)? fromJson,
+  }) async {
+    if (path != '/api/ledgers/$_remoteLedgerUuid/people') {
+      throw UnimplementedError(path);
+    }
+    getStarted.complete();
+    await releaseGet.future;
+    return fromJson!([
+      {
+        'uuid': _remotePersonUuid,
+        'name': '已有人员',
+        'avatar': '🧑',
+        'linkedUserUuid': null,
+      },
+    ]);
+  }
+
+  @override
+  Future<T> post<T>(
+    String path, {
+    Object? data,
+    String? idempotencyKey,
+    T Function(Object? json)? fromJson,
+  }) async {
+    if (path != '/api/ledgers/$_remoteLedgerUuid/people') {
+      throw UnimplementedError(path);
+    }
+    postCompleted.complete();
+    return fromJson!({
+      'uuid': _secondRemotePersonUuid,
+      'name': '刚添加的人员',
+      'avatar': '🧑',
       'linkedUserUuid': null,
     });
   }
