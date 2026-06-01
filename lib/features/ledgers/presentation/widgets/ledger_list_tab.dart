@@ -260,6 +260,8 @@ class _LedgerCard extends StatelessWidget {
     final hasPendingSync = syncStatusValue?.hasPending == true;
     final isLocalUnsynced =
         isCloudMode && ledger.isLocalTemporary && !ledger.hasSyncedRemoteCopy;
+    final isCloudSynced =
+        isCloudMode && ledger.isCloudManaged && !hasPendingSync && !isSyncing;
     final localManualPeople = ledger.personUuids
         .map((uuid) => personOrFallback(peopleById, uuid, name: '人员'))
         .where((person) => person.linkedUserUuid == null && !person.isDeleted)
@@ -330,7 +332,12 @@ class _LedgerCard extends StatelessWidget {
                               if (isSyncing)
                                 const _SyncingMetaChip()
                               else if (hasPendingSync)
-                                _SyncMetaChip(status: syncStatusValue!),
+                                _SyncMetaChip(status: syncStatusValue!)
+                              else if (isCloudSynced)
+                                const _MetaChip(
+                                  text: '已同步至云端',
+                                  tooltip: '账本数据已同步至云端',
+                                ),
                             ],
                           ),
                         ],

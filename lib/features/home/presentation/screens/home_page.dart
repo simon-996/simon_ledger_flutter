@@ -292,6 +292,9 @@ class _HomePageState extends ConsumerState<HomePage> {
       final result = await ref
           .read(syncCoordinatorProvider)
           .syncLedger(ledger.uuid, force: true);
+      ref.invalidate(ledgerNotifierProvider);
+      ref.invalidate(personNotifierProvider);
+      ref.invalidate(cachedPeopleProvider);
       ref.invalidate(ledgerSyncStatusProvider(ledger.uuid));
       ref.invalidate(transactionNotifierProvider(ledger.uuid));
       ref.invalidate(ledgerStatsProvider);

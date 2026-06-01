@@ -124,5 +124,6 @@ void main() {
     expect(find.text('本地已同步'), findsNothing);
     expect(find.text('仅本地'), findsNothing);
     expect(find.text('等待上传'), findsNothing);
+    expect(find.text('已同步至云端'), findsOneWidget);
   });
 }
