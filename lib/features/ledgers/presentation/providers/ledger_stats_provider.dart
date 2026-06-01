@@ -11,15 +11,18 @@ class LedgerStats extends _$LedgerStats {
     await ref.watch(authTokenProvider.future);
     final ledgerRepository = ref.watch(ledgerRepositoryProvider);
     final transactionRepository = ref.watch(transactionRepositoryProvider);
-    final ledgers = await ledgerRepository.getAllLedgers();
-    final transactions = await transactionRepository.getTransactionsForLedgers(
-      ledgers.map((ledger) => ledger.uuid).toList(),
+    final ledgers = await ledgerRepository.getCachedLedgers();
+    final transactionsByLedger = await Future.wait(
+      ledgers.map(
+        (ledger) =>
+            transactionRepository.getCachedTransactionsForLedger(ledger.uuid),
+      ),
     );
 
     return calculateLedgerStats(
       ledgerUuids: ledgers.map((ledger) => ledger.uuid),
       ledgersByUuid: {for (final ledger in ledgers) ledger.uuid: ledger},
-      transactions: transactions,
+      transactions: transactionsByLedger.expand((transactions) => transactions),
     );
   }
 
