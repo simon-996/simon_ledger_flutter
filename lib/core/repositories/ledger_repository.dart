@@ -112,6 +112,10 @@ class RemoteLedgerRepository implements LedgerRepository {
       final cachedPeopleByLedgerUuid = {
         for (final ledger in cachedLedgers) ledger.uuid: ledger.personUuids,
       };
+      final cachedSortOrderByRemoteUuid = {
+        for (final ledger in cachedLedgers)
+          ledger.remoteSyncUuid: ledger.sortOrder,
+      };
 
       if (ledgers.isNotEmpty) {
         try {
@@ -138,7 +142,8 @@ class RemoteLedgerRepository implements LedgerRepository {
       }
 
       for (var index = 0; index < ledgers.length; index += 1) {
-        ledgers[index].sortOrder = index;
+        ledgers[index].sortOrder =
+            cachedSortOrderByRemoteUuid[ledgers[index].uuid] ?? index;
         await _db.saveLedger(ledgers[index]);
       }
       final localTemporaryLedgers = await _localTemporaryLedgers(
@@ -336,13 +341,15 @@ class RemoteLedgerRepository implements LedgerRepository {
         .where((ledger) => ledger.hasSyncedRemoteCopy)
         .map((ledger) => ledger.remoteSyncUuid)
         .toSet();
-    return [
+    final merged = [
       ...localTemporaryLedgers,
       ...ledgers.where((ledger) {
         return !ledger.isLocalTemporary &&
             !syncedRemoteUuids.contains(ledger.uuid);
       }),
     ];
+    merged.sort((left, right) => left.sortOrder.compareTo(right.sortOrder));
+    return merged;
   }
 
   bool _looksLikeRemoteUuid(String uuid) {

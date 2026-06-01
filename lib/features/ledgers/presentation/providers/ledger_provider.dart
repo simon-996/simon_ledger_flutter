@@ -78,10 +78,10 @@ class LedgerNotifier extends _$LedgerNotifier {
     // Optimistically update the UI state
     state = AsyncValue.data(items);
 
-    // Persist changes to database
-    final repository = ref.read(ledgerRepositoryProvider);
+    // Ordering is a device preference and must never wait for cloud writes.
+    final database = ref.read(databaseProvider);
     for (final ledger in items) {
-      await repository.saveLedger(ledger);
+      await database.saveLedger(ledger);
     }
   }
 

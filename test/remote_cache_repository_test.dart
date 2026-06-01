@@ -53,6 +53,36 @@ void main() {
     expect(people.single.avatar, '😎');
   });
 
+  test('RemoteLedgerRepository keeps cached local ledger order', () async {
+    SharedPreferences.setMockInitialValues({});
+    final database = DatabaseService();
+    await database.saveLedger(
+      Ledger()
+        ..uuid = _remoteLedgerUuid
+        ..name = '第二个账本'
+        ..baseCurrencyCode = 'CNY'
+        ..sortOrder = 1,
+    );
+    await database.saveLedger(
+      Ledger()
+        ..uuid = _anotherRemoteLedgerUuid
+        ..name = '第一个账本'
+        ..baseCurrencyCode = 'CNY'
+        ..sortOrder = 0,
+    );
+    final repository = RemoteLedgerRepository(
+      apiClient: _OrderedLedgersApiClient(),
+      database: database,
+    );
+
+    final ledgers = await repository.getAllLedgers();
+
+    expect(ledgers.map((ledger) => ledger.uuid), [
+      _anotherRemoteLedgerUuid,
+      _remoteLedgerUuid,
+    ]);
+  });
+
   test(
     'RemoteLedgerRepository creates ledger locally when cloud create is offline',
     () async {
@@ -416,6 +446,7 @@ class _OfflineApiClient extends ApiClient {
 }
 
 const _remoteLedgerUuid = '0123456789abcdef0123456789abcdef';
+const _anotherRemoteLedgerUuid = 'fedcba9876543210fedcba9876543210';
 const _remotePersonUuid = 'abcdef0123456789abcdef0123456789';
 
 class _LedgerCreateApiClient extends ApiClient {
@@ -509,5 +540,34 @@ class _PersonCreateApiClient extends ApiClient {
       'avatar': '🙂',
       'linkedUserUuid': null,
     });
+  }
+}
+
+class _OrderedLedgersApiClient extends ApiClient {
+  _OrderedLedgersApiClient() : super(tokenStore: TokenStore());
+
+  @override
+  Future<T> get<T>(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+    T Function(Object? json)? fromJson,
+  }) async {
+    if (path == '/api/ledgers') {
+      return fromJson!([
+        {'uuid': _remoteLedgerUuid, 'name': '第二个账本', 'baseCurrencyCode': 'CNY'},
+        {
+          'uuid': _anotherRemoteLedgerUuid,
+          'name': '第一个账本',
+          'baseCurrencyCode': 'CNY',
+        },
+      ]);
+    }
+    if (path == '/api/ledgers/people') {
+      return fromJson!({
+        _remoteLedgerUuid: const [],
+        _anotherRemoteLedgerUuid: const [],
+      });
+    }
+    throw UnimplementedError(path);
   }
 }

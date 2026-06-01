@@ -88,9 +88,6 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
       ),
       itemCount: widget.ledgers.length,
       onReorderItem: (oldIndex, newIndex) {
-        if (isCloudMode) {
-          return;
-        }
         ref
             .read(ledgerNotifierProvider.notifier)
             .reorderLedgers(oldIndex, newIndex);
@@ -143,7 +140,7 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
               onEdit: () => widget.onEdit(ledger),
               onShare: () => widget.onShare(ledger),
               onSync: () => widget.onSync(ledger),
-              canReorder: !isCloudMode,
+              canReorder: true,
               canShare:
                   isCloudMode && !isLocalTemporary && _canShare(ledger.role),
               canSync: isCloudMode && !isLocalTemporary,
