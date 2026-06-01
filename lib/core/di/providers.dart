@@ -101,6 +101,7 @@ final syncCoordinatorProvider = Provider<SyncCoordinator>((ref) {
     ledgerRepository: ref.watch(ledgerRepositoryProvider),
     personRepository: ref.watch(personRepositoryProvider),
     transactionRepository: ref.watch(transactionRepositoryProvider),
+    database: ref.watch(databaseProvider),
   );
 });
 

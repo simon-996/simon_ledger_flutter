@@ -42,8 +42,7 @@ class LedgerListTab extends ConsumerStatefulWidget {
 }
 
 class _LedgerListTabState extends ConsumerState<LedgerListTab> {
-  final Map<String, String> _autoSyncedPendingKeys = {};
-  final Set<String> _autoSyncingLedgerUuids = {};
+  bool _autoSyncing = false;
 
   @override
   Widget build(BuildContext context) {
@@ -160,49 +159,25 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
   }
 
   Future<void> _autoSyncPendingLedgers() async {
-    final database = ref.read(databaseProvider);
+    if (_autoSyncing) return;
+    _autoSyncing = true;
     final syncCoordinator = ref.read(syncCoordinatorProvider);
 
-    for (final ledger in widget.ledgers) {
-      if (_autoSyncingLedgerUuids.contains(ledger.uuid)) {
-        continue;
-      }
-
-      final transactions = await database.getTransactionsForLedger(
-        ledger.uuid,
-        includeDeleted: true,
-      );
-      final pending = transactions
-          .where((transaction) => transaction.pendingSync)
-          .toList();
-      if (pending.isEmpty) {
-        continue;
-      }
-
-      final pendingKey = pending
-          .map((transaction) {
-            return transaction.clientOperationId ?? transaction.uuid;
-          })
-          .toList()
-          .join('|');
-      if (_autoSyncedPendingKeys[ledger.uuid] == pendingKey) {
-        continue;
-      }
-
-      _autoSyncedPendingKeys[ledger.uuid] = pendingKey;
-      _autoSyncingLedgerUuids.add(ledger.uuid);
-      try {
-        await syncCoordinator.syncLedger(ledger.uuid);
-      } catch (_) {
-        // Silent auto-sync: the card keeps showing pending/failed state.
-      } finally {
-        _autoSyncingLedgerUuids.remove(ledger.uuid);
-        if (mounted) {
+    try {
+      final changed = await syncCoordinator.syncAllPending();
+      if (changed && mounted) {
+        for (final ledger in widget.ledgers) {
           ref.invalidate(ledgerSyncStatusProvider(ledger.uuid));
           ref.invalidate(transactionNotifierProvider(ledger.uuid));
-          ref.invalidate(ledgerStatsProvider);
         }
+        ref.invalidate(ledgerNotifierProvider);
+        ref.invalidate(personNotifierProvider);
+        ref.invalidate(ledgerStatsProvider);
       }
+    } catch (_) {
+      // Silent auto-sync: cards keep showing pending or failed state.
+    } finally {
+      _autoSyncing = false;
     }
   }
 

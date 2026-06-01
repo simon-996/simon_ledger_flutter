@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:screenshot/screenshot.dart';
 import '../../../../core/common/gallery_launcher.dart';
 import '../../../../core/common/image_saver.dart';
+import '../../../../core/di/providers.dart';
 import '../../../../core/models/ledger.dart';
 import '../../../../core/models/money.dart';
 import '../../../../core/models/person.dart';
@@ -15,6 +16,7 @@ import '../../../../core/widgets/app_components.dart';
 import '../../../transactions/presentation/widgets/transaction_detail_sheet.dart';
 import '../../../transactions/presentation/providers/transaction_provider.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
+import '../providers/ledger_stats_provider.dart';
 import '../widgets/share_ledger_image_widget.dart';
 
 class LedgerDashboardPage extends ConsumerStatefulWidget {
@@ -32,6 +34,29 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
   final ScreenshotController _screenshotController = ScreenshotController();
   bool _isGeneratingImage = false;
   String _displayCurrency = 'CNY';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _silentSyncPending());
+  }
+
+  Future<void> _silentSyncPending() async {
+    try {
+      final changed = await ref.read(syncCoordinatorProvider).syncAllPending();
+      if (!changed || !mounted) return;
+      ref.invalidate(transactionNotifierProvider(widget.ledger.uuid));
+      ref.invalidate(
+        personNotifierProvider(
+          includeDeleted: true,
+          ledgerUuid: widget.ledger.uuid,
+        ),
+      );
+      ref.invalidate(ledgerStatsProvider);
+    } catch (_) {
+      // Silent retry: local content stays available while offline.
+    }
+  }
 
   void _toggleFilterSelection(String uuid) {
     setState(() {
