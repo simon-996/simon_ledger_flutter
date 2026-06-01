@@ -60,6 +60,7 @@ final ledgerRepositoryProvider = Provider<LedgerRepository>((ref) {
     return RemoteLedgerRepository(
       apiClient: ref.watch(apiClientProvider),
       database: ref.watch(databaseProvider),
+      identityResolver: ref.watch(syncIdentityResolverProvider),
     );
   }
   return LocalLedgerRepository(ref.watch(databaseProvider));
@@ -88,6 +89,7 @@ final transactionRepositoryProvider = Provider<TransactionRepository>((ref) {
     return RemoteTransactionRepository(
       apiClient: ref.watch(apiClientProvider),
       database: ref.watch(databaseProvider),
+      identityResolver: ref.watch(syncIdentityResolverProvider),
     );
   }
   return LocalTransactionRepository(ref.watch(databaseProvider));

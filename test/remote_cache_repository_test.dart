@@ -104,6 +104,10 @@ void main() {
       );
       expect(localLedger.syncedRemoteUuid, _remoteLedgerUuid);
       expect(localLedger.isLocalTemporary, isTrue);
+      final localPerson = (await database.getAllPeople()).firstWhere(
+        (person) => person.uuid == 'local-person-1',
+      );
+      expect(localPerson.syncedRemoteUuid, _remotePersonUuid);
     },
   );
 

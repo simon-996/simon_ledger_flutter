@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simon_ledger_flutter/core/database/database_service.dart';
+import 'package:simon_ledger_flutter/core/models/ledger.dart';
+import 'package:simon_ledger_flutter/core/models/person.dart';
 import 'package:simon_ledger_flutter/core/models/transaction_record.dart';
 import 'package:simon_ledger_flutter/core/network/api_client.dart';
 import 'package:simon_ledger_flutter/core/network/token_store.dart';
@@ -114,6 +116,52 @@ void main() {
       expect(deleted.single.isDeleted, isTrue);
       expect(deleted.single.pendingSync, isFalse);
     });
+
+    test(
+      'uploads local transaction through mapped remote identities',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final apiClient = _MappedTransactionApiClient();
+        final database = DatabaseService();
+        final repository = RemoteTransactionRepository(
+          apiClient: apiClient,
+          database: database,
+        );
+        await database.saveLedger(
+          Ledger()
+            ..uuid = 'local-ledger'
+            ..syncedRemoteUuid = _remoteLedgerUuid
+            ..name = '离线账本'
+            ..baseCurrencyCode = 'CNY',
+        );
+        await database.savePerson(
+          Person()
+            ..uuid = 'local-person'
+            ..syncedRemoteUuid = _remotePersonUuid
+            ..name = '本人',
+        );
+        await database.saveTransaction(
+          _transaction()
+            ..uuid = 'local-transaction'
+            ..ledgerUuid = 'local-ledger'
+            ..payerPersonUuid = 'local-person'
+            ..personUuids = ['local-person']
+            ..pendingSync = true,
+        );
+
+        await repository.syncPendingTransactions('local-ledger');
+
+        expect(apiClient.postPaths, [
+          '/api/ledgers/$_remoteLedgerUuid/transactions',
+        ]);
+        expect(apiClient.postedData?['payerPersonUuid'], _remotePersonUuid);
+        expect(apiClient.postedData?['personUuids'], [_remotePersonUuid]);
+        final cached = await database.getTransactionsForLedger('local-ledger');
+        expect(cached.single.uuid, _remoteTransactionUuid);
+        expect(cached.single.ledgerUuid, 'local-ledger');
+        expect(cached.single.pendingSync, isFalse);
+      },
+    );
   });
 }
 
@@ -205,5 +253,40 @@ class _FakeApiClient extends ApiClient {
     String? idempotencyKey,
   }) async {
     deletePaths.add(path);
+  }
+}
+
+const _remoteLedgerUuid = '0123456789abcdef0123456789abcdef';
+const _remotePersonUuid = 'abcdef0123456789abcdef0123456789';
+const _remoteTransactionUuid = 'fedcba9876543210fedcba9876543210';
+
+class _MappedTransactionApiClient extends ApiClient {
+  _MappedTransactionApiClient() : super(tokenStore: TokenStore());
+
+  final List<String> postPaths = [];
+  Map<String, dynamic>? postedData;
+
+  @override
+  Future<T> post<T>(
+    String path, {
+    Object? data,
+    String? idempotencyKey,
+    T Function(Object? json)? fromJson,
+  }) async {
+    postPaths.add(path);
+    postedData = data! as Map<String, dynamic>;
+    return fromJson!({
+      'uuid': _remoteTransactionUuid,
+      'ledgerUuid': _remoteLedgerUuid,
+      'type': 0,
+      'payerPersonUuid': _remotePersonUuid,
+      'amount': 12.5,
+      'currencyCode': 'CNY',
+      'category': '餐饮',
+      'note': '',
+      'personUuids': [_remotePersonUuid],
+      'happenedAt': '2026-05-22T12:00:00',
+      'version': 1,
+    });
   }
 }

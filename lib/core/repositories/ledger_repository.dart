@@ -2,6 +2,7 @@ import '../database/database_service.dart';
 import '../models/ledger.dart';
 import '../models/person.dart';
 import '../network/api_client.dart';
+import '../services/sync_identity_resolver.dart';
 
 class CreatedLedgerWithPeople {
   const CreatedLedgerWithPeople({required this.ledger, required this.people});
@@ -58,14 +59,17 @@ class LocalLedgerRepository implements LedgerRepository {
 }
 
 class RemoteLedgerRepository implements LedgerRepository {
-  const RemoteLedgerRepository({
+  RemoteLedgerRepository({
     required ApiClient apiClient,
     required DatabaseService database,
+    SyncIdentityResolver? identityResolver,
   }) : _apiClient = apiClient,
-       _db = database;
+       _db = database,
+       _identityResolver = identityResolver ?? SyncIdentityResolver(database);
 
   final ApiClient _apiClient;
   final DatabaseService _db;
+  final SyncIdentityResolver _identityResolver;
 
   @override
   Future<List<Ledger>> getAllLedgers({bool includeDeleted = false}) async {
@@ -244,6 +248,17 @@ class RemoteLedgerRepository implements LedgerRepository {
         ..pendingSync = false
         ..syncError = null;
       await _db.saveLedger(ledger);
+      await _identityResolver.recordLedgerMapping(
+        localUuid: localLedgerUuid,
+        remoteUuid: remoteLedgerUuid,
+      );
+      for (var index = 0; index < people.length; index += 1) {
+        if (index >= created.people.length) break;
+        await _identityResolver.recordPersonMapping(
+          localUuid: people[index].uuid,
+          remoteUuid: created.people[index].uuid,
+        );
+      }
     }
   }
 

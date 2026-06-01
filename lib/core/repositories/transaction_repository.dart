@@ -3,6 +3,7 @@ import 'dart:async';
 import '../database/database_service.dart';
 import '../models/transaction_record.dart';
 import '../network/api_client.dart';
+import '../services/sync_identity_resolver.dart';
 
 abstract class TransactionRepository {
   Future<List<TransactionRecord>> getTransactionsForLedger(
@@ -75,16 +76,19 @@ class LocalTransactionRepository implements TransactionRepository {
 }
 
 class RemoteTransactionRepository implements TransactionRepository {
-  const RemoteTransactionRepository({
+  RemoteTransactionRepository({
     required ApiClient apiClient,
     required DatabaseService database,
+    SyncIdentityResolver? identityResolver,
   }) : _apiClient = apiClient,
-       _db = database;
+       _db = database,
+       _identityResolver = identityResolver ?? SyncIdentityResolver(database);
 
   static const int _pageSize = 100;
 
   final ApiClient _apiClient;
   final DatabaseService _db;
+  final SyncIdentityResolver _identityResolver;
 
   @override
   Future<List<TransactionRecord>> getTransactionsForLedger(
@@ -176,16 +180,27 @@ class RemoteTransactionRepository implements TransactionRepository {
   }
 
   Future<void> _uploadPendingTransaction(TransactionRecord transaction) async {
+    final remoteLedgerUuid = await _identityResolver.resolveLedgerUuid(
+      transaction.ledgerUuid,
+    );
+    final remotePayerPersonUuid = transaction.payerPersonUuid == null
+        ? null
+        : await _identityResolver.resolvePersonUuid(
+            transaction.payerPersonUuid!,
+          );
+    final remotePersonUuids = await _identityResolver.resolvePersonUuids(
+      transaction.personUuids,
+    );
     final data = {
       'type': transaction.type,
-      'payerPersonUuid': transaction.payerPersonUuid,
+      'payerPersonUuid': remotePayerPersonUuid,
       'amount': transaction.amount,
       'currencyCode': transaction.currencyCode,
       'category': transaction.category,
       'note': transaction.note,
       'happenedAt': transaction.createdAt.toIso8601String(),
       'clientOperationId': transaction.clientOperationId ?? transaction.uuid,
-      'personUuids': transaction.personUuids,
+      'personUuids': remotePersonUuids,
     };
 
     final remoteUuid =
@@ -194,7 +209,7 @@ class RemoteTransactionRepository implements TransactionRepository {
     final version = transaction.version ?? _versionByUuid[transaction.uuid];
     if (remoteUuid == null || version == null) {
       final saved = await _apiClient.post<TransactionRecord>(
-        '/api/ledgers/${transaction.ledgerUuid}/transactions',
+        '/api/ledgers/$remoteLedgerUuid/transactions',
         data: data,
         idempotencyKey: transaction.clientOperationId ?? transaction.uuid,
         fromJson: _transactionFromJson,
@@ -204,7 +219,7 @@ class RemoteTransactionRepository implements TransactionRepository {
     }
 
     final saved = await _apiClient.put<TransactionRecord>(
-      '/api/ledgers/${transaction.ledgerUuid}/transactions/$remoteUuid',
+      '/api/ledgers/$remoteLedgerUuid/transactions/$remoteUuid',
       data: {...data, 'version': version},
       idempotencyKey: 'update-transaction-$remoteUuid-$version',
       fromJson: _transactionFromJson,
@@ -233,6 +248,9 @@ class RemoteTransactionRepository implements TransactionRepository {
   }
 
   Future<void> _deletePendingTransaction(TransactionRecord transaction) async {
+    final remoteLedgerUuid = await _identityResolver.resolveLedgerUuid(
+      transaction.ledgerUuid,
+    );
     final remoteUuid =
         _remoteUuidByOperationId[transaction.clientOperationId] ??
         (_looksLikeRemoteUuid(transaction.uuid) ? transaction.uuid : null);
@@ -243,7 +261,7 @@ class RemoteTransactionRepository implements TransactionRepository {
     }
 
     await _apiClient.deleteVoid(
-      '/api/ledgers/${transaction.ledgerUuid}/transactions/$remoteUuid',
+      '/api/ledgers/$remoteLedgerUuid/transactions/$remoteUuid',
       data: {'version': version},
       idempotencyKey: 'delete-transaction-$remoteUuid-$version',
     );
@@ -260,12 +278,15 @@ class RemoteTransactionRepository implements TransactionRepository {
   Future<List<TransactionRecord>> _fetchRemoteTransactions(
     String ledgerUuid,
   ) async {
+    final remoteLedgerUuid = await _identityResolver.resolveLedgerUuid(
+      ledgerUuid,
+    );
     final all = <TransactionRecord>[];
     var page = 1;
     var total = 0;
 
     do {
-      final pageData = await _getTransactionPage(ledgerUuid, page);
+      final pageData = await _getTransactionPage(remoteLedgerUuid, page);
       total = pageData.total;
       all.addAll(pageData.records);
       if (pageData.records.isEmpty) {
@@ -275,6 +296,7 @@ class RemoteTransactionRepository implements TransactionRepository {
     } while (all.length < total);
 
     for (final transaction in all) {
+      transaction.ledgerUuid = ledgerUuid;
       await _db.saveTransaction(transaction);
     }
     return all;
@@ -297,6 +319,7 @@ class RemoteTransactionRepository implements TransactionRepository {
 
     await _db.saveTransaction(
       remote
+        ..ledgerUuid = local.ledgerUuid
         ..clientOperationId = local.clientOperationId
         ..pendingSync = false
         ..syncError = null,
