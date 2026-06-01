@@ -33,6 +33,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
   String? _payerPersonUuid;
   int _transactionType = 0;
   bool _successDialogVisible = false;
+  bool _savingTransaction = false;
 
   final _amountController = TextEditingController();
   final _noteController = TextEditingController();
@@ -290,6 +291,8 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
   }
 
   void _saveTransaction(List<Person> peoplePool) async {
+    if (_savingTransaction) return;
+
     final amount = double.tryParse(_amountController.text);
     if (amount == null || amount <= 0) {
       ScaffoldMessenger.of(
@@ -320,25 +323,26 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     final selectedPeople = _selectedPersonIds.map((pid) {
       return personOrFallback(personMap, pid);
     }).toList();
-    final profile = await ref.read(localProfileProvider.future);
-    final currentUser = ref.read(currentUserProvider).valueOrNull;
-
-    final record = TransactionRecord()
-      ..uuid = DateTime.now().microsecondsSinceEpoch.toString()
-      ..ledgerUuid = ledgerId
-      ..type = _transactionType
-      ..payerPersonUuid = _transactionType == 0 ? _payerPersonUuid : null
-      ..amount = amount
-      ..currencyCode = currency
-      ..category = category
-      ..personUuids = _selectedPersonIds.toList()
-      ..note = _noteController.text.trim()
-      ..createdByUserUuid = currentUser?.uuid
-      ..createdByNickname = currentUser?.nickname ?? profile.normalizedNickname
-      ..createdByAvatar = currentUser?.avatar ?? profile.personAvatar
-      ..createdAt = DateTime.now();
-
+    setState(() => _savingTransaction = true);
     try {
+      final profile = await ref.read(localProfileProvider.future);
+      final currentUser = ref.read(currentUserProvider).valueOrNull;
+      final record = TransactionRecord()
+        ..uuid = DateTime.now().microsecondsSinceEpoch.toString()
+        ..ledgerUuid = ledgerId
+        ..type = _transactionType
+        ..payerPersonUuid = _transactionType == 0 ? _payerPersonUuid : null
+        ..amount = amount
+        ..currencyCode = currency
+        ..category = category
+        ..personUuids = _selectedPersonIds.toList()
+        ..note = _noteController.text.trim()
+        ..createdByUserUuid = currentUser?.uuid
+        ..createdByNickname =
+            currentUser?.nickname ?? profile.normalizedNickname
+        ..createdByAvatar = currentUser?.avatar ?? profile.personAvatar
+        ..createdAt = DateTime.now();
+
       await ref
           .read(transactionNotifierProvider(ledgerId).notifier)
           .addTransaction(record);
@@ -350,6 +354,10 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
         ),
       );
       return;
+    } finally {
+      if (mounted) {
+        setState(() => _savingTransaction = false);
+      }
     }
 
     if (mounted) {
@@ -761,15 +769,17 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
               child: peopleAsyncValue.maybeWhen(
                 data: (peoplePool) => _SaveTransactionButton(
                   key: const ValueKey('save-enabled'),
-                  onPressed: _selectedLedgerUuid == null
+                  onPressed: _selectedLedgerUuid == null || _savingTransaction
                       ? null
                       : () => _saveTransaction(peoplePool),
-                  loading: false,
+                  loading: _savingTransaction,
+                  loadingLabel: '保存中',
                 ),
                 orElse: () => const _SaveTransactionButton(
                   key: ValueKey('save-loading'),
                   onPressed: null,
                   loading: true,
+                  loadingLabel: '准备中',
                 ),
               ),
             ),
@@ -822,10 +832,12 @@ class _SaveTransactionButton extends StatelessWidget {
     super.key,
     required this.onPressed,
     required this.loading,
+    required this.loadingLabel,
   });
 
   final VoidCallback? onPressed;
   final bool loading;
+  final String loadingLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -876,7 +888,7 @@ class _SaveTransactionButton extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 10),
-                    const Text('准备中'),
+                    Text(loadingLabel),
                   ],
                 )
               : const Row(
