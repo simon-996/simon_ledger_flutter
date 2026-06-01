@@ -623,62 +623,73 @@ class AppSettlementTile extends StatelessWidget {
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        child: Row(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              child: _SettlementPerson(avatar: fromAvatar, name: fromName),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Center(
-                child: Container(
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _SettlementPerson(
+                    avatar: fromAvatar,
+                    name: fromName,
+                    alignment: CrossAxisAlignment.start,
+                  ),
+                ),
+                Padding(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
+                    horizontal: 10,
+                    vertical: 7,
                   ),
-                  decoration: BoxDecoration(
-                    color: colorScheme.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(999),
+                  child: Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 20,
+                    color: colorScheme.primary,
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '应付',
-                        style: textTheme.labelSmall?.copyWith(
+                ),
+                Expanded(
+                  child: _SettlementPerson(
+                    avatar: toAvatar,
+                    name: toName,
+                    alignment: CrossAxisAlignment.end,
+                    textAlign: TextAlign.right,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: colorScheme.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  Text(
+                    '应付金额',
+                    style: textTheme.labelMedium?.copyWith(
+                      color: colorScheme.primary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        amount,
+                        maxLines: 1,
+                        style: textTheme.titleMedium?.copyWith(
                           color: colorScheme.primary,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w900,
                         ),
                       ),
-                      const SizedBox(width: 2),
-                      Icon(
-                        Icons.arrow_forward_rounded,
-                        size: 14,
-                        color: colorScheme.primary,
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _SettlementPerson(avatar: toAvatar, name: toName),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  amount,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: textTheme.titleSmall?.copyWith(
-                    color: colorScheme.primary,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
+                ],
               ),
             ),
           ],
@@ -689,33 +700,39 @@ class AppSettlementTile extends StatelessWidget {
 }
 
 class _SettlementPerson extends StatelessWidget {
-  const _SettlementPerson({required this.avatar, required this.name});
+  const _SettlementPerson({
+    required this.avatar,
+    required this.name,
+    required this.alignment,
+    this.textAlign = TextAlign.left,
+  });
 
   final String avatar;
   final String name;
+  final CrossAxisAlignment alignment;
+  final TextAlign textAlign;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+    return Column(
+      crossAxisAlignment: alignment,
       children: [
         CircleAvatar(
           radius: 16,
           backgroundColor: colorScheme.surfaceContainerHigh,
           child: Text(avatar, style: const TextStyle(fontSize: 16)),
         ),
-        const SizedBox(width: 8),
-        Flexible(
-          child: Text(
-            name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(
-              context,
-            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
-          ),
+        const SizedBox(height: 6),
+        Text(
+          name,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          textAlign: textAlign,
+          style: Theme.of(
+            context,
+          ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
         ),
       ],
     );
