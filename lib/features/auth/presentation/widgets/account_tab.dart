@@ -7,6 +7,7 @@ import '../../../../core/models/local_profile.dart';
 import '../../../../core/network/friendly_error.dart';
 import '../../../../core/services/cloud_import_service.dart';
 import '../../../../core/services/profile_sync_service.dart';
+import '../../../../core/services/sync_overview_service.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../ledgers/presentation/providers/ledger_provider.dart';
 import '../../../ledgers/presentation/providers/ledger_stats_provider.dart';
@@ -121,77 +122,11 @@ class _SyncCenterCardState extends ConsumerState<_SyncCenterCard> {
         error: (error, stackTrace) =>
             Text(FriendlyError.message(error, fallback: '暂时无法读取同步状态。')),
         data: (overview) {
-          final colorScheme = Theme.of(context).colorScheme;
-          final hasPending = overview.pendingCount > 0;
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              AppSectionHeader(
-                title: '同步中心',
-                trailing: _syncing
-                    ? const SizedBox.square(
-                        dimension: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Icon(
-                        hasPending
-                            ? Icons.sync_problem_rounded
-                            : Icons.cloud_done_outlined,
-                        color: hasPending
-                            ? colorScheme.tertiary
-                            : colorScheme.primary,
-                      ),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _SyncCountChip(
-                    label: '账本',
-                    count: overview.ledgerPendingCount,
-                  ),
-                  _SyncCountChip(
-                    label: '人员',
-                    count: overview.personPendingCount,
-                  ),
-                  _SyncCountChip(
-                    label: '流水',
-                    count: overview.transactionPendingCount,
-                  ),
-                  _SyncCountChip(
-                    label: '仅本地账本',
-                    count: overview.localOnlyLedgerCount,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Text(
-                overview.failedCount > 0
-                    ? '${overview.failedCount} 项同步失败，可点击下方按钮重试'
-                    : hasPending
-                    ? '数据已保存在本机，联网后会自动同步'
-                    : '本机没有待同步数据',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                _lastSyncText(overview.lastSuccessfulSyncAt),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-              if (hasPending) ...[
-                const SizedBox(height: 12),
-                FilledButton.icon(
-                  onPressed: _syncing ? null : _retry,
-                  icon: const Icon(Icons.sync_rounded),
-                  label: const Text('立即同步'),
-                ),
-              ],
-            ],
+          return AccountSyncCenterContent(
+            overview: overview,
+            syncing: _syncing,
+            onRefresh: _refreshOverview,
+            onSync: _retry,
           );
         },
       ),
@@ -199,13 +134,16 @@ class _SyncCenterCardState extends ConsumerState<_SyncCenterCard> {
   }
 
   Future<void> _retry() async {
+    if (_syncing) return;
     setState(() => _syncing = true);
     try {
-      await ref.read(syncCoordinatorProvider).syncAllPending(force: true);
+      final synced = await ref
+          .read(syncCoordinatorProvider)
+          .syncAllPending(force: true);
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('同步完成')));
+      ).showSnackBar(SnackBar(content: Text(synced ? '同步完成' : '暂无需要同步的数据')));
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -221,6 +159,104 @@ class _SyncCenterCardState extends ConsumerState<_SyncCenterCard> {
       ref.invalidate(ledgerStatsProvider);
       if (mounted) setState(() => _syncing = false);
     }
+  }
+
+  void _refreshOverview() {
+    ref.invalidate(syncOverviewProvider);
+  }
+}
+
+class AccountSyncCenterContent extends StatelessWidget {
+  const AccountSyncCenterContent({
+    super.key,
+    required this.overview,
+    required this.syncing,
+    required this.onRefresh,
+    required this.onSync,
+  });
+
+  final SyncOverview overview;
+  final bool syncing;
+  final VoidCallback onRefresh;
+  final VoidCallback onSync;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final hasPending = overview.pendingCount > 0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppSectionHeader(
+          title: '同步中心',
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                hasPending
+                    ? Icons.sync_problem_rounded
+                    : Icons.cloud_done_outlined,
+                color: hasPending ? colorScheme.tertiary : colorScheme.primary,
+              ),
+              const SizedBox(width: 4),
+              IconButton(
+                tooltip: '刷新同步状态',
+                onPressed: syncing ? null : onRefresh,
+                icon: const Icon(Icons.refresh_rounded),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _SyncCountChip(label: '账本', count: overview.ledgerPendingCount),
+            _SyncCountChip(label: '人员', count: overview.personPendingCount),
+            _SyncCountChip(
+              label: '流水',
+              count: overview.transactionPendingCount,
+            ),
+            _SyncCountChip(
+              label: '仅本地账本',
+              count: overview.localOnlyLedgerCount,
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text(
+          overview.failedCount > 0
+              ? '${overview.failedCount} 项同步失败，可点击下方按钮重试'
+              : hasPending
+              ? '数据已保存在本机，联网后会自动同步'
+              : '本机没有待同步数据',
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          _lastSyncText(overview.lastSuccessfulSyncAt),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+        ),
+        if (hasPending) ...[
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: syncing ? null : onSync,
+            icon: syncing
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.sync_rounded),
+            label: Text(syncing ? '正在同步' : '立即同步'),
+          ),
+        ],
+      ],
+    );
   }
 
   String _lastSyncText(DateTime? time) {
