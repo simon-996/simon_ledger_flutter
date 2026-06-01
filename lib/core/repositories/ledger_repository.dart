@@ -162,12 +162,6 @@ class RemoteLedgerRepository implements LedgerRepository {
 
   @override
   Future<void> saveLedger(Ledger ledger) async {
-    final data = {
-      'name': ledger.name,
-      'baseCurrencyCode': ledger.baseCurrencyCode,
-      'exchangeRateToCny': ledger.exchangeRateToCNY,
-    };
-
     if (ledger.isLocalOnly) {
       await _db.saveLedger(
         ledger
@@ -183,28 +177,20 @@ class RemoteLedgerRepository implements LedgerRepository {
         ..syncError = null,
     );
 
-    if (!ledger.hasSyncedRemoteCopy && !_looksLikeRemoteUuid(ledger.uuid)) {
-      try {
-        final saved = await _apiClient.post<Ledger>(
-          '/api/ledgers',
-          data: data,
-          idempotencyKey: ledger.uuid,
-          fromJson: _ledgerFromJson,
-        );
-        ledger
-          ..syncedRemoteUuid = saved.uuid
-          ..name = saved.name
-          ..baseCurrencyCode = saved.baseCurrencyCode
-          ..exchangeRateToCNY = saved.exchangeRateToCNY
-          ..pendingSync = false
-          ..syncError = null;
-        await _db.saveLedger(ledger);
-      } catch (error) {
-        await _db.saveLedger(ledger..syncError = error.toString());
-      }
+    if (ledger.shouldUploadToCloud) {
+      unawaited(syncPendingWrites(ledgerUuid: ledger.uuid).catchError((_) {}));
       return;
     }
 
+    unawaited(_pushRemoteLedgerUpdate(ledger));
+  }
+
+  Future<void> _pushRemoteLedgerUpdate(Ledger ledger) async {
+    final data = {
+      'name': ledger.name,
+      'baseCurrencyCode': ledger.baseCurrencyCode,
+      'exchangeRateToCny': ledger.exchangeRateToCNY,
+    };
     try {
       await _apiClient.put<Ledger>(
         '/api/ledgers/${ledger.remoteSyncUuid}',
@@ -335,7 +321,7 @@ class RemoteLedgerRepository implements LedgerRepository {
           await _db.saveLedger(ledger..syncError = error.toString());
         }
       } else {
-        await saveLedger(ledger);
+        await _pushRemoteLedgerUpdate(ledger);
       }
     }
   }
@@ -398,11 +384,11 @@ class RemoteLedgerRepository implements LedgerRepository {
         ..pendingSync = true
         ..syncError = null,
     );
-    try {
-      await _deleteRemoteLedger(ledger);
-    } catch (error) {
-      await _db.saveLedger(ledger..syncError = error.toString());
-    }
+    unawaited(
+      _deleteRemoteLedger(ledger).catchError(
+        (error) => _db.saveLedger(ledger..syncError = error.toString()),
+      ),
+    );
   }
 
   Future<void> _deleteRemoteLedger(Ledger ledger) async {

@@ -279,6 +279,7 @@ void main() {
           ..baseCurrencyCode = 'CNY'
           ..exchangeRateToCNY = 1,
       );
+      await _flushBackgroundTasks();
 
       final ledger = (await database.getAllLedgers()).single;
       expect(ledger.name, '新名称');
@@ -305,6 +306,7 @@ void main() {
       );
 
       await repository.deleteLedger(_remoteLedgerUuid);
+      await _flushBackgroundTasks();
 
       expect(await database.getAllLedgers(), isEmpty);
       final deleted = (await database.getAllLedgers(
@@ -380,6 +382,7 @@ void main() {
         ..avatar = '🙂',
       ledgerUuid: _remoteLedgerUuid,
     );
+    await _flushBackgroundTasks();
 
     final person = (await database.getAllPeople()).single;
     expect(person.name, '离线人员');
@@ -468,6 +471,7 @@ void main() {
           ..avatar = '🙂',
         ledgerUuid: 'local-ledger-1',
       );
+      await _flushBackgroundTasks();
 
       expect(apiClient.postPaths, ['/api/ledgers/$_remoteLedgerUuid/people']);
       final ledger = (await database.getAllLedgers()).single;
@@ -571,6 +575,11 @@ class _OfflineApiClient extends ApiClient {
   Future<void> deleteVoid(String path, {Object? data, String? idempotencyKey}) {
     throw Exception('offline');
   }
+}
+
+Future<void> _flushBackgroundTasks() async {
+  await Future<void>.delayed(Duration.zero);
+  await Future<void>.delayed(Duration.zero);
 }
 
 const _remoteLedgerUuid = '0123456789abcdef0123456789abcdef';

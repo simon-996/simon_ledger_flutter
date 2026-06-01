@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../database/database_service.dart';
 import '../models/ledger.dart';
 import '../models/person.dart';
@@ -318,7 +320,22 @@ class RemotePersonRepository implements PersonRepository {
       throw ArgumentError('Remote person writes require ledgerUuid.');
     }
 
-    await _saveRemotePerson(person, ledgerUuid);
+    if (await _isLocalOnlyLedger(ledgerUuid)) {
+      await _savePersonLocally(
+        person
+          ..pendingSync = false
+          ..syncError = null
+          ..pendingLedgerUuid = null,
+      );
+      return;
+    }
+    await _savePersonLocally(
+      person
+        ..pendingSync = true
+        ..syncError = null
+        ..pendingLedgerUuid = ledgerUuid,
+    );
+    unawaited(_saveRemotePerson(person, ledgerUuid));
   }
 
   @override
@@ -346,11 +363,11 @@ class RemotePersonRepository implements PersonRepository {
         !_looksLikeRemoteUuid(remotePersonUuid)) {
       return;
     }
-    try {
-      await _deleteRemotePerson(person, ledgerUuid);
-    } catch (error) {
-      await _savePersonLocally(person..syncError = error.toString());
-    }
+    unawaited(
+      _deleteRemotePerson(person, ledgerUuid).catchError(
+        (error) => _savePersonLocally(person..syncError = error.toString()),
+      ),
+    );
   }
 
   @override
