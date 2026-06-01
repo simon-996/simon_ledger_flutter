@@ -2,6 +2,7 @@ import '../database/database_service.dart';
 import '../models/ledger.dart';
 import '../models/person.dart';
 import '../network/api_client.dart';
+import '../services/sync_identity_resolver.dart';
 import 'ledger_repository.dart';
 
 abstract class PersonRepository {
@@ -40,17 +41,20 @@ class LocalPersonRepository implements PersonRepository {
 }
 
 class RemotePersonRepository implements PersonRepository {
-  const RemotePersonRepository({
+  RemotePersonRepository({
     required ApiClient apiClient,
     required LedgerRepository ledgerRepository,
     required DatabaseService database,
+    SyncIdentityResolver? identityResolver,
   }) : _apiClient = apiClient,
        _ledgerRepository = ledgerRepository,
-       _db = database;
+       _db = database,
+       _identityResolver = identityResolver ?? SyncIdentityResolver(database);
 
   final ApiClient _apiClient;
   final LedgerRepository _ledgerRepository;
   final DatabaseService _db;
+  final SyncIdentityResolver _identityResolver;
 
   @override
   Future<List<Person>> getAllPeople({
@@ -198,7 +202,10 @@ class RemotePersonRepository implements PersonRepository {
         ..pendingLedgerUuid = ledgerUuid,
     );
 
-    if (!_looksLikeRemoteUuid(ledgerUuid)) {
+    final remoteLedgerUuid = await _identityResolver.resolveLedgerUuid(
+      ledgerUuid,
+    );
+    if (!_looksLikeRemoteUuid(remoteLedgerUuid)) {
       return;
     }
 
@@ -208,11 +215,14 @@ class RemotePersonRepository implements PersonRepository {
       'linkedUserUuid': person.linkedUserUuid,
     };
     try {
-      if (_looksLikeRemoteUuid(person.uuid)) {
+      final remotePersonUuid = await _identityResolver.resolvePersonUuid(
+        person.uuid,
+      );
+      if (_looksLikeRemoteUuid(remotePersonUuid)) {
         final saved = await _apiClient.put<Person>(
-          '/api/ledgers/$ledgerUuid/people/${person.uuid}',
+          '/api/ledgers/$remoteLedgerUuid/people/$remotePersonUuid',
           data: data,
-          idempotencyKey: _operationKey('update-person', person.uuid),
+          idempotencyKey: _operationKey('update-person', remotePersonUuid),
           fromJson: _personFromJson,
         );
         person
@@ -227,12 +237,16 @@ class RemotePersonRepository implements PersonRepository {
       }
 
       final saved = await _apiClient.post<Person>(
-        '/api/ledgers/$ledgerUuid/people',
+        '/api/ledgers/$remoteLedgerUuid/people',
         data: data,
         idempotencyKey: person.uuid,
         fromJson: _personFromJson,
       );
       final localUuid = person.uuid;
+      await _identityResolver.recordPersonMapping(
+        localUuid: localUuid,
+        remoteUuid: saved.uuid,
+      );
       person
         ..uuid = saved.uuid
         ..name = saved.name
@@ -274,7 +288,12 @@ class RemotePersonRepository implements PersonRepository {
       ..syncError = null
       ..pendingLedgerUuid = ledgerUuid;
     await _savePersonLocally(person);
-    if (!_looksLikeRemoteUuid(ledgerUuid) || !_looksLikeRemoteUuid(uuid)) {
+    final remoteLedgerUuid = await _identityResolver.resolveLedgerUuid(
+      ledgerUuid,
+    );
+    final remotePersonUuid = await _identityResolver.resolvePersonUuid(uuid);
+    if (!_looksLikeRemoteUuid(remoteLedgerUuid) ||
+        !_looksLikeRemoteUuid(remotePersonUuid)) {
       return;
     }
     try {
@@ -291,10 +310,7 @@ class RemotePersonRepository implements PersonRepository {
     });
     for (final person in pending) {
       if (person.isDeleted) {
-        if (_looksLikeRemoteUuid(ledgerUuid) &&
-            _looksLikeRemoteUuid(person.uuid)) {
-          await _deleteRemotePerson(person, ledgerUuid);
-        }
+        await _deleteRemotePerson(person, ledgerUuid);
         continue;
       }
       await _saveRemotePerson(person, ledgerUuid);
@@ -302,9 +318,19 @@ class RemotePersonRepository implements PersonRepository {
   }
 
   Future<void> _deleteRemotePerson(Person person, String ledgerUuid) async {
+    final remoteLedgerUuid = await _identityResolver.resolveLedgerUuid(
+      ledgerUuid,
+    );
+    final remotePersonUuid = await _identityResolver.resolvePersonUuid(
+      person.uuid,
+    );
+    if (!_looksLikeRemoteUuid(remoteLedgerUuid) ||
+        !_looksLikeRemoteUuid(remotePersonUuid)) {
+      return;
+    }
     await _apiClient.deleteVoid(
-      '/api/ledgers/$ledgerUuid/people/${person.uuid}',
-      idempotencyKey: 'delete-person-${person.uuid}',
+      '/api/ledgers/$remoteLedgerUuid/people/$remotePersonUuid',
+      idempotencyKey: 'delete-person-$remotePersonUuid',
     );
     person
       ..pendingSync = false

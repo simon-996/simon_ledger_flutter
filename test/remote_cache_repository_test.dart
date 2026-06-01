@@ -241,6 +241,62 @@ void main() {
   });
 
   test(
+    'RemotePersonRepository uploads person through mapped remote ledger',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final database = DatabaseService();
+      await database.saveLedger(
+        Ledger()
+          ..uuid = 'local-ledger-1'
+          ..syncedRemoteUuid = _remoteLedgerUuid
+          ..name = '离线新账本'
+          ..baseCurrencyCode = 'CNY'
+          ..personUuids = ['local-person-1'],
+      );
+      await database.saveTransaction(
+        TransactionRecord()
+          ..uuid = 'local-tx-1'
+          ..ledgerUuid = 'local-ledger-1'
+          ..type = 0
+          ..payerPersonUuid = 'local-person-1'
+          ..amount = 12
+          ..currencyCode = 'CNY'
+          ..category = '餐饮'
+          ..personUuids = ['local-person-1']
+          ..note = ''
+          ..createdAt = DateTime(2026, 6, 1),
+      );
+      final apiClient = _PersonCreateApiClient();
+      final ledgerRepository = RemoteLedgerRepository(
+        apiClient: apiClient,
+        database: database,
+      );
+      final repository = RemotePersonRepository(
+        apiClient: apiClient,
+        ledgerRepository: ledgerRepository,
+        database: database,
+      );
+
+      await repository.savePerson(
+        Person()
+          ..uuid = 'local-person-1'
+          ..name = '离线人员'
+          ..avatar = '🙂',
+        ledgerUuid: 'local-ledger-1',
+      );
+
+      expect(apiClient.postPaths, ['/api/ledgers/$_remoteLedgerUuid/people']);
+      final ledger = (await database.getAllLedgers()).single;
+      final transaction = (await database.getTransactionsForLedger(
+        'local-ledger-1',
+      )).single;
+      expect(ledger.personUuids, [_remotePersonUuid]);
+      expect(transaction.personUuids, [_remotePersonUuid]);
+      expect(transaction.payerPersonUuid, _remotePersonUuid);
+    },
+  );
+
+  test(
     'RemotePersonRepository keeps deleted people referenced by history offline',
     () async {
       SharedPreferences.setMockInitialValues({});
@@ -396,6 +452,28 @@ class _LedgerCreateApiClient extends ApiClient {
           'linkedUserUuid': null,
         },
       ],
+    });
+  }
+}
+
+class _PersonCreateApiClient extends ApiClient {
+  _PersonCreateApiClient() : super(tokenStore: TokenStore());
+
+  final List<String> postPaths = [];
+
+  @override
+  Future<T> post<T>(
+    String path, {
+    Object? data,
+    String? idempotencyKey,
+    T Function(Object? json)? fromJson,
+  }) async {
+    postPaths.add(path);
+    return fromJson!({
+      'uuid': _remotePersonUuid,
+      'name': '离线人员',
+      'avatar': '🙂',
+      'linkedUserUuid': null,
     });
   }
 }

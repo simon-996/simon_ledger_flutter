@@ -76,6 +76,7 @@ final personRepositoryProvider = Provider<PersonRepository>((ref) {
       apiClient: ref.watch(apiClientProvider),
       ledgerRepository: ref.watch(ledgerRepositoryProvider),
       database: ref.watch(databaseProvider),
+      identityResolver: ref.watch(syncIdentityResolverProvider),
     );
   }
   return LocalPersonRepository(ref.watch(databaseProvider));
