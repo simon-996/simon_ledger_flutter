@@ -4,6 +4,7 @@ import '../database/database_service.dart';
 import '../models/ledger.dart';
 import '../models/person.dart';
 import '../network/api_client.dart';
+import '../network/token_store.dart';
 import '../services/sync_identity_resolver.dart';
 
 class CreatedLedgerWithPeople {
@@ -47,12 +48,13 @@ class LocalLedgerRepository implements LedgerRepository {
 
   @override
   Future<List<Ledger>> getCachedLedgers({bool includeDeleted = false}) {
-    return _db.getAllLedgers(includeDeleted: includeDeleted);
+    return getAllLedgers(includeDeleted: includeDeleted);
   }
 
   @override
-  Future<List<Ledger>> getAllLedgers({bool includeDeleted = false}) {
-    return _db.getAllLedgers(includeDeleted: includeDeleted);
+  Future<List<Ledger>> getAllLedgers({bool includeDeleted = false}) async {
+    final ledgers = await _db.getAllLedgers(includeDeleted: includeDeleted);
+    return ledgers.where((ledger) => ledger.isLocalTemporary).toList();
   }
 
   @override
@@ -86,19 +88,22 @@ class RemoteLedgerRepository implements LedgerRepository {
   RemoteLedgerRepository({
     required ApiClient apiClient,
     required DatabaseService database,
+    TokenStore? tokenStore,
     SyncIdentityResolver? identityResolver,
   }) : _apiClient = apiClient,
        _db = database,
+       _tokenStore = tokenStore,
        _identityResolver = identityResolver ?? SyncIdentityResolver(database);
 
   final ApiClient _apiClient;
   final DatabaseService _db;
+  final TokenStore? _tokenStore;
   final SyncIdentityResolver _identityResolver;
 
   @override
   Future<List<Ledger>> getCachedLedgers({bool includeDeleted = false}) async {
     final ledgers = await _db.getAllLedgers(includeDeleted: includeDeleted);
-    return _mergeSyncedLocalTemporaryLedgers(ledgers);
+    return _visibleCachedLedgers(ledgers);
   }
 
   @override
@@ -110,6 +115,10 @@ class RemoteLedgerRepository implements LedgerRepository {
         fromJson: (json) =>
             (json! as List<dynamic>).map(_ledgerFromJson).toList(),
       );
+      final accountUuid = await _tokenStore?.readAccountUuid();
+      for (final ledger in ledgers) {
+        ledger.cacheOwnerUserUuid = accountUuid;
+      }
       final cachedLedgers = await _db.getAllLedgers(includeDeleted: true);
       final cachedPeopleByLedgerUuid = {
         for (final ledger in cachedLedgers) ledger.uuid: ledger.personUuids,
@@ -358,6 +367,20 @@ class RemoteLedgerRepository implements LedgerRepository {
     ];
     merged.sort((left, right) => left.sortOrder.compareTo(right.sortOrder));
     return merged;
+  }
+
+  Future<List<Ledger>> _visibleCachedLedgers(List<Ledger> ledgers) async {
+    final tokenStore = _tokenStore;
+    if (tokenStore == null) {
+      return _mergeSyncedLocalTemporaryLedgers(ledgers);
+    }
+    final accountUuid = await tokenStore.readAccountUuid();
+    return _mergeSyncedLocalTemporaryLedgers(
+      ledgers.where((ledger) {
+        return ledger.isLocalTemporary ||
+            ledger.cacheOwnerUserUuid == accountUuid && accountUuid != null;
+      }).toList(),
+    );
   }
 
   bool _looksLikeRemoteUuid(String uuid) {

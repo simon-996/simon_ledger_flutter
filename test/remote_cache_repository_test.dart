@@ -84,6 +84,66 @@ void main() {
   });
 
   test(
+    'RemoteLedgerRepository exposes only current account cloud cache',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final database = DatabaseService();
+      final tokenStore = TokenStore();
+      await tokenStore.saveAccountUuid('user-a');
+      await database.saveLedger(
+        Ledger()
+          ..uuid = _remoteLedgerUuid
+          ..name = '账号 A'
+          ..baseCurrencyCode = 'CNY'
+          ..cacheOwnerUserUuid = 'user-a',
+      );
+      await database.saveLedger(
+        Ledger()
+          ..uuid = _anotherRemoteLedgerUuid
+          ..name = '账号 B'
+          ..baseCurrencyCode = 'CNY'
+          ..cacheOwnerUserUuid = 'user-b',
+      );
+      await database.saveLedger(
+        Ledger()
+          ..uuid = 'local-only-ledger'
+          ..name = '设备本地'
+          ..baseCurrencyCode = 'CNY',
+      );
+      final repository = RemoteLedgerRepository(
+        apiClient: _OfflineApiClient(),
+        database: database,
+        tokenStore: tokenStore,
+      );
+
+      final ledgers = await repository.getCachedLedgers();
+
+      expect(ledgers.map((ledger) => ledger.name), ['设备本地', '账号 A']);
+    },
+  );
+
+  test('LocalLedgerRepository hides pure cloud cache after logout', () async {
+    SharedPreferences.setMockInitialValues({});
+    final database = DatabaseService();
+    await database.saveLedger(
+      Ledger()
+        ..uuid = _remoteLedgerUuid
+        ..name = '云端缓存'
+        ..baseCurrencyCode = 'CNY',
+    );
+    await database.saveLedger(
+      Ledger()
+        ..uuid = 'local-only-ledger'
+        ..name = '设备本地'
+        ..baseCurrencyCode = 'CNY',
+    );
+
+    final ledgers = await LocalLedgerRepository(database).getAllLedgers();
+
+    expect(ledgers.single.name, '设备本地');
+  });
+
+  test(
     'RemoteLedgerRepository creates ledger locally when cloud create is offline',
     () async {
       SharedPreferences.setMockInitialValues({});

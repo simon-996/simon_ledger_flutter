@@ -27,6 +27,8 @@ class Ledger {
 
   String? syncedRemoteUuid;
 
+  String? cacheOwnerUserUuid;
+
   LedgerCloudPolicy cloudPolicy = LedgerCloudPolicy.localOnly;
 
   bool pendingSync = false;

@@ -112,6 +112,7 @@ class RemoteAuthRepository implements AuthRepository {
       fromJson: AuthLoginResult.fromJson,
     );
     await _tokenStore.save(result.token);
+    await _tokenStore.saveAccountUuid(result.user.uuid);
     return result;
   }
 
@@ -125,11 +126,13 @@ class RemoteAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<AuthUser> me() {
-    return _apiClient.get<AuthUser>(
+  Future<AuthUser> me() async {
+    final user = await _apiClient.get<AuthUser>(
       '/api/auth/me',
       fromJson: AuthUser.fromJson,
     );
+    await _tokenStore.saveAccountUuid(user.uuid);
+    return user;
   }
 
   @override

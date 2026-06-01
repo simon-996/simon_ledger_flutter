@@ -62,6 +62,7 @@ final ledgerRepositoryProvider = Provider<LedgerRepository>((ref) {
     return RemoteLedgerRepository(
       apiClient: ref.watch(apiClientProvider),
       database: ref.watch(databaseProvider),
+      tokenStore: ref.watch(tokenStoreProvider),
       identityResolver: ref.watch(syncIdentityResolverProvider),
     );
   }
