@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +10,7 @@ import '../../../../core/models/person_lookup.dart';
 import '../../../../core/models/person_transaction_stats.dart';
 import '../../../../core/models/transaction_record.dart';
 import '../../../../core/network/friendly_error.dart';
+import '../../../../core/preferences/statistics_preference.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
@@ -61,10 +64,23 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
     }
   }
 
-  void _initDefaults() {
-    if (widget.ledgers.isNotEmpty) {
-      _selectedLedgerUuid = widget.ledgers.first.uuid;
-    }
+  Future<void> _initDefaults() async {
+    final preference = await StatisticsPreference.read();
+    if (!mounted) return;
+    setState(() {
+      _timeFilter = TimeFilter.values.firstWhere(
+        (filter) => filter.name == preference?.timeFilter,
+        orElse: () => TimeFilter.month,
+      );
+      _transactionType = preference?.transactionType == 1 ? 1 : 0;
+      _displayCurrency = preference?.displayCurrency ?? 'CNY';
+      final preferredLedgerUuid = preference?.ledgerUuid;
+      if (widget.ledgers.any((ledger) => ledger.uuid == preferredLedgerUuid)) {
+        _selectedLedgerUuid = preferredLedgerUuid;
+      } else if (widget.ledgers.isNotEmpty) {
+        _selectedLedgerUuid = widget.ledgers.first.uuid;
+      }
+    });
   }
 
   Future<void> _showLedgerPicker() async {
@@ -95,6 +111,20 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
       return;
     }
     setState(() => _selectedLedgerUuid = selected);
+    _persistPreference();
+  }
+
+  void _persistPreference() {
+    unawaited(
+      StatisticsPreference.write(
+        StatisticsPreference(
+          ledgerUuid: _selectedLedgerUuid,
+          timeFilter: _timeFilter.name,
+          transactionType: _transactionType,
+          displayCurrency: _displayCurrency,
+        ),
+      ),
+    );
   }
 
   List<TransactionRecord> _filterTransactions(
@@ -197,9 +227,11 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
               onLedgerTap: _showLedgerPicker,
               onTypeChanged: (type) {
                 setState(() => _transactionType = type);
+                _persistPreference();
               },
               onTimeChanged: (filter) {
                 setState(() => _timeFilter = filter);
+                _persistPreference();
               },
             ),
           ),
@@ -279,6 +311,7 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                           selectedCurrency: _displayCurrency,
                           onCurrencyChanged: (currency) {
                             setState(() => _displayCurrency = currency);
+                            _persistPreference();
                           },
                           colorForIndex: (index) =>
                               _getColorForCategory(index, context),
