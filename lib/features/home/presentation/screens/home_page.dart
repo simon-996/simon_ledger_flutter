@@ -223,6 +223,14 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     try {
       await ref.read(ledgerNotifierProvider.notifier).updateLedger(ledger);
+      final personRepository = ref.read(personRepositoryProvider);
+      for (final person in result.people) {
+        await personRepository.savePerson(person, ledgerUuid: ledger.uuid);
+      }
+      if (result.people.isNotEmpty) {
+        ref.invalidate(personNotifierProvider);
+        ref.invalidate(cachedPeopleProvider);
+      }
       await _syncRemoteLedgerPeopleSelection(
         ledger.uuid,
         oldPersonUuids,

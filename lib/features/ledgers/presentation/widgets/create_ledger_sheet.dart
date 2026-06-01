@@ -48,6 +48,7 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
 
   final Set<String> _selectedPersonIds = {};
   final List<Person> _draftPeople = [];
+  List<Person> _latestPeoplePool = const [];
   bool _draftSelfDeselected = false;
   bool _submitting = false;
 
@@ -76,7 +77,7 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
   }
 
   Future<void> _addNewPerson() async {
-    if (_isDraftPeopleMode) {
+    if (_isDraftPeopleMode || widget.existingLedger != null) {
       final result = await showDialog<Person>(
         context: context,
         builder: (context) => const PersonEditDialog(),
@@ -117,7 +118,7 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
   }
 
   Future<void> _editPerson(Person person) async {
-    if (_isDraftPeopleMode) {
+    if (_isDraftPerson(person)) {
       final result = await showDialog<Person>(
         context: context,
         builder: (context) => PersonEditDialog(person: person),
@@ -180,7 +181,7 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
     );
 
     if (confirm == true && mounted) {
-      if (_isDraftPeopleMode) {
+      if (_isDraftPerson(person)) {
         setState(() {
           _draftPeople.removeWhere((item) => item.uuid == person.uuid);
           _selectedPersonIds.remove(person.uuid);
@@ -215,14 +216,19 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
 
   bool _validateDraftPersonName(Person person, {String? currentUuid}) {
     final name = person.name.trim();
-    final exists = _draftPeople.any(
-      (item) => item.uuid != currentUuid && item.name.trim() == name,
-    );
+    final exists = [
+      ..._latestPeoplePool,
+      ..._draftPeople,
+    ].any((item) => item.uuid != currentUuid && item.name.trim() == name);
     if (!exists) return true;
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('手动人员名称不能重复')));
     return false;
+  }
+
+  bool _isDraftPerson(Person person) {
+    return _draftPeople.any((item) => item.uuid == person.uuid);
   }
 
   void _showWriteError(Object error) {
@@ -422,34 +428,27 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
                               )
                             else
                               peopleAsyncValue!.when(
-                                loading: () => const _PeopleLoadingState(),
-                                error: (e, st) => _InfoStrip(
-                                  icon: Icons.error_outline_rounded,
-                                  text: FriendlyError.message(
-                                    e,
-                                    fallback: '人员加载失败，请稍后重试。',
-                                  ),
-                                ),
+                                loading: () => _draftPeople.isEmpty
+                                    ? const _PeopleLoadingState()
+                                    : _buildPeopleSelector(_latestPeoplePool),
+                                error: (e, st) => _draftPeople.isEmpty
+                                    ? _InfoStrip(
+                                        icon: Icons.error_outline_rounded,
+                                        text: FriendlyError.message(
+                                          e,
+                                          fallback: '人员加载失败，请稍后重试。',
+                                        ),
+                                      )
+                                    : _buildPeopleSelector(_latestPeoplePool),
                                 data: (peoplePool) {
+                                  _latestPeoplePool = peoplePool;
                                   _selectDefaultSelfPerson(
                                     peoplePool,
                                     localProfile,
                                     currentUser,
                                   );
 
-                                  return _PeopleSelector(
-                                    people: peoplePool,
-                                    selectedPersonIds: _selectedPersonIds,
-                                    onToggle: (person, selected) {
-                                      setState(() {
-                                        _togglePersonSelection(
-                                          person,
-                                          selected,
-                                        );
-                                      });
-                                    },
-                                    onLongPress: _showPersonOptions,
-                                  );
+                                  return _buildPeopleSelector(peoplePool);
                                 },
                               ),
                           ],
@@ -510,6 +509,11 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
   }
 
   Future<List<Person>> _buildCreatePeople() async {
+    if (widget.existingLedger != null) {
+      return _draftPeople
+          .where((person) => _selectedPersonIds.contains(person.uuid))
+          .toList();
+    }
     if (!_isDraftPeopleMode) {
       return const [];
     }
@@ -534,6 +538,26 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
         ..linkedUserUuid = user.uuid,
       ...selectedPeople,
     ];
+  }
+
+  List<Person> _mergeVisiblePeople(List<Person> peoplePool) {
+    return {
+      for (final person in peoplePool) person.uuid: person,
+      for (final person in _draftPeople) person.uuid: person,
+    }.values.toList();
+  }
+
+  Widget _buildPeopleSelector(List<Person> peoplePool) {
+    return _PeopleSelector(
+      people: _mergeVisiblePeople(peoplePool),
+      selectedPersonIds: _selectedPersonIds,
+      onToggle: (person, selected) {
+        setState(() {
+          _togglePersonSelection(person, selected);
+        });
+      },
+      onLongPress: _showPersonOptions,
+    );
   }
 
   bool get _shouldIncludeSelfFallback {
