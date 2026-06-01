@@ -99,6 +99,7 @@ class RemoteLedgerRepository implements LedgerRepository {
   final DatabaseService _db;
   final TokenStore? _tokenStore;
   final SyncIdentityResolver _identityResolver;
+  static final Map<String, Future<void>> _pendingLocalLedgerUploads = {};
 
   @override
   Future<List<Ledger>> getCachedLedgers({bool includeDeleted = false}) async {
@@ -256,61 +257,85 @@ class RemoteLedgerRepository implements LedgerRepository {
 
   Future<void> _syncPendingLocalLedgers({String? ledgerUuid}) async {
     final cachedLedgers = await _db.getAllLedgers(includeDeleted: true);
-    final cachedPeople = await _db.getAllPeople(includeDeleted: true);
-    final peopleByUuid = {
-      for (final person in cachedPeople) person.uuid: person,
-    };
     for (final ledger in cachedLedgers) {
       if (ledgerUuid != null && ledger.uuid != ledgerUuid) {
         continue;
       }
-      if (_looksLikeRemoteUuid(ledger.uuid) ||
-          ledger.hasSyncedRemoteCopy ||
-          !ledger.shouldUploadToCloud ||
-          ledger.isDeleted) {
-        continue;
-      }
+      await _syncPendingLocalLedger(ledger.uuid);
+    }
+  }
 
-      final transactions = await _db.getTransactionsForLedger(ledger.uuid);
-      final referencedPersonUuids = <String>{
-        ...ledger.personUuids,
-        for (final transaction in transactions) ...transaction.personUuids,
-        for (final transaction in transactions)
-          if (transaction.payerPersonUuid != null) transaction.payerPersonUuid!,
-      };
-      final people = referencedPersonUuids
-          .map((uuid) => peopleByUuid[uuid])
-          .whereType<Person>()
-          .toList();
-      final localLedgerUuid = ledger.uuid;
-      final created = await _createLedgerWithPeopleRemote(ledger, people);
-      final remoteLedgerUuid = created.ledger.uuid;
-      ledger
-        ..uuid = localLedgerUuid
-        ..syncedRemoteUuid = remoteLedgerUuid
-        ..cloudPolicy = LedgerCloudPolicy.cloudManaged
-        ..pendingSync = false
-        ..syncError = null;
-      await _db.saveLedger(ledger);
-      await _identityResolver.recordLedgerMapping(
-        localUuid: localLedgerUuid,
-        remoteUuid: remoteLedgerUuid,
+  Future<void> _syncPendingLocalLedger(String ledgerUuid) {
+    final current = _pendingLocalLedgerUploads[ledgerUuid];
+    if (current != null) {
+      return current;
+    }
+    late final Future<void> sync;
+    sync = _syncPendingLocalLedgerNow(ledgerUuid).whenComplete(() {
+      if (identical(_pendingLocalLedgerUploads[ledgerUuid], sync)) {
+        _pendingLocalLedgerUploads.remove(ledgerUuid);
+      }
+    });
+    _pendingLocalLedgerUploads[ledgerUuid] = sync;
+    return sync;
+  }
+
+  Future<void> _syncPendingLocalLedgerNow(String ledgerUuid) async {
+    final cachedLedgers = await _db.getAllLedgers(includeDeleted: true);
+    final ledger = cachedLedgers
+        .where((ledger) => ledger.uuid == ledgerUuid)
+        .firstOrNull;
+    if (ledger == null ||
+        _looksLikeRemoteUuid(ledger.uuid) ||
+        ledger.hasSyncedRemoteCopy ||
+        !ledger.shouldUploadToCloud ||
+        ledger.isDeleted) {
+      return;
+    }
+
+    final cachedPeople = await _db.getAllPeople(includeDeleted: true);
+    final peopleByUuid = {
+      for (final person in cachedPeople) person.uuid: person,
+    };
+    final transactions = await _db.getTransactionsForLedger(ledger.uuid);
+    final referencedPersonUuids = <String>{
+      ...ledger.personUuids,
+      for (final transaction in transactions) ...transaction.personUuids,
+      for (final transaction in transactions)
+        if (transaction.payerPersonUuid != null) transaction.payerPersonUuid!,
+    };
+    final people = referencedPersonUuids
+        .map((uuid) => peopleByUuid[uuid])
+        .whereType<Person>()
+        .toList();
+    final localLedgerUuid = ledger.uuid;
+    final created = await _createLedgerWithPeopleRemote(ledger, people);
+    final remoteLedgerUuid = created.ledger.uuid;
+    ledger
+      ..uuid = localLedgerUuid
+      ..syncedRemoteUuid = remoteLedgerUuid
+      ..cloudPolicy = LedgerCloudPolicy.cloudManaged
+      ..pendingSync = false
+      ..syncError = null;
+    await _db.saveLedger(ledger);
+    await _identityResolver.recordLedgerMapping(
+      localUuid: localLedgerUuid,
+      remoteUuid: remoteLedgerUuid,
+    );
+    for (var index = 0; index < people.length; index += 1) {
+      if (index >= created.people.length) break;
+      await _identityResolver.recordPersonMapping(
+        localUuid: people[index].uuid,
+        remoteUuid: created.people[index].uuid,
       );
-      for (var index = 0; index < people.length; index += 1) {
-        if (index >= created.people.length) break;
-        await _identityResolver.recordPersonMapping(
-          localUuid: people[index].uuid,
-          remoteUuid: created.people[index].uuid,
-        );
-      }
-      for (final transaction in transactions) {
-        await _db.saveTransaction(
-          transaction
-            ..clientOperationId ??= transaction.uuid
-            ..pendingSync = true
-            ..syncError = null,
-        );
-      }
+    }
+    for (final transaction in transactions) {
+      await _db.saveTransaction(
+        transaction
+          ..clientOperationId ??= transaction.uuid
+          ..pendingSync = true
+          ..syncError = null,
+      );
     }
   }
 
@@ -351,21 +376,24 @@ class RemoteLedgerRepository implements LedgerRepository {
   }
 
   List<Ledger> _mergeSyncedLocalTemporaryLedgers(List<Ledger> ledgers) {
+    final mergedByIdentity = <String, Ledger>{};
     final localTemporaryLedgers = ledgers
         .where((ledger) => ledger.isLocalTemporary)
         .toList();
-    final syncedRemoteUuids = localTemporaryLedgers
-        .where((ledger) => ledger.hasSyncedRemoteCopy)
-        .map((ledger) => ledger.remoteSyncUuid)
-        .toSet();
-    final merged = [
-      ...localTemporaryLedgers,
-      ...ledgers.where((ledger) {
-        return !ledger.isLocalTemporary &&
-            !syncedRemoteUuids.contains(ledger.uuid);
-      }),
-    ];
-    merged.sort((left, right) => left.sortOrder.compareTo(right.sortOrder));
+    final cloudLedgers = ledgers
+        .where((ledger) => !ledger.isLocalTemporary)
+        .toList();
+    for (final ledger in [...localTemporaryLedgers, ...cloudLedgers]) {
+      final identity = ledger.remoteSyncUuid;
+      mergedByIdentity.putIfAbsent(identity, () => ledger);
+    }
+    final merged = mergedByIdentity.values.toList();
+    merged.sort((left, right) {
+      final order = left.sortOrder.compareTo(right.sortOrder);
+      if (order != 0) return order;
+      if (left.isLocalTemporary == right.isLocalTemporary) return 0;
+      return left.isLocalTemporary ? -1 : 1;
+    });
     return merged;
   }
 

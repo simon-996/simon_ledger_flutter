@@ -252,6 +252,85 @@ void main() {
   );
 
   test(
+    'RemoteLedgerRepository merges cached ledgers with the same cloud identity',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final database = DatabaseService();
+      await database.saveLedger(
+        Ledger()
+          ..uuid = 'local-ledger-1'
+          ..syncedRemoteUuid = _remoteLedgerUuid
+          ..name = '本地副本一'
+          ..baseCurrencyCode = 'CNY',
+      );
+      await database.saveLedger(
+        Ledger()
+          ..uuid = 'local-ledger-2'
+          ..syncedRemoteUuid = _remoteLedgerUuid
+          ..name = '本地副本二'
+          ..baseCurrencyCode = 'CNY',
+      );
+      await database.saveLedger(
+        Ledger()
+          ..uuid = _remoteLedgerUuid
+          ..name = '云端缓存'
+          ..baseCurrencyCode = 'CNY',
+      );
+      final repository = RemoteLedgerRepository(
+        apiClient: _OfflineApiClient(),
+        database: database,
+      );
+
+      final ledgers = await repository.getCachedLedgers();
+
+      expect(ledgers, hasLength(1));
+      expect(ledgers.single.uuid, 'local-ledger-1');
+    },
+  );
+
+  test(
+    'RemoteLedgerRepository uploads a pending local ledger only once concurrently',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final database = DatabaseService();
+      await database.saveLedger(
+        Ledger()
+          ..uuid = 'local-ledger-concurrent'
+          ..name = '并发同步账本'
+          ..baseCurrencyCode = 'CNY'
+          ..cloudPolicy = LedgerCloudPolicy.uploadRequested
+          ..pendingSync = true,
+      );
+      final apiClient = _DelayedLedgerCreateApiClient();
+      final firstRepository = RemoteLedgerRepository(
+        apiClient: apiClient,
+        database: database,
+      );
+      final secondRepository = RemoteLedgerRepository(
+        apiClient: apiClient,
+        database: database,
+      );
+
+      final first = firstRepository.syncPendingWrites(
+        ledgerUuid: 'local-ledger-concurrent',
+      );
+      final second = secondRepository.syncPendingWrites(
+        ledgerUuid: 'local-ledger-concurrent',
+      );
+      await apiClient.postStarted.future;
+
+      expect(apiClient.postCount, 1);
+
+      apiClient.releasePost.complete();
+      await Future.wait([first, second]);
+
+      expect(apiClient.postCount, 1);
+      final ledger = (await database.getAllLedgers()).single;
+      expect(ledger.syncedRemoteUuid, _remoteLedgerUuid);
+    },
+  );
+
+  test(
     'RemoteLedgerRepository queues historical transactions when syncing selected local ledger',
     () async {
       SharedPreferences.setMockInitialValues({});
@@ -798,6 +877,43 @@ class _PersonCreateApiClient extends ApiClient {
       'name': '离线人员',
       'avatar': '🙂',
       'linkedUserUuid': null,
+    });
+  }
+}
+
+class _DelayedLedgerCreateApiClient extends ApiClient {
+  _DelayedLedgerCreateApiClient() : super(tokenStore: TokenStore());
+
+  final postStarted = Completer<void>();
+  final releasePost = Completer<void>();
+  int postCount = 0;
+
+  @override
+  Future<T> post<T>(
+    String path, {
+    Object? data,
+    String? idempotencyKey,
+    T Function(Object? json)? fromJson,
+  }) async {
+    if (path != '/api/ledgers/with-people') {
+      throw UnimplementedError(path);
+    }
+    postCount += 1;
+    if (!postStarted.isCompleted) {
+      postStarted.complete();
+    }
+    await releasePost.future;
+    return fromJson!({
+      'ledger': {
+        'uuid': _remoteLedgerUuid,
+        'name': '并发同步账本',
+        'baseCurrencyCode': 'CNY',
+        'exchangeRateToCny': 1,
+        'role': 'owner',
+        'memberCount': 1,
+        'members': const [],
+      },
+      'people': const [],
     });
   }
 }
