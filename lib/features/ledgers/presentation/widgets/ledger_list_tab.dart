@@ -31,7 +31,7 @@ class LedgerListTab extends ConsumerStatefulWidget {
   final Map<String, Map<String, double>> ledgerStats;
   final ValueChanged<Ledger> onTap;
   final ValueChanged<Ledger> onEdit;
-  final ValueChanged<Ledger> onShare;
+  final Future<void> Function(Ledger ledger) onShare;
   final ValueChanged<Ledger> onDelete;
   final VoidCallback onCreate;
   final Future<void> Function(Ledger ledger) onSync;
@@ -43,7 +43,7 @@ class LedgerListTab extends ConsumerStatefulWidget {
 
 class _LedgerListTabState extends ConsumerState<LedgerListTab> {
   bool _autoSyncing = false;
-  final Set<String> _syncingLedgerUuids = {};
+  final Map<String, _LedgerCardOperation> _ledgerOperations = {};
 
   @override
   Widget build(BuildContext context) {
@@ -112,11 +112,14 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
             widget.ledgerStats[ledger.uuid] ??
             {'expense': 0.0, 'income': 0.0, 'balance': 0.0};
         final syncStatus = ref.watch(ledgerSyncStatusProvider(ledger.uuid));
-        final isSyncing = _syncingLedgerUuids.contains(ledger.uuid);
+        final operation = _ledgerOperations[ledger.uuid];
+        final isBusy = operation != null;
         final delayMs = (index < 6 ? index : 6) * 45;
         return Dismissible(
           key: ValueKey(ledger.uuid),
-          direction: DismissDirection.endToStart,
+          direction: isBusy
+              ? DismissDirection.none
+              : DismissDirection.endToStart,
           confirmDismiss: (direction) => _confirmDelete(context, ledger),
           onDismissed: (_) => widget.onDelete(ledger),
           background: _DeleteBackground(),
@@ -131,10 +134,10 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
               isCloudMode: isCloudMode,
               index: index,
               syncStatus: syncStatus,
-              isSyncing: isSyncing,
+              operation: operation,
               onTap: () => widget.onTap(ledger),
               onEdit: () => widget.onEdit(ledger),
-              onShare: () => widget.onShare(ledger),
+              onShare: () => _shareLedger(ledger),
               onSync: () => _syncLedger(ledger),
               canReorder: true,
               canShare:
@@ -153,14 +156,34 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
     return role == 'owner' || role == 'admin';
   }
 
+  Future<void> _shareLedger(Ledger ledger) async {
+    await _runLedgerOperation(
+      ledger,
+      _LedgerCardOperation.share,
+      () => widget.onShare(ledger),
+    );
+  }
+
   Future<void> _syncLedger(Ledger ledger) async {
-    if (_syncingLedgerUuids.contains(ledger.uuid)) return;
-    setState(() => _syncingLedgerUuids.add(ledger.uuid));
+    await _runLedgerOperation(
+      ledger,
+      _LedgerCardOperation.sync,
+      () => widget.onSync(ledger),
+    );
+  }
+
+  Future<void> _runLedgerOperation(
+    Ledger ledger,
+    _LedgerCardOperation operation,
+    Future<void> Function() action,
+  ) async {
+    if (_ledgerOperations.containsKey(ledger.uuid)) return;
+    setState(() => _ledgerOperations[ledger.uuid] = operation);
     try {
-      await widget.onSync(ledger);
+      await action();
     } finally {
       if (mounted) {
-        setState(() => _syncingLedgerUuids.remove(ledger.uuid));
+        setState(() => _ledgerOperations.remove(ledger.uuid));
       }
     }
   }
@@ -215,6 +238,8 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
   }
 }
 
+enum _LedgerCardOperation { share, sync }
+
 class _LedgerCard extends StatelessWidget {
   const _LedgerCard({
     required this.ledger,
@@ -225,7 +250,7 @@ class _LedgerCard extends StatelessWidget {
     required this.isCloudMode,
     required this.index,
     required this.syncStatus,
-    required this.isSyncing,
+    required this.operation,
     required this.onTap,
     required this.onEdit,
     required this.onShare,
@@ -243,7 +268,7 @@ class _LedgerCard extends StatelessWidget {
   final bool isCloudMode;
   final int index;
   final AsyncValue<LedgerSyncStatus> syncStatus;
-  final bool isSyncing;
+  final _LedgerCardOperation? operation;
   final VoidCallback onTap;
   final VoidCallback onEdit;
   final VoidCallback onShare;
@@ -258,6 +283,8 @@ class _LedgerCard extends StatelessWidget {
     final hasRate = ledger.exchangeRateToCNY != 1.0;
     final syncStatusValue = syncStatus.valueOrNull;
     final hasPendingSync = syncStatusValue?.hasPending == true;
+    final isBusy = operation != null;
+    final isSyncing = operation == _LedgerCardOperation.sync;
     final isLocalUnsynced =
         isCloudMode && ledger.isLocalTemporary && !ledger.hasSyncedRemoteCopy;
     final isCloudSynced =
@@ -269,167 +296,301 @@ class _LedgerCard extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Material(
-        color: colorScheme.surfaceContainerLowest,
-        shape: RoundedRectangleBorder(
+      child: AnimatedContainer(
+        duration: AppMotion.normal,
+        curve: AppMotion.standard,
+        decoration: BoxDecoration(
+          color: isBusy
+              ? colorScheme.primaryContainer.withValues(alpha: 0.2)
+              : colorScheme.surfaceContainerLowest,
           borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: colorScheme.outlineVariant),
+          border: Border.all(
+            color: isBusy
+                ? colorScheme.primary.withValues(alpha: 0.42)
+                : colorScheme.outlineVariant,
+          ),
         ),
-        child: InkWell(
-          onTap: onTap,
+        child: Material(
+          color: Colors.transparent,
           borderRadius: BorderRadius.circular(20),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: isBusy ? null : onTap,
+            borderRadius: BorderRadius.circular(20),
+            child: Stack(
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
+                AnimatedOpacity(
+                  duration: AppMotion.normal,
+                  curve: AppMotion.standard,
+                  opacity: isBusy ? 0.34 : 1,
+                  child: IgnorePointer(
+                    ignoring: isBusy,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Text(
-                            ledger.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            ledger.displayCode,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                          ),
-                          const SizedBox(height: 7),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 6,
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _MetaChip(text: ledger.baseCurrencyCode),
-                              if (isLocalUnsynced)
-                                _MetaChip(
-                                  text: ledger.shouldUploadToCloud
-                                      ? '等待上传'
-                                      : '仅本地',
-                                  emphasized: ledger.shouldUploadToCloud,
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      ledger.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleLarge,
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      ledger.displayCode,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: colorScheme.onSurfaceVariant,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 7),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 6,
+                                      children: [
+                                        _MetaChip(
+                                          text: ledger.baseCurrencyCode,
+                                        ),
+                                        if (isLocalUnsynced)
+                                          _MetaChip(
+                                            text: ledger.shouldUploadToCloud
+                                                ? '等待上传'
+                                                : '仅本地',
+                                            emphasized:
+                                                ledger.shouldUploadToCloud,
+                                          ),
+                                        if (ledger.isShared)
+                                          _MetaChip(
+                                            text: '${ledger.memberCount} 人共享',
+                                          ),
+                                        if (hasRate)
+                                          _MetaChip(
+                                            text:
+                                                '汇率 ${ledger.exchangeRateToCNY.toStringAsFixed(4)}',
+                                            tooltip:
+                                                '1 ${ledger.baseCurrencyCode} = ${ledger.exchangeRateToCNY.toStringAsFixed(4)} CNY',
+                                          ),
+                                        if (isSyncing)
+                                          const _SyncingMetaChip()
+                                        else if (hasPendingSync)
+                                          _SyncMetaChip(
+                                            status: syncStatusValue!,
+                                          )
+                                        else if (isCloudSynced)
+                                          const _MetaChip(
+                                            text: '已同步至云端',
+                                            tooltip: '账本数据已同步至云端',
+                                          ),
+                                      ],
+                                    ),
+                                  ],
                                 ),
-                              if (ledger.isShared)
-                                _MetaChip(text: '${ledger.memberCount} 人共享'),
-                              if (hasRate)
-                                _MetaChip(
-                                  text:
-                                      '汇率 ${ledger.exchangeRateToCNY.toStringAsFixed(4)}',
-                                  tooltip:
-                                      '1 ${ledger.baseCurrencyCode} = ${ledger.exchangeRateToCNY.toStringAsFixed(4)} CNY',
+                              ),
+                              IconButton(
+                                tooltip: '编辑',
+                                icon: const Icon(Icons.edit_outlined),
+                                onPressed: isBusy ? null : onEdit,
+                              ),
+                              if (canShare)
+                                IconButton(
+                                  tooltip: '分享邀请',
+                                  icon: const Icon(Icons.ios_share_rounded),
+                                  onPressed: isBusy ? null : onShare,
                                 ),
-                              if (isSyncing)
-                                const _SyncingMetaChip()
-                              else if (hasPendingSync)
-                                _SyncMetaChip(status: syncStatusValue!)
-                              else if (isCloudSynced)
-                                const _MetaChip(
-                                  text: '已同步至云端',
-                                  tooltip: '账本数据已同步至云端',
+                              if (canSync && (hasPendingSync || isSyncing))
+                                IconButton(
+                                  tooltip: isSyncing ? '正在同步' : '同步待处理数据',
+                                  icon: AnimatedSwitcher(
+                                    duration: AppMotion.fast,
+                                    child: isSyncing
+                                        ? const SizedBox(
+                                            key: ValueKey(
+                                              'ledger-sync-progress',
+                                            ),
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2.2,
+                                            ),
+                                          )
+                                        : const Icon(
+                                            Icons.sync_rounded,
+                                            key: ValueKey('ledger-sync-icon'),
+                                          ),
+                                  ),
+                                  onPressed: isBusy ? null : onSync,
                                 ),
+                              if (canReorder)
+                                Tooltip(
+                                  message: '排序',
+                                  child: ReorderableDragStartListener(
+                                    index: index,
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(12),
+                                      child: Icon(
+                                        Icons.drag_handle_rounded,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          if (ledger.members.isNotEmpty ||
+                              ledger.personUuids.isNotEmpty) ...[
+                            _LedgerPeopleRows(
+                              sharedMembers: ledger.members,
+                              localManualPeople: localManualPeople,
+                            ),
+                            const SizedBox(height: 14),
+                          ],
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _StatPill(
+                                  label: '收入',
+                                  value: formatMoney('CNY', income),
+                                  color: colorScheme.primary,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _StatPill(
+                                  label: '支出',
+                                  value: formatMoney('CNY', expense),
+                                  color: colorScheme.error,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _StatPill(
+                                  label: '结余',
+                                  value: formatMoney(
+                                    'CNY',
+                                    balance,
+                                    signed: true,
+                                  ),
+                                  color: colorScheme.onSurface,
+                                ),
+                              ),
                             ],
                           ),
                         ],
                       ),
                     ),
-                    IconButton(
-                      tooltip: '编辑',
-                      icon: const Icon(Icons.edit_outlined),
-                      onPressed: onEdit,
-                    ),
-                    if (canShare)
-                      IconButton(
-                        tooltip: '分享邀请',
-                        icon: const Icon(Icons.ios_share_rounded),
-                        onPressed: onShare,
-                      ),
-                    if (canSync && (hasPendingSync || isSyncing))
-                      IconButton(
-                        tooltip: isSyncing ? '正在同步' : '同步待处理数据',
-                        icon: AnimatedSwitcher(
-                          duration: AppMotion.fast,
-                          child: isSyncing
-                              ? const SizedBox(
-                                  key: ValueKey('ledger-sync-progress'),
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.2,
-                                  ),
-                                )
-                              : const Icon(
-                                  Icons.sync_rounded,
-                                  key: ValueKey('ledger-sync-icon'),
-                                ),
-                        ),
-                        onPressed: isSyncing ? null : onSync,
-                      ),
-                    if (canReorder)
-                      Tooltip(
-                        message: '排序',
-                        child: ReorderableDragStartListener(
-                          index: index,
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Icon(
-                              Icons.drag_handle_rounded,
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                if (ledger.members.isNotEmpty ||
-                    ledger.personUuids.isNotEmpty) ...[
-                  _LedgerPeopleRows(
-                    sharedMembers: ledger.members,
-                    localManualPeople: localManualPeople,
                   ),
-                  const SizedBox(height: 14),
-                ],
-                Row(
-                  children: [
-                    Expanded(
-                      child: _StatPill(
-                        label: '收入',
-                        value: formatMoney('CNY', income),
-                        color: colorScheme.primary,
-                      ),
+                ),
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: AnimatedSwitcher(
+                      duration: AppMotion.normal,
+                      switchInCurve: AppMotion.emphasized,
+                      switchOutCurve: AppMotion.standard,
+                      transitionBuilder: (child, animation) {
+                        return FadeTransition(
+                          opacity: animation,
+                          child: ScaleTransition(
+                            scale: Tween<double>(
+                              begin: 0.96,
+                              end: 1,
+                            ).animate(animation),
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: operation == null
+                          ? const SizedBox.shrink(
+                              key: ValueKey('ledger-operation-idle'),
+                            )
+                          : _LedgerOperationOverlay(
+                              key: ValueKey(operation),
+                              operation: operation!,
+                            ),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _StatPill(
-                        label: '支出',
-                        value: formatMoney('CNY', expense),
-                        color: colorScheme.error,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _StatPill(
-                        label: '结余',
-                        value: formatMoney('CNY', balance, signed: true),
-                        color: colorScheme.onSurface,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LedgerOperationOverlay extends StatelessWidget {
+  const _LedgerOperationOverlay({super.key, required this.operation});
+
+  final _LedgerCardOperation operation;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isSharing = operation == _LedgerCardOperation.share;
+    final message = isSharing ? '正在生成邀请' : '正在同步账本';
+
+    return ColoredBox(
+      color: colorScheme.surface.withValues(alpha: 0.5),
+      child: Center(
+        child: Semantics(
+          liveRegion: true,
+          label: message,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerLowest,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: colorScheme.primary.withValues(alpha: 0.2),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: colorScheme.shadow.withValues(alpha: 0.08),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 17,
+                    height: 17,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.2,
+                      color: colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 9),
+                  Text(
+                    message,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: colorScheme.onSurface,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

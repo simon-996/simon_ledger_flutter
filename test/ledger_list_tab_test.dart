@@ -41,7 +41,7 @@ void main() {
               ledgerStats: const {},
               onTap: (_) {},
               onEdit: (_) {},
-              onShare: (_) {},
+              onShare: (_) async {},
               onDelete: (_) {},
               onCreate: () {},
               onSync: (_) async {
@@ -107,7 +107,7 @@ void main() {
               ledgerStats: const {},
               onTap: (_) {},
               onEdit: (_) {},
-              onShare: (_) {},
+              onShare: (_) async {},
               onDelete: (_) {},
               onCreate: () {},
               onSync: (_) async {},
@@ -125,5 +125,70 @@ void main() {
     expect(find.text('仅本地'), findsNothing);
     expect(find.text('等待上传'), findsNothing);
     expect(find.text('已同步至云端'), findsOneWidget);
+  });
+
+  testWidgets('ledger share action animates card and blocks repeated taps', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final database = DatabaseService();
+    final ledger = Ledger()
+      ..uuid = 'remote-ledger'
+      ..name = '共享账本'
+      ..baseCurrencyCode = 'CNY'
+      ..cloudPolicy = LedgerCloudPolicy.cloudManaged
+      ..role = 'owner';
+    await database.saveLedger(ledger);
+    final releaseShare = Completer<void>();
+    var shareCalls = 0;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          authTokenProvider.overrideWith(
+            (ref) async => const AuthToken(name: 'satoken', value: 'token'),
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: LedgerListTab(
+              ledgers: [ledger],
+              ledgerStats: const {},
+              onTap: (_) {},
+              onEdit: (_) {},
+              onShare: (_) async {
+                shareCalls += 1;
+                await releaseShare.future;
+              },
+              onDelete: (_) {},
+              onCreate: () {},
+              onSync: (_) async {},
+              autoSyncEnabled: false,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await tester.tap(find.byTooltip('分享邀请'));
+    await tester.pump();
+
+    expect(find.text('正在生成邀请'), findsOneWidget);
+    expect(shareCalls, 1);
+    final sharingButton = tester.widget<IconButton>(
+      find.byWidgetPredicate(
+        (widget) => widget is IconButton && widget.tooltip == '分享邀请',
+      ),
+    );
+    expect(sharingButton.onPressed, isNull);
+
+    releaseShare.complete();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('正在生成邀请'), findsNothing);
   });
 }
