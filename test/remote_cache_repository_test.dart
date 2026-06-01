@@ -244,6 +244,7 @@ void main() {
       );
       expect(localLedger.syncedRemoteUuid, _remoteLedgerUuid);
       expect(localLedger.isLocalTemporary, isTrue);
+      expect(localLedger.role, 'owner');
       final localPerson = (await database.getAllPeople()).firstWhere(
         (person) => person.uuid == 'local-person-1',
       );

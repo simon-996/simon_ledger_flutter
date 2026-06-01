@@ -162,6 +162,10 @@ class RemoteLedgerRepository implements LedgerRepository {
       final localTemporaryLedgers = await _localTemporaryLedgers(
         includeDeleted: includeDeleted,
       );
+      await _refreshSyncedLocalTemporaryMetadata(
+        localTemporaryLedgers,
+        ledgers,
+      );
       return _mergeSyncedLocalTemporaryLedgers([
         ...localTemporaryLedgers,
         ...ledgers,
@@ -316,6 +320,9 @@ class RemoteLedgerRepository implements LedgerRepository {
       ..uuid = localLedgerUuid
       ..syncedRemoteUuid = remoteLedgerUuid
       ..cloudPolicy = LedgerCloudPolicy.cloudManaged
+      ..role = created.ledger.role
+      ..memberCount = created.ledger.memberCount
+      ..members = created.ledger.members
       ..pendingSync = false
       ..syncError = null;
     await _db.saveLedger(ledger);
@@ -396,6 +403,27 @@ class RemoteLedgerRepository implements LedgerRepository {
       return left.isLocalTemporary ? -1 : 1;
     });
     return merged;
+  }
+
+  Future<void> _refreshSyncedLocalTemporaryMetadata(
+    List<Ledger> localTemporaryLedgers,
+    List<Ledger> cloudLedgers,
+  ) async {
+    final cloudLedgerByUuid = {
+      for (final ledger in cloudLedgers) ledger.uuid: ledger,
+    };
+    for (final localLedger in localTemporaryLedgers) {
+      if (!localLedger.hasSyncedRemoteCopy) continue;
+      final cloudLedger = cloudLedgerByUuid[localLedger.remoteSyncUuid];
+      if (cloudLedger == null) continue;
+      localLedger
+        ..role = cloudLedger.role
+        ..memberCount = cloudLedger.memberCount
+        ..members = cloudLedger.members
+        ..cacheOwnerUserUuid = cloudLedger.cacheOwnerUserUuid
+        ..cloudPolicy = LedgerCloudPolicy.cloudManaged;
+      await _db.saveLedger(localLedger);
+    }
   }
 
   Future<List<Ledger>> _visibleCachedLedgers(List<Ledger> ledgers) async {

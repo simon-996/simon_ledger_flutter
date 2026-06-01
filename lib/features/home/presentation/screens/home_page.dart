@@ -326,7 +326,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     try {
       final invite = await ref
           .read(inviteRepositoryProvider)
-          .createInvite(ledger.uuid);
+          .createInvite(ledger.remoteSyncUuid);
       if (!mounted) return;
       final text =
           '邀请你加入 Simon Ledger 账本“${ledger.name}”。\n'

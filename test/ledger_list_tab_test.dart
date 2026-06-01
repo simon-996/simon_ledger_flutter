@@ -77,4 +77,52 @@ void main() {
     expect(find.text('同步中'), findsNothing);
     expect(find.byTooltip('同步待处理数据'), findsOneWidget);
   });
+
+  testWidgets('synced local ledger matches cloud card and exposes sharing', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final database = DatabaseService();
+    final ledger = Ledger()
+      ..uuid = 'local-ledger'
+      ..syncedRemoteUuid = '0123456789abcdef0123456789abcdef'
+      ..name = '已同步账本'
+      ..baseCurrencyCode = 'CNY'
+      ..cloudPolicy = LedgerCloudPolicy.cloudManaged
+      ..role = 'owner';
+    await database.saveLedger(ledger);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          authTokenProvider.overrideWith(
+            (ref) async => const AuthToken(name: 'satoken', value: 'token'),
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: LedgerListTab(
+              ledgers: [ledger],
+              ledgerStats: const {},
+              onTap: (_) {},
+              onEdit: (_) {},
+              onShare: (_) {},
+              onDelete: (_) {},
+              onCreate: () {},
+              onSync: (_) async {},
+              autoSyncEnabled: false,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.byTooltip('分享邀请'), findsOneWidget);
+    expect(find.text('本地已同步'), findsNothing);
+    expect(find.text('仅本地'), findsNothing);
+    expect(find.text('等待上传'), findsNothing);
+  });
 }

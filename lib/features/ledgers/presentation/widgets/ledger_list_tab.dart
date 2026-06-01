@@ -114,8 +114,6 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
         final syncStatus = ref.watch(ledgerSyncStatusProvider(ledger.uuid));
         final isSyncing = _syncingLedgerUuids.contains(ledger.uuid);
         final delayMs = (index < 6 ? index : 6) * 45;
-        final isLocalTemporary = isCloudMode && ledger.isLocalTemporary;
-
         return Dismissible(
           key: ValueKey(ledger.uuid),
           direction: DismissDirection.endToStart,
@@ -140,7 +138,9 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
               onSync: () => _syncLedger(ledger),
               canReorder: true,
               canShare:
-                  isCloudMode && !isLocalTemporary && _canShare(ledger.role),
+                  isCloudMode &&
+                  ledger.isCloudManaged &&
+                  _canShare(ledger.role),
               canSync: isCloudMode,
             ),
           ),
@@ -258,6 +258,8 @@ class _LedgerCard extends StatelessWidget {
     final hasRate = ledger.exchangeRateToCNY != 1.0;
     final syncStatusValue = syncStatus.valueOrNull;
     final hasPendingSync = syncStatusValue?.hasPending == true;
+    final isLocalUnsynced =
+        isCloudMode && ledger.isLocalTemporary && !ledger.hasSyncedRemoteCopy;
     final localManualPeople = ledger.personUuids
         .map((uuid) => personOrFallback(peopleById, uuid, name: '人员'))
         .where((person) => person.linkedUserUuid == null && !person.isDeleted)
@@ -309,11 +311,9 @@ class _LedgerCard extends StatelessWidget {
                             runSpacing: 6,
                             children: [
                               _MetaChip(text: ledger.baseCurrencyCode),
-                              if (isCloudMode && ledger.isLocalTemporary)
+                              if (isLocalUnsynced)
                                 _MetaChip(
-                                  text: ledger.hasSyncedRemoteCopy
-                                      ? '本地已同步'
-                                      : ledger.shouldUploadToCloud
+                                  text: ledger.shouldUploadToCloud
                                       ? '等待上传'
                                       : '仅本地',
                                   emphasized: ledger.shouldUploadToCloud,
