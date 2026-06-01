@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simon_ledger_flutter/core/database/database_service.dart';
@@ -86,6 +88,48 @@ void main() {
       'people:1234567890abcdef1234567890abcdef',
       'tx:1234567890abcdef1234567890abcdef',
     ]);
+  });
+
+  test('reuses an in-flight sync for the same ledger', () async {
+    final calls = <String>[];
+    final transactionRepository = _BlockingTransactionRepository(calls);
+    final coordinator = SyncCoordinator(
+      ledgerRepository: _LedgerRepository(calls),
+      personRepository: _PersonRepository(calls),
+      transactionRepository: transactionRepository,
+      database: DatabaseService(),
+    );
+
+    final first = coordinator.syncLedger('remote-ledger');
+    final second = coordinator.syncLedger('remote-ledger');
+    await Future<void>.delayed(Duration.zero);
+
+    expect(calls, ['ledger', 'people:remote-ledger', 'tx:remote-ledger']);
+    transactionRepository.complete();
+    await Future.wait([first, second]);
+    expect(calls.where((call) => call == 'tx:remote-ledger'), hasLength(1));
+  });
+
+  test('backs off automatic retry but allows forced retry', () async {
+    final calls = <String>[];
+    final coordinator = SyncCoordinator(
+      ledgerRepository: _LedgerRepository(calls),
+      personRepository: _PersonRepository(calls),
+      transactionRepository: _FailingTransactionRepository(calls),
+      database: DatabaseService(),
+      retryDelay: const Duration(minutes: 1),
+      now: () => DateTime(2026),
+    );
+
+    await expectLater(coordinator.syncLedger('remote-ledger'), throwsException);
+    final skipped = await coordinator.syncLedger('remote-ledger');
+    await expectLater(
+      coordinator.syncLedger('remote-ledger', force: true),
+      throwsException,
+    );
+
+    expect(skipped.synced, 0);
+    expect(calls.where((call) => call == 'tx:remote-ledger'), hasLength(2));
   });
 }
 
@@ -184,4 +228,30 @@ class _TransactionRepository implements TransactionRepository {
 
   @override
   Future<void> deleteTransaction(String ledgerUuid, String uuid) async {}
+}
+
+class _BlockingTransactionRepository extends _TransactionRepository {
+  _BlockingTransactionRepository(super.calls);
+
+  final Completer<TransactionSyncResult> _completer = Completer();
+
+  @override
+  Future<TransactionSyncResult> syncPendingTransactions(String ledgerUuid) {
+    calls.add('tx:$ledgerUuid');
+    return _completer.future;
+  }
+
+  void complete() {
+    _completer.complete(const TransactionSyncResult(synced: 1));
+  }
+}
+
+class _FailingTransactionRepository extends _TransactionRepository {
+  const _FailingTransactionRepository(super.calls);
+
+  @override
+  Future<TransactionSyncResult> syncPendingTransactions(String ledgerUuid) {
+    calls.add('tx:$ledgerUuid');
+    throw Exception('offline');
+  }
 }

@@ -4,28 +4,54 @@ import '../repositories/person_repository.dart';
 import '../repositories/transaction_repository.dart';
 
 class SyncCoordinator {
-  const SyncCoordinator({
+  SyncCoordinator({
     required LedgerRepository ledgerRepository,
     required PersonRepository personRepository,
     required TransactionRepository transactionRepository,
     required DatabaseService database,
+    Duration retryDelay = const Duration(seconds: 30),
+    DateTime Function()? now,
   }) : _ledgerRepository = ledgerRepository,
        _personRepository = personRepository,
        _transactionRepository = transactionRepository,
-       _database = database;
+       _database = database,
+       _retryDelay = retryDelay,
+       _now = now ?? DateTime.now;
 
   final LedgerRepository _ledgerRepository;
   final PersonRepository _personRepository;
   final TransactionRepository _transactionRepository;
   final DatabaseService _database;
+  final Duration _retryDelay;
+  final DateTime Function() _now;
+  final Map<String, Future<TransactionSyncResult>> _ledgerSyncs = {};
+  final Map<String, DateTime> _ledgerRetryAfter = {};
+  Future<bool>? _allPendingSync;
+  DateTime? _allPendingRetryAfter;
 
-  Future<TransactionSyncResult> syncLedger(String ledgerUuid) async {
-    await _ledgerRepository.syncPendingWrites();
-    await _personRepository.syncPendingPeople(ledgerUuid);
-    return _transactionRepository.syncPendingTransactions(ledgerUuid);
+  Future<TransactionSyncResult> syncLedger(
+    String ledgerUuid, {
+    bool force = false,
+  }) {
+    return _startLedgerSync(ledgerUuid, force: force, syncLedgerWrites: true);
   }
 
-  Future<bool> syncAllPending() async {
+  Future<bool> syncAllPending() {
+    final current = _allPendingSync;
+    if (current != null) return current;
+    if (!_canRetry(_allPendingRetryAfter)) return Future.value(false);
+
+    late final Future<bool> sync;
+    sync = _syncAllPendingNow().whenComplete(() {
+      if (identical(_allPendingSync, sync)) {
+        _allPendingSync = null;
+      }
+    });
+    _allPendingSync = sync;
+    return sync;
+  }
+
+  Future<bool> _syncAllPendingNow() async {
     final ledgers = await _database.getAllLedgers(includeDeleted: true);
     final people = await _database.getAllPeople(includeDeleted: true);
     final transactions = await _database.getTransactionsForLedgers(
@@ -34,7 +60,9 @@ class SyncCoordinator {
     );
     final ledgerUuids = <String>{
       for (final ledger in ledgers)
-        if (ledger.pendingSync || ledger.isLocalTemporary) ledger.uuid,
+        if (ledger.pendingSync ||
+            (ledger.isLocalTemporary && !ledger.hasSyncedRemoteCopy))
+          ledger.uuid,
       for (final person in people)
         if (person.pendingSync && person.pendingLedgerUuid != null)
           person.pendingLedgerUuid!,
@@ -43,11 +71,62 @@ class SyncCoordinator {
     };
     if (ledgerUuids.isEmpty) return false;
 
-    await _ledgerRepository.syncPendingWrites();
-    for (final ledgerUuid in ledgerUuids) {
-      await _personRepository.syncPendingPeople(ledgerUuid);
-      await _transactionRepository.syncPendingTransactions(ledgerUuid);
+    try {
+      await _ledgerRepository.syncPendingWrites();
+      for (final ledgerUuid in ledgerUuids) {
+        await _startLedgerSync(ledgerUuid, syncLedgerWrites: false);
+      }
+      _allPendingRetryAfter = null;
+      return true;
+    } catch (_) {
+      _allPendingRetryAfter = _now().add(_retryDelay);
+      rethrow;
     }
-    return true;
+  }
+
+  Future<TransactionSyncResult> _startLedgerSync(
+    String ledgerUuid, {
+    bool force = false,
+    required bool syncLedgerWrites,
+  }) {
+    final current = _ledgerSyncs[ledgerUuid];
+    if (current != null) return current;
+    if (!force && !_canRetry(_ledgerRetryAfter[ledgerUuid])) {
+      return Future.value(const TransactionSyncResult(synced: 0));
+    }
+
+    late final Future<TransactionSyncResult> sync;
+    sync = _syncLedgerNow(ledgerUuid, syncLedgerWrites: syncLedgerWrites)
+        .whenComplete(() {
+          if (identical(_ledgerSyncs[ledgerUuid], sync)) {
+            _ledgerSyncs.remove(ledgerUuid);
+          }
+        });
+    _ledgerSyncs[ledgerUuid] = sync;
+    return sync;
+  }
+
+  Future<TransactionSyncResult> _syncLedgerNow(
+    String ledgerUuid, {
+    required bool syncLedgerWrites,
+  }) async {
+    try {
+      if (syncLedgerWrites) {
+        await _ledgerRepository.syncPendingWrites();
+      }
+      await _personRepository.syncPendingPeople(ledgerUuid);
+      final result = await _transactionRepository.syncPendingTransactions(
+        ledgerUuid,
+      );
+      _ledgerRetryAfter.remove(ledgerUuid);
+      return result;
+    } catch (_) {
+      _ledgerRetryAfter[ledgerUuid] = _now().add(_retryDelay);
+      rethrow;
+    }
+  }
+
+  bool _canRetry(DateTime? retryAfter) {
+    return retryAfter == null || !_now().isBefore(retryAfter);
   }
 }
