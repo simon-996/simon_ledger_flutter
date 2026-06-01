@@ -526,16 +526,13 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
     }
 
     final profile = await ref.read(localProfileProvider.future);
-    final user = await ref.read(currentUserProvider.future);
-    if (user == null) {
-      throw const FormatException('登录状态已失效，请重新登录');
-    }
+    final accountUuid = await ref.read(tokenStoreProvider).readAccountUuid();
     return [
       Person()
         ..uuid = 'self-${DateTime.now().microsecondsSinceEpoch}'
         ..name = profile.normalizedNickname
         ..avatar = profile.personAvatar
-        ..linkedUserUuid = user.uuid,
+        ..linkedUserUuid = accountUuid,
       ...selectedPeople,
     ];
   }
