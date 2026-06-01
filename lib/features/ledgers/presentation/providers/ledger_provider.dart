@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../../core/di/providers.dart';
 import '../../../../core/models/ledger.dart';
 import '../../../../core/models/person.dart';
+import '../../../../core/repositories/ledger_repository.dart';
 
 part 'ledger_provider.g.dart';
 
@@ -11,7 +14,23 @@ class LedgerNotifier extends _$LedgerNotifier {
   Future<List<Ledger>> build() async {
     await ref.watch(authTokenProvider.future);
     final repository = ref.watch(ledgerRepositoryProvider);
-    return await repository.getAllLedgers();
+    if (repository is! RemoteLedgerRepository) {
+      return repository.getAllLedgers();
+    }
+
+    var disposed = false;
+    ref.onDispose(() => disposed = true);
+    unawaited(_refreshRemote(repository, isDisposed: () => disposed));
+    return repository.getCachedLedgers();
+  }
+
+  Future<void> _refreshRemote(
+    RemoteLedgerRepository repository, {
+    required bool Function() isDisposed,
+  }) async {
+    final ledgers = await repository.getAllLedgers();
+    if (isDisposed()) return;
+    state = AsyncValue.data(ledgers);
   }
 
   Future<void> addLedger(Ledger ledger) async {

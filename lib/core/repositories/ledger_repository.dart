@@ -12,6 +12,8 @@ class CreatedLedgerWithPeople {
 }
 
 abstract class LedgerRepository {
+  Future<List<Ledger>> getCachedLedgers({bool includeDeleted = false});
+
   Future<List<Ledger>> getAllLedgers({bool includeDeleted = false});
 
   Future<void> saveLedger(Ledger ledger);
@@ -30,6 +32,11 @@ class LocalLedgerRepository implements LedgerRepository {
   const LocalLedgerRepository(this._db);
 
   final DatabaseService _db;
+
+  @override
+  Future<List<Ledger>> getCachedLedgers({bool includeDeleted = false}) {
+    return _db.getAllLedgers(includeDeleted: includeDeleted);
+  }
 
   @override
   Future<List<Ledger>> getAllLedgers({bool includeDeleted = false}) {
@@ -75,6 +82,11 @@ class RemoteLedgerRepository implements LedgerRepository {
   final ApiClient _apiClient;
   final DatabaseService _db;
   final SyncIdentityResolver _identityResolver;
+
+  @override
+  Future<List<Ledger>> getCachedLedgers({bool includeDeleted = false}) {
+    return _db.getAllLedgers(includeDeleted: includeDeleted);
+  }
 
   @override
   Future<List<Ledger>> getAllLedgers({bool includeDeleted = false}) async {

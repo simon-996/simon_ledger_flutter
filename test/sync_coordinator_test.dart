@@ -35,6 +35,10 @@ class _LedgerRepository implements LedgerRepository {
   Future<List<Ledger>> getAllLedgers({bool includeDeleted = false}) async => [];
 
   @override
+  Future<List<Ledger>> getCachedLedgers({bool includeDeleted = false}) async =>
+      [];
+
+  @override
   Future<void> saveLedger(Ledger ledger) async {}
 
   @override
