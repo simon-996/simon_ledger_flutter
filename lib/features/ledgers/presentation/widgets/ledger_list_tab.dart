@@ -161,7 +161,7 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
 
   Future<void> _autoSyncPendingLedgers() async {
     final database = ref.read(databaseProvider);
-    final repository = ref.read(transactionRepositoryProvider);
+    final syncCoordinator = ref.read(syncCoordinatorProvider);
 
     for (final ledger in widget.ledgers) {
       if (_autoSyncingLedgerUuids.contains(ledger.uuid)) {
@@ -192,7 +192,7 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
       _autoSyncedPendingKeys[ledger.uuid] = pendingKey;
       _autoSyncingLedgerUuids.add(ledger.uuid);
       try {
-        await repository.syncPendingTransactions(ledger.uuid);
+        await syncCoordinator.syncLedger(ledger.uuid);
       } catch (_) {
         // Silent auto-sync: the card keeps showing pending/failed state.
       } finally {

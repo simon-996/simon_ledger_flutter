@@ -281,8 +281,8 @@ class _HomePageState extends ConsumerState<HomePage> {
   Future<void> _syncLedger(Ledger ledger) async {
     try {
       final result = await ref
-          .read(transactionRepositoryProvider)
-          .syncPendingTransactions(ledger.uuid);
+          .read(syncCoordinatorProvider)
+          .syncLedger(ledger.uuid);
       ref.invalidate(ledgerSyncStatusProvider(ledger.uuid));
       ref.invalidate(transactionNotifierProvider(ledger.uuid));
       ref.invalidate(ledgerStatsProvider);

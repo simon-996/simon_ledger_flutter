@@ -11,6 +11,7 @@ import '../repositories/person_repository.dart';
 import '../repositories/transaction_repository.dart';
 import '../services/cloud_import_service.dart';
 import '../services/profile_sync_service.dart';
+import '../services/sync_coordinator.dart';
 import '../services/sync_identity_resolver.dart';
 
 /// Provides the global instance of DatabaseService.
@@ -93,6 +94,14 @@ final transactionRepositoryProvider = Provider<TransactionRepository>((ref) {
     );
   }
   return LocalTransactionRepository(ref.watch(databaseProvider));
+});
+
+final syncCoordinatorProvider = Provider<SyncCoordinator>((ref) {
+  return SyncCoordinator(
+    ledgerRepository: ref.watch(ledgerRepositoryProvider),
+    personRepository: ref.watch(personRepositoryProvider),
+    transactionRepository: ref.watch(transactionRepositoryProvider),
+  );
 });
 
 final cloudImportServiceProvider = Provider<CloudImportService>((ref) {

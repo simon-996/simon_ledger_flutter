@@ -22,6 +22,8 @@ abstract class LedgerRepository {
   );
 
   Future<void> deleteLedger(String uuid);
+
+  Future<void> syncPendingWrites();
 }
 
 class LocalLedgerRepository implements LedgerRepository {
@@ -56,6 +58,9 @@ class LocalLedgerRepository implements LedgerRepository {
   Future<void> deleteLedger(String uuid) {
     return _db.deleteLedger(uuid);
   }
+
+  @override
+  Future<void> syncPendingWrites() async {}
 }
 
 class RemoteLedgerRepository implements LedgerRepository {
@@ -74,8 +79,7 @@ class RemoteLedgerRepository implements LedgerRepository {
   @override
   Future<List<Ledger>> getAllLedgers({bool includeDeleted = false}) async {
     try {
-      await _syncPendingLocalLedgers();
-      await _syncPendingLedgerWrites();
+      await syncPendingWrites();
       final ledgers = await _apiClient.get<List<Ledger>>(
         '/api/ledgers',
         fromJson: (json) =>
@@ -278,6 +282,12 @@ class RemoteLedgerRepository implements LedgerRepository {
         await saveLedger(ledger);
       }
     }
+  }
+
+  @override
+  Future<void> syncPendingWrites() async {
+    await _syncPendingLocalLedgers();
+    await _syncPendingLedgerWrites();
   }
 
   Future<List<Ledger>> _localTemporaryLedgers({

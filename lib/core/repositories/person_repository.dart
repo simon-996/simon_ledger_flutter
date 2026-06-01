@@ -14,6 +14,8 @@ abstract class PersonRepository {
   Future<void> savePerson(Person person, {String? ledgerUuid});
 
   Future<void> deletePerson(String uuid, {String? ledgerUuid});
+
+  Future<void> syncPendingPeople(String ledgerUuid);
 }
 
 class LocalPersonRepository implements PersonRepository {
@@ -38,6 +40,9 @@ class LocalPersonRepository implements PersonRepository {
   Future<void> deletePerson(String uuid, {String? ledgerUuid}) {
     return _db.deletePerson(uuid);
   }
+
+  @override
+  Future<void> syncPendingPeople(String ledgerUuid) async {}
 }
 
 class RemotePersonRepository implements PersonRepository {
@@ -63,9 +68,12 @@ class RemotePersonRepository implements PersonRepository {
   }) async {
     if (ledgerUuid != null) {
       try {
-        await _syncPendingPeople(ledgerUuid);
+        await syncPendingPeople(ledgerUuid);
+        final remoteLedgerUuid = await _identityResolver.resolveLedgerUuid(
+          ledgerUuid,
+        );
         final people = await _apiClient.get<List<Person>>(
-          '/api/ledgers/$ledgerUuid/people',
+          '/api/ledgers/$remoteLedgerUuid/people',
           fromJson: (json) =>
               (json! as List<dynamic>).map(_personFromJson).toList(),
         );
@@ -303,7 +311,8 @@ class RemotePersonRepository implements PersonRepository {
     }
   }
 
-  Future<void> _syncPendingPeople(String ledgerUuid) async {
+  @override
+  Future<void> syncPendingPeople(String ledgerUuid) async {
     final people = await _db.getAllPeople(includeDeleted: true);
     final pending = people.where((person) {
       return person.pendingSync && person.pendingLedgerUuid == ledgerUuid;
