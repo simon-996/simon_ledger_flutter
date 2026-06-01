@@ -385,9 +385,7 @@ class _LedgerCard extends StatelessWidget {
                                             tooltip:
                                                 '1 ${ledger.baseCurrencyCode} = ${ledger.exchangeRateToCNY.toStringAsFixed(4)} CNY',
                                           ),
-                                        if (isSyncing)
-                                          const _SyncingMetaChip()
-                                        else if (hasPendingSync)
+                                        if (hasPendingSync)
                                           _SyncMetaChip(
                                             status: syncStatusValue!,
                                           )
@@ -401,6 +399,12 @@ class _LedgerCard extends StatelessWidget {
                                   ],
                                 ),
                               ),
+                              if (canSync && (hasPendingSync || isSyncing))
+                                IconButton(
+                                  tooltip: isSyncing ? '正在同步' : '同步待处理数据',
+                                  icon: const Icon(Icons.sync_rounded),
+                                  onPressed: isBusy ? null : onSync,
+                                ),
                               IconButton(
                                 tooltip: '编辑',
                                 icon: const Icon(Icons.edit_outlined),
@@ -411,29 +415,6 @@ class _LedgerCard extends StatelessWidget {
                                   tooltip: '分享邀请',
                                   icon: const Icon(Icons.ios_share_rounded),
                                   onPressed: isBusy ? null : onShare,
-                                ),
-                              if (canSync && (hasPendingSync || isSyncing))
-                                IconButton(
-                                  tooltip: isSyncing ? '正在同步' : '同步待处理数据',
-                                  icon: AnimatedSwitcher(
-                                    duration: AppMotion.fast,
-                                    child: isSyncing
-                                        ? const SizedBox(
-                                            key: ValueKey(
-                                              'ledger-sync-progress',
-                                            ),
-                                            width: 18,
-                                            height: 18,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2.2,
-                                            ),
-                                          )
-                                        : const Icon(
-                                            Icons.sync_rounded,
-                                            key: ValueKey('ledger-sync-icon'),
-                                          ),
-                                  ),
-                                  onPressed: isBusy ? null : onSync,
                                 ),
                               if (canReorder)
                                 Tooltip(
@@ -610,24 +591,25 @@ class _LedgerPeopleRows extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
       children: [
-        if (sharedMembers.isNotEmpty)
-          _LedgerPeopleLine(
-            label: '共享成员',
-            children: sharedMembers.map((member) {
-              return _LedgerPersonChip(
-                avatar: member.displayAvatar,
-                name: member.displayName,
-                tooltip: '${member.displayName}${_roleLabel(member.role)}',
-              );
-            }).toList(),
-          ),
-        _ManualPeopleLine(
-          localManualPeople: localManualPeople,
-          topPadding: sharedMembers.isNotEmpty ? 8 : 0,
-        ),
+        ...sharedMembers.map((member) {
+          return _LedgerPersonChip(
+            avatar: member.displayAvatar,
+            name: member.displayName,
+            tooltip: '${member.displayName}${_roleLabel(member.role)} · 共享成员',
+            isShared: true,
+          );
+        }),
+        ...localManualPeople.map((person) {
+          return _LedgerPersonChip(
+            avatar: person.avatar,
+            name: person.name,
+            tooltip: person.name,
+          );
+        }),
       ],
     );
   }
@@ -643,84 +625,18 @@ class _LedgerPeopleRows extends StatelessWidget {
   }
 }
 
-class _ManualPeopleLine extends StatelessWidget {
-  const _ManualPeopleLine({
-    required this.localManualPeople,
-    required this.topPadding,
-  });
-
-  final List<Person> localManualPeople;
-  final double topPadding;
-
-  @override
-  Widget build(BuildContext context) {
-    return _buildLine(localManualPeople);
-  }
-
-  Widget _buildLine(List<Person> manualPeople) {
-    if (manualPeople.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Padding(
-      padding: EdgeInsets.only(top: topPadding),
-      child: _LedgerPeopleLine(
-        label: '账本人员',
-        children: manualPeople.map((person) {
-          return _LedgerPersonChip(
-            avatar: person.avatar,
-            name: person.name,
-            tooltip: person.name,
-          );
-        }).toList(),
-      ),
-    );
-  }
-}
-
-class _LedgerPeopleLine extends StatelessWidget {
-  const _LedgerPeopleLine({required this.label, required this.children});
-
-  final String label;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 62,
-          child: Padding(
-            padding: const EdgeInsets.only(top: 7),
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(child: Wrap(spacing: 8, runSpacing: 8, children: children)),
-      ],
-    );
-  }
-}
-
 class _LedgerPersonChip extends StatelessWidget {
   const _LedgerPersonChip({
     required this.avatar,
     required this.name,
     required this.tooltip,
+    this.isShared = false,
   });
 
   final String avatar;
   final String name;
   final String tooltip;
+  final bool isShared;
 
   @override
   Widget build(BuildContext context) {
@@ -732,10 +648,14 @@ class _LedgerPersonChip extends StatelessWidget {
         constraints: const BoxConstraints(maxWidth: 156),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.68),
+          color: isShared
+              ? Colors.green.withValues(alpha: 0.08)
+              : colorScheme.surfaceContainerHigh.withValues(alpha: 0.68),
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.72),
+            color: isShared
+                ? Colors.green.shade600.withValues(alpha: 0.72)
+                : colorScheme.outlineVariant.withValues(alpha: 0.72),
           ),
         ),
         child: Row(
@@ -853,44 +773,6 @@ class _SyncMetaChip extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _SyncingMetaChip extends StatelessWidget {
-  const _SyncingMetaChip();
-
-  @override
-  Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.primary;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.24)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            width: 13,
-            height: 13,
-            child: CircularProgressIndicator(strokeWidth: 2, color: color),
-          ),
-          const SizedBox(width: 5),
-          Text(
-            '同步中',
-            maxLines: 1,
-            softWrap: false,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
       ),
     );
   }

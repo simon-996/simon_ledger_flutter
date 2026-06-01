@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simon_ledger_flutter/core/database/database_service.dart';
 import 'package:simon_ledger_flutter/core/di/providers.dart';
 import 'package:simon_ledger_flutter/core/models/ledger.dart';
+import 'package:simon_ledger_flutter/core/models/person.dart';
 import 'package:simon_ledger_flutter/core/network/token_store.dart';
 import 'package:simon_ledger_flutter/features/ledgers/presentation/widgets/ledger_list_tab.dart';
 
@@ -57,10 +58,17 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    await tester.tap(find.byTooltip('同步待处理数据'));
+    final syncButtonFinder = find.byTooltip('同步待处理数据');
+    expect(
+      tester.getTopLeft(syncButtonFinder).dx,
+      lessThan(tester.getTopLeft(find.byTooltip('编辑')).dx),
+    );
+
+    await tester.tap(syncButtonFinder);
     await tester.pump();
 
-    expect(find.text('同步中'), findsOneWidget);
+    expect(find.text('正在同步账本'), findsOneWidget);
+    expect(find.text('同步中'), findsNothing);
     expect(find.byTooltip('正在同步'), findsOneWidget);
     final syncingButton = tester.widget<IconButton>(
       find.byWidgetPredicate(
@@ -74,7 +82,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('同步中'), findsNothing);
+    expect(find.text('正在同步账本'), findsNothing);
     expect(find.byTooltip('同步待处理数据'), findsOneWidget);
   });
 
@@ -191,4 +199,68 @@ void main() {
 
     expect(find.text('正在生成邀请'), findsNothing);
   });
+
+  testWidgets(
+    'ledger card shows one compact people list without group labels',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final database = DatabaseService();
+      final manualPerson = Person()
+        ..uuid = 'manual-person'
+        ..name = '小李'
+        ..avatar = '🙂';
+      final ledger = Ledger()
+        ..uuid = 'local-ledger'
+        ..name = '家庭账本'
+        ..baseCurrencyCode = 'CNY'
+        ..personUuids = [manualPerson.uuid]
+        ..members = [
+          LedgerMemberSummary(
+            uuid: 'shared-person',
+            nickname: '小王',
+            avatar: '😀',
+            role: 'editor',
+          ),
+        ]
+        ..memberCount = 2;
+      await database.savePerson(manualPerson);
+      await database.saveLedger(ledger);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [databaseProvider.overrideWithValue(database)],
+          child: MaterialApp(
+            home: Scaffold(
+              body: LedgerListTab(
+                ledgers: [ledger],
+                ledgerStats: const {},
+                onTap: (_) {},
+                onEdit: (_) {},
+                onShare: (_) async {},
+                onDelete: (_) {},
+                onCreate: () {},
+                onSync: (_) async {},
+                autoSyncEnabled: false,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('小王'), findsOneWidget);
+      expect(find.text('小李'), findsOneWidget);
+      expect(find.text('共享成员'), findsNothing);
+      expect(find.text('账本人员'), findsNothing);
+      expect(find.byTooltip('小王 · 可记账 · 共享成员'), findsOneWidget);
+      final sharedOffset = tester.getTopLeft(find.text('小王'));
+      final manualOffset = tester.getTopLeft(find.text('小李'));
+      final sharedBeforeManual =
+          sharedOffset.dy < manualOffset.dy ||
+          (sharedOffset.dy == manualOffset.dy &&
+              sharedOffset.dx < manualOffset.dx);
+      expect(sharedBeforeManual, isTrue);
+    },
+  );
 }
