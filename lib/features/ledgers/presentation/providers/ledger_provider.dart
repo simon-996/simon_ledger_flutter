@@ -5,6 +5,7 @@ import '../../../../core/di/providers.dart';
 import '../../../../core/models/ledger.dart';
 import '../../../../core/models/person.dart';
 import '../../../../core/repositories/ledger_repository.dart';
+import '../../../people_pool/presentation/providers/person_provider.dart';
 
 part 'ledger_provider.g.dart';
 
@@ -30,6 +31,7 @@ class LedgerNotifier extends _$LedgerNotifier {
   }) async {
     final ledgers = await repository.getAllLedgers();
     if (isDisposed()) return;
+    ref.invalidate(cachedPeopleProvider);
     state = AsyncValue.data(ledgers);
   }
 
@@ -51,6 +53,7 @@ class LedgerNotifier extends _$LedgerNotifier {
       ledger.sortOrder = currentLedgers.last.sortOrder + 1;
     }
     final created = await repository.createLedgerWithPeople(ledger, people);
+    ref.invalidate(cachedPeopleProvider);
     state = AsyncValue.data(_upsertLedger(currentLedgers, created.ledger));
   }
 

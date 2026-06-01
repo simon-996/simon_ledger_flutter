@@ -48,14 +48,9 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
   Widget build(BuildContext context) {
     final token = ref.watch(authTokenProvider).valueOrNull;
     final isCloudMode = token != null && token.isValid;
-    final peopleById = isCloudMode
-        ? const <String, Person>{}
-        : ref
-              .watch(personNotifierProvider(includeDeleted: true))
-              .maybeWhen(
-                data: peopleByUuid,
-                orElse: () => const <String, Person>{},
-              );
+    final peopleById = ref
+        .watch(cachedPeopleProvider)
+        .maybeWhen(data: peopleByUuid, orElse: () => const <String, Person>{});
 
     if (isCloudMode && widget.autoSyncEnabled && widget.ledgers.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -374,10 +369,8 @@ class _LedgerCard extends StatelessWidget {
                 if (ledger.members.isNotEmpty ||
                     ledger.personUuids.isNotEmpty) ...[
                   _LedgerPeopleRows(
-                    ledger: ledger,
                     sharedMembers: ledger.members,
                     localManualPeople: localManualPeople,
-                    isCloudMode: isCloudMode,
                   ),
                   const SizedBox(height: 14),
                 ],
@@ -419,16 +412,12 @@ class _LedgerCard extends StatelessWidget {
 
 class _LedgerPeopleRows extends StatelessWidget {
   const _LedgerPeopleRows({
-    required this.ledger,
     required this.sharedMembers,
     required this.localManualPeople,
-    required this.isCloudMode,
   });
 
-  final Ledger ledger;
   final List<LedgerMemberSummary> sharedMembers;
   final List<Person> localManualPeople;
-  final bool isCloudMode;
 
   @override
   Widget build(BuildContext context) {
@@ -447,9 +436,7 @@ class _LedgerPeopleRows extends StatelessWidget {
             }).toList(),
           ),
         _ManualPeopleLine(
-          ledger: ledger,
           localManualPeople: localManualPeople,
-          isCloudMode: isCloudMode,
           topPadding: sharedMembers.isNotEmpty ? 8 : 0,
         ),
       ],
@@ -467,39 +454,18 @@ class _LedgerPeopleRows extends StatelessWidget {
   }
 }
 
-class _ManualPeopleLine extends ConsumerWidget {
+class _ManualPeopleLine extends StatelessWidget {
   const _ManualPeopleLine({
-    required this.ledger,
     required this.localManualPeople,
-    required this.isCloudMode,
     required this.topPadding,
   });
 
-  final Ledger ledger;
   final List<Person> localManualPeople;
-  final bool isCloudMode;
   final double topPadding;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    if (!isCloudMode) {
-      return _buildLine(localManualPeople);
-    }
-
-    return FutureBuilder<List<Person>>(
-      future: ref.watch(databaseProvider).getAllPeople(),
-      builder: (context, snapshot) {
-        final people = snapshot.data;
-        if (people == null) {
-          return _buildLoading(context);
-        }
-        final manualPeople = people
-            .where((person) => ledger.personUuids.contains(person.uuid))
-            .where((person) => person.linkedUserUuid == null)
-            .toList();
-        return _buildLine(manualPeople);
-      },
-    );
+  Widget build(BuildContext context) {
+    return _buildLine(localManualPeople);
   }
 
   Widget _buildLine(List<Person> manualPeople) {
@@ -518,39 +484,6 @@ class _ManualPeopleLine extends ConsumerWidget {
             tooltip: person.name,
           );
         }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildLoading(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Padding(
-      padding: EdgeInsets.only(top: topPadding),
-      child: _LedgerPeopleLine(
-        label: '账本人员',
-        children: [
-          Container(
-            width: 72,
-            height: 30,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.68),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(
-                color: colorScheme.outlineVariant.withValues(alpha: 0.72),
-              ),
-            ),
-            child: SizedBox(
-              width: 14,
-              height: 14,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: colorScheme.primary,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

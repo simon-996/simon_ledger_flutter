@@ -259,6 +259,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       await personRepository.deletePerson(personUuid, ledgerUuid: ledgerUuid);
     }
     ref.invalidate(personNotifierProvider);
+    ref.invalidate(cachedPeopleProvider);
     ref.invalidate(ledgerNotifierProvider);
   }
 
@@ -393,6 +394,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       ..linkedUserUuid = user?.uuid;
     await personRepository.savePerson(person, ledgerUuid: ledgerScope);
     ref.invalidate(personNotifierProvider);
+    ref.invalidate(cachedPeopleProvider);
     return person.uuid;
   }
 

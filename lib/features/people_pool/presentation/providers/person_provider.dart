@@ -7,6 +7,10 @@ import '../../../../core/repositories/person_repository.dart';
 
 part 'person_provider.g.dart';
 
+final cachedPeopleProvider = FutureProvider<List<Person>>((ref) {
+  return ref.watch(databaseProvider).getAllPeople(includeDeleted: true);
+});
+
 @riverpod
 class PersonNotifier extends _$PersonNotifier {
   @override
@@ -47,6 +51,7 @@ class PersonNotifier extends _$PersonNotifier {
   Future<void> addOrUpdatePerson(Person person) async {
     final repository = ref.read(personRepositoryProvider);
     await repository.savePerson(person, ledgerUuid: ledgerUuid);
+    ref.invalidate(cachedPeopleProvider);
     final current = state.valueOrNull;
     if (current != null) {
       state = AsyncValue.data(_upsertPerson(current, person));
@@ -56,6 +61,7 @@ class PersonNotifier extends _$PersonNotifier {
   Future<void> deletePerson(String uuid) async {
     final repository = ref.read(personRepositoryProvider);
     await repository.deletePerson(uuid, ledgerUuid: ledgerUuid);
+    ref.invalidate(cachedPeopleProvider);
     final current = state.valueOrNull;
     if (current != null) {
       if (includeDeleted) {
