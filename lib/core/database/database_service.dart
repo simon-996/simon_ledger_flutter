@@ -121,7 +121,7 @@ class DatabaseService {
     final visible = includeDeleted
         ? ledgers
         : ledgers.where((ledger) => !ledger.isDeleted).toList();
-    visible.sort((left, right) => left.sortOrder.compareTo(right.sortOrder));
+    visible.sort((left, right) => right.sortOrder.compareTo(left.sortOrder));
     return visible;
   }
 

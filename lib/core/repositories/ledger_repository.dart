@@ -155,7 +155,8 @@ class RemoteLedgerRepository implements LedgerRepository {
 
       for (var index = 0; index < ledgers.length; index += 1) {
         ledgers[index].sortOrder =
-            cachedSortOrderByRemoteUuid[ledgers[index].uuid] ?? index;
+            cachedSortOrderByRemoteUuid[ledgers[index].uuid] ??
+            ledgers.length - index - 1;
         await _db.saveLedger(ledgers[index]);
       }
       final localTemporaryLedgers = await _localTemporaryLedgers(
@@ -389,7 +390,7 @@ class RemoteLedgerRepository implements LedgerRepository {
     }
     final merged = mergedByIdentity.values.toList();
     merged.sort((left, right) {
-      final order = left.sortOrder.compareTo(right.sortOrder);
+      final order = right.sortOrder.compareTo(left.sortOrder);
       if (order != 0) return order;
       if (left.isLocalTemporary == right.isLocalTemporary) return 0;
       return left.isLocalTemporary ? -1 : 1;

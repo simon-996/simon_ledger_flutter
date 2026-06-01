@@ -99,5 +99,29 @@ void main() {
         hasLength(1),
       );
     });
+
+    test('returns ledgers with the newest sort order first', () async {
+      await database.saveLedger(
+        Ledger()
+          ..uuid = 'ledger-older'
+          ..name = '旧账本'
+          ..baseCurrencyCode = 'CNY'
+          ..sortOrder = 0,
+      );
+      await database.saveLedger(
+        Ledger()
+          ..uuid = 'ledger-newer'
+          ..name = '新账本'
+          ..baseCurrencyCode = 'CNY'
+          ..sortOrder = 1,
+      );
+
+      final ledgers = await database.getAllLedgers();
+
+      expect(ledgers.map((ledger) => ledger.uuid), [
+        'ledger-newer',
+        'ledger-older',
+      ]);
+    });
   });
 }

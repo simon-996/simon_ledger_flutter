@@ -37,11 +37,8 @@ class LedgerNotifier extends _$LedgerNotifier {
 
   Future<void> addLedger(Ledger ledger) async {
     final repository = ref.read(ledgerRepositoryProvider);
-    // Give it the highest sort order (put at the end)
     final currentLedgers = state.valueOrNull ?? [];
-    if (currentLedgers.isNotEmpty) {
-      ledger.sortOrder = currentLedgers.last.sortOrder + 1;
-    }
+    ledger.sortOrder = _nextSortOrder(currentLedgers);
     await repository.saveLedger(ledger);
     state = AsyncValue.data(_upsertLedger(currentLedgers, ledger));
   }
@@ -49,9 +46,7 @@ class LedgerNotifier extends _$LedgerNotifier {
   Future<void> addLedgerWithPeople(Ledger ledger, List<Person> people) async {
     final repository = ref.read(ledgerRepositoryProvider);
     final currentLedgers = state.valueOrNull ?? [];
-    if (currentLedgers.isNotEmpty) {
-      ledger.sortOrder = currentLedgers.last.sortOrder + 1;
-    }
+    ledger.sortOrder = _nextSortOrder(currentLedgers);
     final created = await repository.createLedgerWithPeople(ledger, people);
     ref.invalidate(cachedPeopleProvider);
     state = AsyncValue.data(_upsertLedger(currentLedgers, created.ledger));
@@ -73,9 +68,9 @@ class LedgerNotifier extends _$LedgerNotifier {
     final item = items.removeAt(oldIndex);
     items.insert(newIndex, item);
 
-    // Update sortOrder for all items
+    // The first visible ledger owns the highest sort order.
     for (int i = 0; i < items.length; i++) {
-      items[i].sortOrder = i;
+      items[i].sortOrder = items.length - i;
     }
 
     // Optimistically update the UI state
@@ -115,7 +110,17 @@ class LedgerNotifier extends _$LedgerNotifier {
     } else {
       items[index] = ledger;
     }
-    items.sort((left, right) => left.sortOrder.compareTo(right.sortOrder));
+    items.sort((left, right) => right.sortOrder.compareTo(left.sortOrder));
     return items;
+  }
+
+  int _nextSortOrder(List<Ledger> ledgers) {
+    var maxSortOrder = -1;
+    for (final ledger in ledgers) {
+      if (ledger.sortOrder > maxSortOrder) {
+        maxSortOrder = ledger.sortOrder;
+      }
+    }
+    return maxSortOrder + 1;
   }
 }

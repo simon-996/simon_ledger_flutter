@@ -55,35 +55,38 @@ void main() {
     expect(people.single.avatar, '😎');
   });
 
-  test('RemoteLedgerRepository keeps cached local ledger order', () async {
-    SharedPreferences.setMockInitialValues({});
-    final database = DatabaseService();
-    await database.saveLedger(
-      Ledger()
-        ..uuid = _remoteLedgerUuid
-        ..name = '第二个账本'
-        ..baseCurrencyCode = 'CNY'
-        ..sortOrder = 1,
-    );
-    await database.saveLedger(
-      Ledger()
-        ..uuid = _anotherRemoteLedgerUuid
-        ..name = '第一个账本'
-        ..baseCurrencyCode = 'CNY'
-        ..sortOrder = 0,
-    );
-    final repository = RemoteLedgerRepository(
-      apiClient: _OrderedLedgersApiClient(),
-      database: database,
-    );
+  test(
+    'RemoteLedgerRepository shows higher local ledger order first',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final database = DatabaseService();
+      await database.saveLedger(
+        Ledger()
+          ..uuid = _remoteLedgerUuid
+          ..name = '第二个账本'
+          ..baseCurrencyCode = 'CNY'
+          ..sortOrder = 1,
+      );
+      await database.saveLedger(
+        Ledger()
+          ..uuid = _anotherRemoteLedgerUuid
+          ..name = '第一个账本'
+          ..baseCurrencyCode = 'CNY'
+          ..sortOrder = 0,
+      );
+      final repository = RemoteLedgerRepository(
+        apiClient: _OrderedLedgersApiClient(),
+        database: database,
+      );
 
-    final ledgers = await repository.getAllLedgers();
+      final ledgers = await repository.getAllLedgers();
 
-    expect(ledgers.map((ledger) => ledger.uuid), [
-      _anotherRemoteLedgerUuid,
-      _remoteLedgerUuid,
-    ]);
-  });
+      expect(ledgers.map((ledger) => ledger.uuid), [
+        _remoteLedgerUuid,
+        _anotherRemoteLedgerUuid,
+      ]);
+    },
+  );
 
   test(
     'RemoteLedgerRepository exposes only current account cloud cache',
