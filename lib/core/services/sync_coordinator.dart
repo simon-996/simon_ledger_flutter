@@ -122,7 +122,7 @@ class SyncCoordinator {
   }) async {
     try {
       if (syncLedgerWrites) {
-        await _ledgerRepository.syncPendingWrites();
+        await _ledgerRepository.syncPendingWrites(ledgerUuid: ledgerUuid);
       }
       await _personRepository.syncPendingPeople(ledgerUuid);
       final result = await _transactionRepository.syncPendingTransactions(

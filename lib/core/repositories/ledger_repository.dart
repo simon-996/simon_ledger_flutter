@@ -35,7 +35,7 @@ abstract class LedgerRepository {
 
   Future<void> deleteLedger(String uuid);
 
-  Future<void> syncPendingWrites();
+  Future<void> syncPendingWrites({String? ledgerUuid});
 }
 
 class LocalLedgerRepository implements LedgerRepository {
@@ -77,7 +77,7 @@ class LocalLedgerRepository implements LedgerRepository {
   }
 
   @override
-  Future<void> syncPendingWrites() async {}
+  Future<void> syncPendingWrites({String? ledgerUuid}) async {}
 }
 
 class RemoteLedgerRepository implements LedgerRepository {
@@ -260,20 +260,30 @@ class RemoteLedgerRepository implements LedgerRepository {
     return CreatedLedgerWithPeople(ledger: remoteLedger, people: saved.people);
   }
 
-  Future<void> _syncPendingLocalLedgers() async {
+  Future<void> _syncPendingLocalLedgers({String? ledgerUuid}) async {
     final cachedLedgers = await _db.getAllLedgers(includeDeleted: true);
-    final cachedPeople = await _db.getAllPeople(includeDeleted: false);
+    final cachedPeople = await _db.getAllPeople(includeDeleted: true);
     final peopleByUuid = {
       for (final person in cachedPeople) person.uuid: person,
     };
     for (final ledger in cachedLedgers) {
+      if (ledgerUuid != null && ledger.uuid != ledgerUuid) {
+        continue;
+      }
       if (_looksLikeRemoteUuid(ledger.uuid) ||
           ledger.hasSyncedRemoteCopy ||
           ledger.isDeleted) {
         continue;
       }
 
-      final people = ledger.personUuids
+      final transactions = await _db.getTransactionsForLedger(ledger.uuid);
+      final referencedPersonUuids = <String>{
+        ...ledger.personUuids,
+        for (final transaction in transactions) ...transaction.personUuids,
+        for (final transaction in transactions)
+          if (transaction.payerPersonUuid != null) transaction.payerPersonUuid!,
+      };
+      final people = referencedPersonUuids
           .map((uuid) => peopleByUuid[uuid])
           .whereType<Person>()
           .toList();
@@ -297,12 +307,23 @@ class RemoteLedgerRepository implements LedgerRepository {
           remoteUuid: created.people[index].uuid,
         );
       }
+      for (final transaction in transactions) {
+        await _db.saveTransaction(
+          transaction
+            ..clientOperationId ??= transaction.uuid
+            ..pendingSync = true
+            ..syncError = null,
+        );
+      }
     }
   }
 
-  Future<void> _syncPendingLedgerWrites() async {
+  Future<void> _syncPendingLedgerWrites({String? ledgerUuid}) async {
     final cachedLedgers = await _db.getAllLedgers(includeDeleted: true);
     for (final ledger in cachedLedgers) {
+      if (ledgerUuid != null && ledger.uuid != ledgerUuid) {
+        continue;
+      }
       if (!ledger.pendingSync) {
         continue;
       }
@@ -319,9 +340,9 @@ class RemoteLedgerRepository implements LedgerRepository {
   }
 
   @override
-  Future<void> syncPendingWrites() async {
-    await _syncPendingLocalLedgers();
-    await _syncPendingLedgerWrites();
+  Future<void> syncPendingWrites({String? ledgerUuid}) async {
+    await _syncPendingLocalLedgers(ledgerUuid: ledgerUuid);
+    await _syncPendingLedgerWrites(ledgerUuid: ledgerUuid);
   }
 
   Future<List<Ledger>> _localTemporaryLedgers({

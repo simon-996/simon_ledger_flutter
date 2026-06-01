@@ -27,7 +27,11 @@ void main() {
 
     final result = await coordinator.syncLedger('local-ledger');
 
-    expect(calls, ['ledger', 'people:local-ledger', 'tx:local-ledger']);
+    expect(calls, [
+      'ledger:local-ledger',
+      'people:local-ledger',
+      'tx:local-ledger',
+    ]);
     expect(result.synced, 1);
   });
 
@@ -104,7 +108,11 @@ void main() {
     final second = coordinator.syncLedger('remote-ledger');
     await Future<void>.delayed(Duration.zero);
 
-    expect(calls, ['ledger', 'people:remote-ledger', 'tx:remote-ledger']);
+    expect(calls, [
+      'ledger:remote-ledger',
+      'people:remote-ledger',
+      'tx:remote-ledger',
+    ]);
     transactionRepository.complete();
     await Future.wait([first, second]);
     expect(calls.where((call) => call == 'tx:remote-ledger'), hasLength(1));
@@ -139,7 +147,9 @@ class _LedgerRepository implements LedgerRepository {
   final List<String> calls;
 
   @override
-  Future<void> syncPendingWrites() async => calls.add('ledger');
+  Future<void> syncPendingWrites({String? ledgerUuid}) async {
+    calls.add(ledgerUuid == null ? 'ledger' : 'ledger:$ledgerUuid');
+  }
 
   @override
   Future<List<Ledger>> getAllLedgers({bool includeDeleted = false}) async => [];

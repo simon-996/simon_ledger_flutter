@@ -822,7 +822,10 @@ class _CloudImportCardState extends ConsumerState<_CloudImportCard> {
     if (!mounted || imported != true) return;
     _reload();
     ref.invalidate(ledgerNotifierProvider);
+    ref.invalidate(personNotifierProvider);
+    ref.invalidate(transactionNotifierProvider);
     ref.invalidate(ledgerStatsProvider);
+    ref.invalidate(syncOverviewProvider);
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('本地账本导入完成')));

@@ -164,6 +164,71 @@ void main() {
   );
 
   test(
+    'RemoteLedgerRepository queues historical transactions when syncing selected local ledger',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final database = DatabaseService();
+      await database.savePerson(
+        Person()
+          ..uuid = 'local-person-1'
+          ..name = '本人'
+          ..avatar = '😎',
+      );
+      await database.saveLedger(
+        Ledger()
+          ..uuid = 'local-ledger-1'
+          ..name = '待导入账本'
+          ..baseCurrencyCode = 'CNY'
+          ..personUuids = ['local-person-1'],
+      );
+      await database.saveLedger(
+        Ledger()
+          ..uuid = 'local-ledger-2'
+          ..name = '暂不导入账本'
+          ..baseCurrencyCode = 'CNY'
+          ..personUuids = ['local-person-1'],
+      );
+      await database.saveTransaction(
+        TransactionRecord()
+          ..uuid = 'local-transaction-1'
+          ..ledgerUuid = 'local-ledger-1'
+          ..type = 0
+          ..amount = 12
+          ..currencyCode = 'CNY'
+          ..category = '餐饮'
+          ..note = ''
+          ..personUuids = ['local-person-1']
+          ..createdAt = DateTime(2026),
+      );
+      final repository = RemoteLedgerRepository(
+        apiClient: _LedgerCreateApiClient(),
+        database: database,
+      );
+
+      await repository.syncPendingWrites(ledgerUuid: 'local-ledger-1');
+
+      final ledgers = await database.getAllLedgers();
+      expect(
+        ledgers
+            .firstWhere((ledger) => ledger.uuid == 'local-ledger-1')
+            .syncedRemoteUuid,
+        _remoteLedgerUuid,
+      );
+      expect(
+        ledgers
+            .firstWhere((ledger) => ledger.uuid == 'local-ledger-2')
+            .syncedRemoteUuid,
+        isNull,
+      );
+      final transaction = (await database.getTransactionsForLedger(
+        'local-ledger-1',
+      )).single;
+      expect(transaction.pendingSync, isTrue);
+      expect(transaction.clientOperationId, 'local-transaction-1');
+    },
+  );
+
+  test(
     'RemoteLedgerRepository saves remote ledger edits locally while offline',
     () async {
       SharedPreferences.setMockInitialValues({});

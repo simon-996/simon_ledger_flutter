@@ -118,7 +118,7 @@ final syncOverviewProvider = FutureProvider<SyncOverview>((ref) {
 final cloudImportServiceProvider = Provider<CloudImportService>((ref) {
   return CloudImportService(
     database: ref.watch(databaseProvider),
-    apiClient: ref.watch(apiClientProvider),
+    syncCoordinator: ref.watch(syncCoordinatorProvider),
   );
 });
 

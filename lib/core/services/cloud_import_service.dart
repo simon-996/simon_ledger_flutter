@@ -1,13 +1,8 @@
-import 'dart:convert';
-
-import 'package:crypto/crypto.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../database/database_service.dart';
 import '../models/ledger.dart';
-import '../models/person.dart';
-import '../models/transaction_record.dart';
-import '../network/api_client.dart';
+import 'sync_coordinator.dart';
 
 class LocalLedgerImportCandidate {
   const LocalLedgerImportCandidate({
@@ -38,20 +33,19 @@ class CloudImportProgress {
 class CloudImportService {
   const CloudImportService({
     required DatabaseService database,
-    required ApiClient apiClient,
+    required SyncCoordinator syncCoordinator,
   }) : _database = database,
-       _apiClient = apiClient;
+       _syncCoordinator = syncCoordinator;
 
   final DatabaseService _database;
-  final ApiClient _apiClient;
+  final SyncCoordinator _syncCoordinator;
 
   Future<List<LocalLedgerImportCandidate>> scanLocalLedgers() async {
-    final prefs = await SharedPreferences.getInstance();
     final ledgers = await _database.getAllLedgers();
     final candidates = <LocalLedgerImportCandidate>[];
 
-    for (final ledger in ledgers) {
-      final remoteUuid = prefs.getString(_importedLedgerKey(ledger.uuid));
+    for (final ledger in ledgers.where((ledger) => ledger.isLocalTemporary)) {
+      await _migrateLegacyImportMapping(ledger);
       final transactions = await _database.getTransactionsForLedger(
         ledger.uuid,
       );
@@ -59,8 +53,8 @@ class CloudImportService {
         LocalLedgerImportCandidate(
           ledger: ledger,
           transactionCount: transactions.length,
-          imported: remoteUuid != null,
-          remoteLedgerUuid: remoteUuid,
+          imported: ledger.hasSyncedRemoteCopy,
+          remoteLedgerUuid: ledger.syncedRemoteUuid,
         ),
       );
     }
@@ -72,55 +66,40 @@ class CloudImportService {
     List<String> ledgerUuids, {
     void Function(CloudImportProgress progress)? onProgress,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
+    final selectedUuidSet = ledgerUuids.toSet();
     final ledgers = await _database.getAllLedgers();
-    final selectedLedgers = ledgers
-        .where((ledger) => ledgerUuids.contains(ledger.uuid))
-        .toList();
-    final people = await _database.getAllPeople(includeDeleted: true);
-    final peopleByUuid = {for (final person in people) person.uuid: person};
+    final selectedLedgers = ledgers.where((ledger) {
+      return selectedUuidSet.contains(ledger.uuid) &&
+          ledger.isLocalTemporary &&
+          !ledger.hasSyncedRemoteCopy;
+    }).toList();
 
     for (var index = 0; index < selectedLedgers.length; index++) {
       final ledger = selectedLedgers[index];
       final step = index + 1;
       onProgress?.call(
         CloudImportProgress(
-          message: '正在导入 ${ledger.displayNameWithCode}',
+          message: '正在同步 ${ledger.displayNameWithCode}',
           done: index,
           total: selectedLedgers.length,
         ),
       );
 
-      final existingRemoteUuid = prefs.getString(
-        _importedLedgerKey(ledger.uuid),
+      final result = await _syncCoordinator.syncLedger(
+        ledger.uuid,
+        force: true,
       );
-      if (existingRemoteUuid != null) {
-        onProgress?.call(
-          CloudImportProgress(
-            message: '${ledger.displayNameWithCode} 已导入，已跳过',
-            done: step,
-            total: selectedLedgers.length,
-          ),
-        );
-        continue;
+      if (result.error != null) {
+        throw result.error!;
+      }
+      final syncedLedger = await _findLedger(ledger.uuid);
+      if (syncedLedger == null || !syncedLedger.hasSyncedRemoteCopy) {
+        throw StateError('账本暂时未能同步，请检查网络后重试。');
       }
 
-      final remoteLedger = await _createLedger(ledger);
-      final personUuidMap = await _uploadPeople(
-        localLedger: ledger,
-        remoteLedgerUuid: remoteLedger.uuid,
-        peopleByUuid: peopleByUuid,
-      );
-      await _uploadTransactions(
-        localLedger: ledger,
-        remoteLedgerUuid: remoteLedger.uuid,
-        personUuidMap: personUuidMap,
-      );
-
-      await prefs.setString(_importedLedgerKey(ledger.uuid), remoteLedger.uuid);
       onProgress?.call(
         CloudImportProgress(
-          message: '${ledger.displayNameWithCode} 导入完成',
+          message: '${ledger.displayNameWithCode} 同步完成',
           done: step,
           total: selectedLedgers.length,
         ),
@@ -128,147 +107,25 @@ class CloudImportService {
     }
   }
 
-  Future<Ledger> _createLedger(Ledger ledger) {
-    return _apiClient.post<Ledger>(
-      '/api/ledgers',
-      data: {
-        'name': ledger.name,
-        'baseCurrencyCode': ledger.baseCurrencyCode,
-        'exchangeRateToCny': ledger.exchangeRateToCNY,
-      },
-      idempotencyKey: _importKey('ledger', ledger.uuid),
-      fromJson: _ledgerFromJson,
-    );
-  }
-
-  Future<Map<String, String>> _uploadPeople({
-    required Ledger localLedger,
-    required String remoteLedgerUuid,
-    required Map<String, Person> peopleByUuid,
-  }) async {
-    final transactions = await _database.getTransactionsForLedger(
-      localLedger.uuid,
-    );
-    final personUuids = <String>{
-      ...localLedger.personUuids,
-      for (final transaction in transactions) ...transaction.personUuids,
-      for (final transaction in transactions)
-        if (transaction.payerPersonUuid != null) transaction.payerPersonUuid!,
-    };
-    final personUuidMap = <String, String>{};
-
-    for (final personUuid in personUuids) {
-      final person = peopleByUuid[personUuid] ?? _fallbackPerson(personUuid);
-      final remotePerson = await _apiClient.post<Person>(
-        '/api/ledgers/$remoteLedgerUuid/people',
-        data: {'name': person.name, 'avatar': person.avatar},
-        idempotencyKey: _importKey('person', localLedger.uuid, personUuid),
-        fromJson: _personFromJson,
-      );
-      personUuidMap[personUuid] = remotePerson.uuid;
+  Future<void> _migrateLegacyImportMapping(Ledger ledger) async {
+    if (ledger.hasSyncedRemoteCopy) {
+      return;
     }
-
-    return personUuidMap;
-  }
-
-  Future<void> _uploadTransactions({
-    required Ledger localLedger,
-    required String remoteLedgerUuid,
-    required Map<String, String> personUuidMap,
-  }) async {
-    final transactions = await _database.getTransactionsForLedger(
-      localLedger.uuid,
-    );
-    for (final transaction in transactions) {
-      final remotePersonUuids = transaction.personUuids
-          .map((uuid) => personUuidMap[uuid])
-          .whereType<String>()
-          .toList();
-      if (remotePersonUuids.isEmpty) {
-        continue;
-      }
-
-      await _apiClient.post<TransactionRecord>(
-        '/api/ledgers/$remoteLedgerUuid/transactions',
-        data: {
-          'type': transaction.type,
-          'payerPersonUuid': transaction.payerPersonUuid == null
-              ? null
-              : personUuidMap[transaction.payerPersonUuid],
-          'amount': transaction.amount,
-          'currencyCode': transaction.currencyCode,
-          'category': transaction.category,
-          'note': transaction.note,
-          'happenedAt': transaction.createdAt.toIso8601String(),
-          'clientOperationId': _importKey(
-            'tx',
-            localLedger.uuid,
-            transaction.uuid,
-          ),
-          'personUuids': remotePersonUuids,
-        },
-        idempotencyKey: _importKey(
-          'transaction',
-          localLedger.uuid,
-          transaction.uuid,
-        ),
-        fromJson: _transactionFromJson,
-      );
+    final prefs = await SharedPreferences.getInstance();
+    final remoteUuid = prefs.getString(_legacyImportedLedgerKey(ledger.uuid));
+    if (remoteUuid == null || remoteUuid.isEmpty) {
+      return;
     }
+    ledger.syncedRemoteUuid = remoteUuid;
+    await _database.saveLedger(ledger);
   }
 
-  String _importedLedgerKey(String ledgerUuid) {
+  Future<Ledger?> _findLedger(String uuid) async {
+    final ledgers = await _database.getAllLedgers(includeDeleted: true);
+    return ledgers.where((ledger) => ledger.uuid == uuid).firstOrNull;
+  }
+
+  String _legacyImportedLedgerKey(String ledgerUuid) {
     return 'cloud_import.ledger.$ledgerUuid';
-  }
-
-  String _importKey(String prefix, String first, [String? second]) {
-    final value = second == null ? first : '$first:$second';
-    final digest = sha1.convert(utf8.encode(value)).toString();
-    return 'import-$prefix-$digest';
-  }
-
-  static Ledger _ledgerFromJson(Object? json) {
-    final map = json! as Map<String, dynamic>;
-    return Ledger()
-      ..uuid = map['uuid'].toString()
-      ..name = map['name'].toString()
-      ..baseCurrencyCode = map['baseCurrencyCode'].toString()
-      ..exchangeRateToCNY =
-          (map['exchangeRateToCny'] as num?)?.toDouble() ?? 1.0
-      ..role = map['role']?.toString();
-  }
-
-  static Person _personFromJson(Object? json) {
-    final map = json! as Map<String, dynamic>;
-    return Person()
-      ..uuid = map['uuid'].toString()
-      ..name = map['name'].toString()
-      ..avatar = map['avatar']?.toString() ?? '';
-  }
-
-  static TransactionRecord _transactionFromJson(Object? json) {
-    final map = json! as Map<String, dynamic>;
-    return TransactionRecord()
-      ..uuid = map['uuid'].toString()
-      ..ledgerUuid = map['ledgerUuid'].toString()
-      ..type = (map['type'] as num?)?.toInt() ?? 0
-      ..payerPersonUuid = map['payerPersonUuid']?.toString()
-      ..amount = (map['amount'] as num?)?.toDouble() ?? 0
-      ..currencyCode = map['currencyCode'].toString()
-      ..category = map['category'].toString()
-      ..note = map['note']?.toString() ?? ''
-      ..personUuids = (map['personUuids'] as List<dynamic>? ?? [])
-          .map((value) => value.toString())
-          .toList()
-      ..createdAt =
-          DateTime.tryParse(map['happenedAt']?.toString() ?? '') ??
-          DateTime.now();
-  }
-
-  static Person _fallbackPerson(String uuid) {
-    return Person()
-      ..uuid = uuid
-      ..name = '未知人员'
-      ..avatar = '?';
   }
 }
