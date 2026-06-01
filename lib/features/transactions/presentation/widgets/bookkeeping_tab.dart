@@ -321,7 +321,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
       return personOrFallback(personMap, pid);
     }).toList();
     final profile = await ref.read(localProfileProvider.future);
-    final currentUser = await ref.read(currentUserProvider.future);
+    final currentUser = ref.read(currentUserProvider).valueOrNull;
 
     final record = TransactionRecord()
       ..uuid = DateTime.now().microsecondsSinceEpoch.toString()
