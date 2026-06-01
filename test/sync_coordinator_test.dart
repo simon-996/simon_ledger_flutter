@@ -70,6 +70,12 @@ class _PersonRepository implements PersonRepository {
   }) async => [];
 
   @override
+  Future<List<Person>> getCachedPeople({
+    bool includeDeleted = false,
+    String? ledgerUuid,
+  }) async => [];
+
+  @override
   Future<void> savePerson(Person person, {String? ledgerUuid}) async {}
 
   @override

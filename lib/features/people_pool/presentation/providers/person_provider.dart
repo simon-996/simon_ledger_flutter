@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../../core/di/providers.dart';
 import '../../../../core/models/person.dart';
+import '../../../../core/repositories/person_repository.dart';
 
 part 'person_provider.g.dart';
 
@@ -13,10 +16,32 @@ class PersonNotifier extends _$PersonNotifier {
   }) async {
     await ref.watch(authTokenProvider.future);
     final repository = ref.watch(personRepositoryProvider);
-    return await repository.getAllPeople(
+    if (repository is! RemotePersonRepository) {
+      return repository.getAllPeople(
+        includeDeleted: includeDeleted,
+        ledgerUuid: ledgerUuid,
+      );
+    }
+
+    var disposed = false;
+    ref.onDispose(() => disposed = true);
+    unawaited(_refreshRemote(repository, isDisposed: () => disposed));
+    return repository.getCachedPeople(
       includeDeleted: includeDeleted,
       ledgerUuid: ledgerUuid,
     );
+  }
+
+  Future<void> _refreshRemote(
+    RemotePersonRepository repository, {
+    required bool Function() isDisposed,
+  }) async {
+    final people = await repository.getAllPeople(
+      includeDeleted: includeDeleted,
+      ledgerUuid: ledgerUuid,
+    );
+    if (isDisposed()) return;
+    state = AsyncValue.data(people);
   }
 
   Future<void> addOrUpdatePerson(Person person) async {

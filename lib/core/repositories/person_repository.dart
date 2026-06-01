@@ -6,6 +6,11 @@ import '../services/sync_identity_resolver.dart';
 import 'ledger_repository.dart';
 
 abstract class PersonRepository {
+  Future<List<Person>> getCachedPeople({
+    bool includeDeleted = false,
+    String? ledgerUuid,
+  });
+
   Future<List<Person>> getAllPeople({
     bool includeDeleted = false,
     String? ledgerUuid,
@@ -22,6 +27,14 @@ class LocalPersonRepository implements PersonRepository {
   const LocalPersonRepository(this._db);
 
   final DatabaseService _db;
+
+  @override
+  Future<List<Person>> getCachedPeople({
+    bool includeDeleted = false,
+    String? ledgerUuid,
+  }) {
+    return _db.getAllPeople(includeDeleted: includeDeleted);
+  }
 
   @override
   Future<List<Person>> getAllPeople({
@@ -60,6 +73,17 @@ class RemotePersonRepository implements PersonRepository {
   final LedgerRepository _ledgerRepository;
   final DatabaseService _db;
   final SyncIdentityResolver _identityResolver;
+
+  @override
+  Future<List<Person>> getCachedPeople({
+    bool includeDeleted = false,
+    String? ledgerUuid,
+  }) {
+    if (ledgerUuid == null) {
+      return _db.getAllPeople(includeDeleted: includeDeleted);
+    }
+    return _cachedPeopleForLedger(ledgerUuid, includeDeleted: includeDeleted);
+  }
 
   @override
   Future<List<Person>> getAllPeople({
