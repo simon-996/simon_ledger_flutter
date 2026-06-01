@@ -182,6 +182,14 @@ Ledger.syncError
 
 不要在同步成功后直接删除本地临时账本，否则会破坏离线可用性和界面连续性。
 
+账本和人员的本地 UUID 到远端 UUID 映射统一通过：
+
+```text
+lib/core/services/sync_identity_resolver.dart
+```
+
+人员映射保存在 `Person.syncedRemoteUuid`。后续同步链路不得在业务代码中自行猜测 UUID。
+
 ### 4.4 流水同步
 
 实现位置：

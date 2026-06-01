@@ -11,6 +11,7 @@ import '../repositories/person_repository.dart';
 import '../repositories/transaction_repository.dart';
 import '../services/cloud_import_service.dart';
 import '../services/profile_sync_service.dart';
+import '../services/sync_identity_resolver.dart';
 
 /// Provides the global instance of DatabaseService.
 /// This acts as our base Dependency Injection for the database layer.
@@ -32,6 +33,10 @@ final localProfileStoreProvider = Provider<LocalProfileStore>((ref) {
 
 final localProfileProvider = FutureProvider<LocalProfile>((ref) {
   return ref.watch(localProfileStoreProvider).read();
+});
+
+final syncIdentityResolverProvider = Provider<SyncIdentityResolver>((ref) {
+  return SyncIdentityResolver(ref.watch(databaseProvider));
 });
 
 final apiClientProvider = Provider<ApiClient>((ref) {

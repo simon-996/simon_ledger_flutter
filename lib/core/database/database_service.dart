@@ -296,6 +296,7 @@ class DatabaseService {
       ..name = json['name']?.toString() ?? ''
       ..avatar = json['avatar']?.toString() ?? '🧑'
       ..linkedUserUuid = json['linkedUserUuid']?.toString()
+      ..syncedRemoteUuid = json['syncedRemoteUuid']?.toString()
       ..isDeleted = json['isDeleted'] == true
       ..pendingSync = json['pendingSync'] == true
       ..syncError = json['syncError']?.toString()
@@ -309,6 +310,7 @@ class DatabaseService {
       'name': person.name,
       'avatar': person.avatar,
       'linkedUserUuid': person.linkedUserUuid,
+      'syncedRemoteUuid': person.syncedRemoteUuid,
       'isDeleted': person.isDeleted,
       'pendingSync': person.pendingSync,
       'syncError': person.syncError,

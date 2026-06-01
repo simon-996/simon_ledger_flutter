@@ -9,6 +9,8 @@ class Person {
 
   String? linkedUserUuid;
 
+  String? syncedRemoteUuid;
+
   bool isDeleted = false; // Soft delete flag
 
   bool pendingSync = false;
@@ -16,4 +18,9 @@ class Person {
   String? syncError;
 
   String? pendingLedgerUuid;
+
+  bool get hasSyncedRemoteCopy =>
+      syncedRemoteUuid != null && syncedRemoteUuid!.isNotEmpty;
+
+  String get remoteSyncUuid => hasSyncedRemoteCopy ? syncedRemoteUuid! : uuid;
 }
