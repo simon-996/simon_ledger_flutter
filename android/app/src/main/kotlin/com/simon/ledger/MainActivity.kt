@@ -1,4 +1,4 @@
-package com.example.simon_ledger_flutter
+package com.simon.ledger
 
 import android.content.ContentUris
 import android.content.Intent

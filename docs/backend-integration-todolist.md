@@ -306,3 +306,4 @@
 - [x] 优化云端账本参与人加载方式，先将逐账本人员请求并发化，减少账本列表等待时间。
 - [x] 后端补充云端账本参与人批量查询接口，彻底减少账本列表 N+1 请求数量。
 - [x] Flutter 云端账本列表改用参与人批量查询接口，避免逐账本请求参与人。
+- [x] Android `applicationId`、namespace 和 iOS Bundle Identifier 统一调整为 `com.simon.ledger`。
