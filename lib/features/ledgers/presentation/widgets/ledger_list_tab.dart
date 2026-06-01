@@ -34,7 +34,7 @@ class LedgerListTab extends ConsumerStatefulWidget {
   final ValueChanged<Ledger> onShare;
   final ValueChanged<Ledger> onDelete;
   final VoidCallback onCreate;
-  final ValueChanged<Ledger> onSync;
+  final Future<void> Function(Ledger ledger) onSync;
   final bool autoSyncEnabled;
 
   @override
@@ -43,6 +43,7 @@ class LedgerListTab extends ConsumerStatefulWidget {
 
 class _LedgerListTabState extends ConsumerState<LedgerListTab> {
   bool _autoSyncing = false;
+  final Set<String> _syncingLedgerUuids = {};
 
   @override
   Widget build(BuildContext context) {
@@ -111,6 +112,7 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
             widget.ledgerStats[ledger.uuid] ??
             {'expense': 0.0, 'income': 0.0, 'balance': 0.0};
         final syncStatus = ref.watch(ledgerSyncStatusProvider(ledger.uuid));
+        final isSyncing = _syncingLedgerUuids.contains(ledger.uuid);
         final delayMs = (index < 6 ? index : 6) * 45;
         final isLocalTemporary = isCloudMode && ledger.isLocalTemporary;
 
@@ -131,10 +133,11 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
               isCloudMode: isCloudMode,
               index: index,
               syncStatus: syncStatus,
+              isSyncing: isSyncing,
               onTap: () => widget.onTap(ledger),
               onEdit: () => widget.onEdit(ledger),
               onShare: () => widget.onShare(ledger),
-              onSync: () => widget.onSync(ledger),
+              onSync: () => _syncLedger(ledger),
               canReorder: true,
               canShare:
                   isCloudMode && !isLocalTemporary && _canShare(ledger.role),
@@ -148,6 +151,18 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
 
   bool _canShare(String? role) {
     return role == 'owner' || role == 'admin';
+  }
+
+  Future<void> _syncLedger(Ledger ledger) async {
+    if (_syncingLedgerUuids.contains(ledger.uuid)) return;
+    setState(() => _syncingLedgerUuids.add(ledger.uuid));
+    try {
+      await widget.onSync(ledger);
+    } finally {
+      if (mounted) {
+        setState(() => _syncingLedgerUuids.remove(ledger.uuid));
+      }
+    }
   }
 
   Future<void> _autoSyncPendingLedgers() async {
@@ -210,6 +225,7 @@ class _LedgerCard extends StatelessWidget {
     required this.isCloudMode,
     required this.index,
     required this.syncStatus,
+    required this.isSyncing,
     required this.onTap,
     required this.onEdit,
     required this.onShare,
@@ -227,6 +243,7 @@ class _LedgerCard extends StatelessWidget {
   final bool isCloudMode;
   final int index;
   final AsyncValue<LedgerSyncStatus> syncStatus;
+  final bool isSyncing;
   final VoidCallback onTap;
   final VoidCallback onEdit;
   final VoidCallback onShare;
@@ -325,7 +342,9 @@ class _LedgerCard extends StatelessWidget {
                                   tooltip:
                                       '1 ${ledger.baseCurrencyCode} = ${ledger.exchangeRateToCNY.toStringAsFixed(4)} CNY',
                                 ),
-                              if (hasPendingSync)
+                              if (isSyncing)
+                                const _SyncingMetaChip()
+                              else if (hasPendingSync)
                                 _SyncMetaChip(status: syncStatusValue!),
                             ],
                           ),
@@ -343,11 +362,26 @@ class _LedgerCard extends StatelessWidget {
                         icon: const Icon(Icons.ios_share_rounded),
                         onPressed: onShare,
                       ),
-                    if (canSync && hasPendingSync)
+                    if (canSync && (hasPendingSync || isSyncing))
                       IconButton(
-                        tooltip: '同步待处理数据',
-                        icon: const Icon(Icons.sync_rounded),
-                        onPressed: onSync,
+                        tooltip: isSyncing ? '正在同步' : '同步待处理数据',
+                        icon: AnimatedSwitcher(
+                          duration: AppMotion.fast,
+                          child: isSyncing
+                              ? const SizedBox(
+                                  key: ValueKey('ledger-sync-progress'),
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.2,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.sync_rounded,
+                                  key: ValueKey('ledger-sync-icon'),
+                                ),
+                        ),
+                        onPressed: isSyncing ? null : onSync,
                       ),
                     if (canReorder)
                       Tooltip(
@@ -666,6 +700,44 @@ class _SyncMetaChip extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SyncingMetaChip extends StatelessWidget {
+  const _SyncingMetaChip();
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.primary;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 13,
+            height: 13,
+            child: CircularProgressIndicator(strokeWidth: 2, color: color),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            '同步中',
+            maxLines: 1,
+            softWrap: false,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
       ),
     );
   }
