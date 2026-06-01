@@ -37,7 +37,7 @@ class FriendlyError {
       case 404001:
         return '相关数据不存在，刷新后再试';
       case 409001:
-        return '数据已被更新，请刷新后再操作';
+        return '该流水已在其他设备更新，请刷新后重新提交';
       case 500001:
         return '服务暂时不可用，请稍后重试';
       case -1:
@@ -61,6 +61,9 @@ class FriendlyError {
 
     if (normalized == '系统错误') {
       return '服务暂时不可用，请稍后重试';
+    }
+    if (normalized.contains('数据冲突')) {
+      return '该流水已在其他设备更新，请刷新后重新提交';
     }
 
     final technicalPatterns = [
