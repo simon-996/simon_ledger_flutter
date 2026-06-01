@@ -347,7 +347,7 @@ class _LedgerCard extends StatelessWidget {
                       ),
                     if (canSync && hasPendingSync)
                       IconButton(
-                        tooltip: '同步未同步流水',
+                        tooltip: '同步待处理数据',
                         icon: const Icon(Icons.sync_rounded),
                         onPressed: onSync,
                       ),

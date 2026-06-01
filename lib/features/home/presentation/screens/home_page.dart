@@ -293,7 +293,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              FriendlyError.message(error, fallback: '部分流水同步失败，请稍后重试。'),
+              FriendlyError.message(error, fallback: '部分数据同步失败，请稍后重试。'),
             ),
           ),
         );
@@ -303,7 +303,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            result.synced > 0 ? '已同步 ${result.synced} 条流水' : '没有需要同步的流水',
+            result.synced > 0 ? '同步完成，已上传 ${result.synced} 条流水' : '同步完成',
           ),
         ),
       );
