@@ -310,17 +310,17 @@ class _LedgerCard extends StatelessWidget {
                               if (isCloudMode && ledger.isLocalTemporary)
                                 _MetaChip(
                                   text: ledger.hasSyncedRemoteCopy
-                                      ? '本地临时 · 已同步'
-                                      : '本地临时 · 待同步',
+                                      ? '本地已同步'
+                                      : '本地待同步',
                                   emphasized: !ledger.hasSyncedRemoteCopy,
                                 ),
                               if (ledger.isShared)
-                                _MetaChip(
-                                  text: '共享中 · ${ledger.memberCount} 人',
-                                ),
+                                _MetaChip(text: '${ledger.memberCount} 人共享'),
                               if (hasRate)
                                 _MetaChip(
                                   text:
+                                      '汇率 ${ledger.exchangeRateToCNY.toStringAsFixed(4)}',
+                                  tooltip:
                                       '1 ${ledger.baseCurrencyCode} = ${ledger.exchangeRateToCNY.toStringAsFixed(4)} CNY',
                                 ),
                               if (hasPendingSync)
@@ -577,30 +577,37 @@ class _LedgerPersonChip extends StatelessWidget {
 }
 
 class _MetaChip extends StatelessWidget {
-  const _MetaChip({required this.text, this.emphasized = false});
+  const _MetaChip({required this.text, this.tooltip, this.emphasized = false});
 
   final String text;
+  final String? tooltip;
   final bool emphasized;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: emphasized
-            ? colorScheme.tertiaryContainer.withValues(alpha: 0.7)
-            : colorScheme.surfaceContainerHigh.withValues(alpha: 0.7),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        text,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+    return Tooltip(
+      message: tooltip ?? text,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
           color: emphasized
-              ? colorScheme.onTertiaryContainer
-              : colorScheme.onSurfaceVariant,
-          fontWeight: FontWeight.w700,
+              ? colorScheme.tertiaryContainer.withValues(alpha: 0.7)
+              : colorScheme.surfaceContainerHigh.withValues(alpha: 0.7),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          text,
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.fade,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: emphasized
+                ? colorScheme.onTertiaryContainer
+                : colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
     );
@@ -624,33 +631,39 @@ class _SyncMetaChip extends StatelessWidget {
         '流水 ${status.transactionPendingCount}',
     ].join(' · ');
     final text = failed
-        ? '${status.failedCount} 项同步失败 · $details'
-        : '待同步 · $details';
+        ? '失败 ${status.failedCount}/${status.pendingCount}'
+        : '待同步 ${status.pendingCount}';
+    final tooltip = failed ? '同步失败：$details' : '待同步：$details';
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.24)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            failed ? Icons.error_outline_rounded : Icons.sync_rounded,
-            size: 14,
-            color: color,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            text,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+    return Tooltip(
+      message: tooltip,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: color.withValues(alpha: 0.24)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              failed ? Icons.error_outline_rounded : Icons.sync_rounded,
+              size: 14,
               color: color,
-              fontWeight: FontWeight.w800,
             ),
-          ),
-        ],
+            const SizedBox(width: 4),
+            Text(
+              text,
+              maxLines: 1,
+              softWrap: false,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
