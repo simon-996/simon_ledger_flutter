@@ -1,0 +1,73 @@
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../database/database_service.dart';
+
+class SyncOverview {
+  const SyncOverview({
+    required this.ledgerPendingCount,
+    required this.personPendingCount,
+    required this.transactionPendingCount,
+    required this.failedCount,
+    this.lastSuccessfulSyncAt,
+  });
+
+  final int ledgerPendingCount;
+  final int personPendingCount;
+  final int transactionPendingCount;
+  final int failedCount;
+  final DateTime? lastSuccessfulSyncAt;
+
+  int get pendingCount =>
+      ledgerPendingCount + personPendingCount + transactionPendingCount;
+}
+
+class SyncOverviewService {
+  const SyncOverviewService(this._database);
+
+  static const _lastSuccessfulSyncAtKey = 'sync.last_successful_at.v1';
+
+  final DatabaseService _database;
+
+  Future<SyncOverview> read() async {
+    final ledgers = await _database.getAllLedgers(includeDeleted: true);
+    final people = await _database.getAllPeople(includeDeleted: true);
+    final transactions = await _database.getTransactionsForLedgers(
+      ledgers.map((ledger) => ledger.uuid).toList(),
+      includeDeleted: true,
+    );
+    final pendingLedgers = ledgers.where((ledger) {
+      return ledger.pendingSync ||
+          (ledger.isLocalTemporary && !ledger.hasSyncedRemoteCopy);
+    }).toList();
+    final pendingPeople = people.where((person) => person.pendingSync).toList();
+    final pendingTransactions = transactions
+        .where((transaction) => transaction.pendingSync)
+        .toList();
+    final prefs = await SharedPreferences.getInstance();
+
+    return SyncOverview(
+      ledgerPendingCount: pendingLedgers.length,
+      personPendingCount: pendingPeople.length,
+      transactionPendingCount: pendingTransactions.length,
+      failedCount:
+          pendingLedgers.where((ledger) => _hasError(ledger.syncError)).length +
+          pendingPeople.where((person) => _hasError(person.syncError)).length +
+          pendingTransactions
+              .where((transaction) => _hasError(transaction.syncError))
+              .length,
+      lastSuccessfulSyncAt: DateTime.tryParse(
+        prefs.getString(_lastSuccessfulSyncAtKey) ?? '',
+      ),
+    );
+  }
+
+  Future<void> markSuccessfulSync(DateTime timestamp) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _lastSuccessfulSyncAtKey,
+      timestamp.toIso8601String(),
+    );
+  }
+
+  bool _hasError(String? error) => error != null && error.isNotEmpty;
+}

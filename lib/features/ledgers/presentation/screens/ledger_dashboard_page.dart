@@ -53,6 +53,7 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
         ),
       );
       ref.invalidate(ledgerStatsProvider);
+      ref.invalidate(syncOverviewProvider);
     } catch (_) {
       // Silent retry: local content stays available while offline.
     }

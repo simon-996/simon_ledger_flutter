@@ -11,6 +11,7 @@ import '../../../../core/widgets/app_components.dart';
 import '../../../ledgers/presentation/providers/ledger_provider.dart';
 import '../../../ledgers/presentation/providers/ledger_stats_provider.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
+import '../../../transactions/presentation/providers/transaction_provider.dart';
 import '../providers/auth_provider.dart';
 
 class AccountTab extends ConsumerWidget {
@@ -63,6 +64,8 @@ class _SignedInPanel extends ConsumerWidget {
           syncingProfile: syncingProfile,
         ),
         const SizedBox(height: 16),
+        const _SyncCenterCard(),
+        const SizedBox(height: 16),
         const _JoinInviteCard(),
         const SizedBox(height: 16),
         const _CloudImportCard(),
@@ -83,6 +86,171 @@ class _SignedInPanel extends ConsumerWidget {
           label: const Text('退出登录'),
         ),
       ],
+    );
+  }
+}
+
+class _SyncCenterCard extends ConsumerStatefulWidget {
+  const _SyncCenterCard();
+
+  @override
+  ConsumerState<_SyncCenterCard> createState() => _SyncCenterCardState();
+}
+
+class _SyncCenterCardState extends ConsumerState<_SyncCenterCard> {
+  bool _syncing = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final overview = ref.watch(syncOverviewProvider);
+    return AppSectionCard(
+      child: overview.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            children: [
+              SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              SizedBox(width: 10),
+              Text('正在读取同步状态'),
+            ],
+          ),
+        ),
+        error: (error, stackTrace) =>
+            Text(FriendlyError.message(error, fallback: '暂时无法读取同步状态。')),
+        data: (overview) {
+          final colorScheme = Theme.of(context).colorScheme;
+          final hasPending = overview.pendingCount > 0;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AppSectionHeader(
+                title: '同步中心',
+                trailing: _syncing
+                    ? const SizedBox.square(
+                        dimension: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(
+                        hasPending
+                            ? Icons.sync_problem_rounded
+                            : Icons.cloud_done_outlined,
+                        color: hasPending
+                            ? colorScheme.tertiary
+                            : colorScheme.primary,
+                      ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _SyncCountChip(
+                    label: '账本',
+                    count: overview.ledgerPendingCount,
+                  ),
+                  _SyncCountChip(
+                    label: '人员',
+                    count: overview.personPendingCount,
+                  ),
+                  _SyncCountChip(
+                    label: '流水',
+                    count: overview.transactionPendingCount,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                overview.failedCount > 0
+                    ? '${overview.failedCount} 项同步失败，可点击下方按钮重试'
+                    : hasPending
+                    ? '数据已保存在本机，联网后会自动同步'
+                    : '本机没有待同步数据',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _lastSyncText(overview.lastSuccessfulSyncAt),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+              if (hasPending) ...[
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: _syncing ? null : _retry,
+                  icon: const Icon(Icons.sync_rounded),
+                  label: const Text('立即同步'),
+                ),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _retry() async {
+    setState(() => _syncing = true);
+    try {
+      await ref.read(syncCoordinatorProvider).syncAllPending(force: true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('同步完成')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(FriendlyError.message(error, fallback: '同步失败，请稍后重试。')),
+        ),
+      );
+    } finally {
+      ref.invalidate(syncOverviewProvider);
+      ref.invalidate(ledgerNotifierProvider);
+      ref.invalidate(personNotifierProvider);
+      ref.invalidate(transactionNotifierProvider);
+      ref.invalidate(ledgerStatsProvider);
+      if (mounted) setState(() => _syncing = false);
+    }
+  }
+
+  String _lastSyncText(DateTime? time) {
+    if (time == null) return '尚无成功同步记录';
+    final local = time.toLocal();
+    final date =
+        '${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')}';
+    final clock =
+        '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+    return '上次同步 $date $clock';
+  }
+}
+
+class _SyncCountChip extends StatelessWidget {
+  const _SyncCountChip({required this.label, required this.count});
+
+  final String label;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        '$label $count',
+        style: Theme.of(
+          context,
+        ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w800),
+      ),
     );
   }
 }

@@ -13,6 +13,7 @@ import '../services/cloud_import_service.dart';
 import '../services/profile_sync_service.dart';
 import '../services/sync_coordinator.dart';
 import '../services/sync_identity_resolver.dart';
+import '../services/sync_overview_service.dart';
 
 /// Provides the global instance of DatabaseService.
 /// This acts as our base Dependency Injection for the database layer.
@@ -102,7 +103,16 @@ final syncCoordinatorProvider = Provider<SyncCoordinator>((ref) {
     personRepository: ref.watch(personRepositoryProvider),
     transactionRepository: ref.watch(transactionRepositoryProvider),
     database: ref.watch(databaseProvider),
+    syncOverviewService: ref.watch(syncOverviewServiceProvider),
   );
+});
+
+final syncOverviewServiceProvider = Provider<SyncOverviewService>((ref) {
+  return SyncOverviewService(ref.watch(databaseProvider));
+});
+
+final syncOverviewProvider = FutureProvider<SyncOverview>((ref) {
+  return ref.watch(syncOverviewServiceProvider).read();
 });
 
 final cloudImportServiceProvider = Provider<CloudImportService>((ref) {

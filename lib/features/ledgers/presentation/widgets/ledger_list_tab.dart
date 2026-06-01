@@ -170,6 +170,7 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
         ref.invalidate(ledgerNotifierProvider);
         ref.invalidate(personNotifierProvider);
         ref.invalidate(ledgerStatsProvider);
+        ref.invalidate(syncOverviewProvider);
       }
     } catch (_) {
       // Silent auto-sync: cards keep showing pending or failed state.

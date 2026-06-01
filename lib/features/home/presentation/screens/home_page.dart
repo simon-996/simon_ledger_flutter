@@ -286,6 +286,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       ref.invalidate(ledgerSyncStatusProvider(ledger.uuid));
       ref.invalidate(transactionNotifierProvider(ledger.uuid));
       ref.invalidate(ledgerStatsProvider);
+      ref.invalidate(syncOverviewProvider);
       if (!mounted) return;
 
       final error = result.error;

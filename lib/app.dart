@@ -64,6 +64,7 @@ class _SimonLedgerAppState extends ConsumerState<SimonLedgerApp>
       ref.invalidate(personNotifierProvider);
       ref.invalidate(transactionNotifierProvider);
       ref.invalidate(ledgerStatsProvider);
+      ref.invalidate(syncOverviewProvider);
     } catch (_) {
       // Silent retry: pending items stay local until the next sync trigger.
     } finally {
