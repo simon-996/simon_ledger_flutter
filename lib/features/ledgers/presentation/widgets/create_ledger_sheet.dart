@@ -60,7 +60,9 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
     );
     _baseCurrencyCode = widget.existingLedger?.baseCurrencyCode ?? 'CNY';
     _rateController = TextEditingController(
-      text: widget.existingLedger?.exchangeRateToCNY.toString() ?? '1.0',
+      text: _baseCurrencyCode == 'CNY'
+          ? '1.0'
+          : widget.existingLedger?.exchangeRateToCNY.toString() ?? '1.0',
     );
 
     if (widget.existingLedger != null) {
@@ -472,7 +474,9 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
     final name = _nameController.text.trim();
     if (name.isEmpty) return;
 
-    final rate = double.tryParse(_rateController.text);
+    final rate = _baseCurrencyCode == 'CNY'
+        ? 1.0
+        : double.tryParse(_rateController.text);
     if (rate == null || rate <= 0) {
       AppNotice.error(context, '请输入大于 0 的有效汇率');
       return;
@@ -996,6 +1000,7 @@ class _CurrencyRateFields extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isCny = baseCurrencyCode == 'CNY';
     return LayoutBuilder(
       builder: (context, constraints) {
         final currencyField = DropdownButtonFormField<String>(
@@ -1018,11 +1023,12 @@ class _CurrencyRateFields extends StatelessWidget {
 
         final rateField = TextField(
           controller: rateController,
+          enabled: !isCny,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           decoration: InputDecoration(
             labelText: '对人民币汇率',
             prefixIcon: const Icon(Icons.currency_exchange_rounded),
-            helperText: '1 $baseCurrencyCode = ? CNY',
+            helperText: isCny ? '人民币账本汇率固定为 1' : '1 $baseCurrencyCode = ? CNY',
           ),
         );
 

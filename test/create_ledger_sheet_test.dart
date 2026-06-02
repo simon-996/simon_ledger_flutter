@@ -14,6 +14,77 @@ import 'package:simon_ledger_flutter/features/auth/presentation/providers/auth_p
 import 'package:simon_ledger_flutter/features/ledgers/presentation/widgets/create_ledger_sheet.dart';
 
 void main() {
+  testWidgets('new CNY ledger keeps exchange rate fixed', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(DatabaseService()),
+          authTokenProvider.overrideWith((ref) async => null),
+        ],
+        child: const MaterialApp(home: Scaffold(body: CreateLedgerSheet())),
+      ),
+    );
+    await tester.pump();
+
+    final rateField = tester.widget<TextField>(_rateFieldFinder());
+    expect(rateField.enabled, isFalse);
+    expect(rateField.controller!.text, '1.0');
+    expect(find.text('人民币账本汇率固定为 1'), findsOneWidget);
+  });
+
+  testWidgets('editing CNY ledger normalizes and locks exchange rate', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final ledger = Ledger()
+      ..uuid = 'legacy-cny-ledger'
+      ..name = '人民币账本'
+      ..baseCurrencyCode = 'CNY'
+      ..exchangeRateToCNY = 7.2;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(DatabaseService()),
+          authTokenProvider.overrideWith((ref) async => null),
+        ],
+        child: MaterialApp(
+          home: Scaffold(body: CreateLedgerSheet(existingLedger: ledger)),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final rateField = tester.widget<TextField>(_rateFieldFinder());
+    expect(rateField.enabled, isFalse);
+    expect(rateField.controller!.text, '1.0');
+  });
+
+  testWidgets('foreign currency ledger allows editing exchange rate', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(DatabaseService()),
+          authTokenProvider.overrideWith((ref) async => null),
+        ],
+        child: const MaterialApp(home: Scaffold(body: CreateLedgerSheet())),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('CNY 人民币'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('USD 美元').last);
+    await tester.pumpAndSettle();
+
+    final rateField = tester.widget<TextField>(_rateFieldFinder());
+    expect(rateField.enabled, isTrue);
+    expect(find.text('1 USD = ? CNY'), findsOneWidget);
+  });
+
   testWidgets('editing ledger shows newly added person immediately', (
     tester,
   ) async {
@@ -108,4 +179,10 @@ void main() {
     expect(result!.people.single.linkedUserUuid, 'account-1');
     expect(userCompleter.isCompleted, isFalse);
   });
+}
+
+Finder _rateFieldFinder() {
+  return find.byWidgetPredicate(
+    (widget) => widget is TextField && widget.decoration?.labelText == '对人民币汇率',
+  );
 }
