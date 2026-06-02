@@ -116,6 +116,45 @@ void main() {
     ]);
   });
 
+  test(
+    'reports failed sync when repository returns a transaction error',
+    () async {
+      final calls = <String>[];
+      final database = DatabaseService();
+      await database.saveLedger(
+        Ledger()
+          ..uuid = '1234567890abcdef1234567890abcdef'
+          ..name = 'remote ledger'
+          ..baseCurrencyCode = 'CNY',
+      );
+      await database.saveTransaction(
+        TransactionRecord()
+          ..uuid = 'local-transaction'
+          ..ledgerUuid = '1234567890abcdef1234567890abcdef'
+          ..amount = 12
+          ..currencyCode = 'CNY'
+          ..category = '餐饮'
+          ..note = ''
+          ..createdAt = DateTime(2026)
+          ..pendingSync = true,
+      );
+      final coordinator = SyncCoordinator(
+        ledgerRepository: _LedgerRepository(calls),
+        personRepository: _PersonRepository(calls),
+        transactionRepository: _TransactionErrorResultRepository(calls),
+        database: database,
+      );
+
+      final result = await coordinator.syncAllPendingResult(force: true);
+
+      expect(result.attempted, isTrue);
+      expect(result.hasError, isTrue);
+      expect(result.failedCount, 1);
+      expect(result.syncedCount, 0);
+      expect(result.error, isNotNull);
+    },
+  );
+
   test('reuses an in-flight sync for the same ledger', () async {
     final calls = <String>[];
     final transactionRepository = _BlockingTransactionRepository(calls);
@@ -285,5 +324,17 @@ class _FailingTransactionRepository extends _TransactionRepository {
   Future<TransactionSyncResult> syncPendingTransactions(String ledgerUuid) {
     calls.add('tx:$ledgerUuid');
     throw Exception('offline');
+  }
+}
+
+class _TransactionErrorResultRepository extends _TransactionRepository {
+  const _TransactionErrorResultRepository(super.calls);
+
+  @override
+  Future<TransactionSyncResult> syncPendingTransactions(String ledgerUuid) {
+    calls.add('tx:$ledgerUuid');
+    return Future.value(
+      TransactionSyncResult(synced: 0, error: Exception('offline')),
+    );
   }
 }
