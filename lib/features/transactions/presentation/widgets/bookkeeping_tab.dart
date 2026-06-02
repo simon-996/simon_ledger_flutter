@@ -282,6 +282,9 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
         ledgerUuid: selectedLedger?.uuid,
       ),
     );
+    final syncStatus = selectedLedger == null
+        ? null
+        : ref.watch(ledgerSyncStatusProvider(selectedLedger.uuid)).valueOrNull;
     final colorScheme = Theme.of(context).colorScheme;
 
     return Column(
@@ -314,6 +317,10 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                     },
                   ),
                 ),
+                if (syncStatus?.hasPending == true) ...[
+                  const SizedBox(height: 10),
+                  _BookkeepingSyncBanner(status: syncStatus!),
+                ],
                 const SizedBox(height: 14),
                 AppAnimatedEntry(
                   delay: const Duration(milliseconds: 60),
@@ -792,6 +799,49 @@ class _SaveTransactionButton extends StatelessWidget {
                   ],
                 ),
         ),
+      ),
+    );
+  }
+}
+
+class _BookkeepingSyncBanner extends StatelessWidget {
+  const _BookkeepingSyncBanner({required this.status});
+
+  final LedgerSyncStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final failed = status.hasFailed;
+    final color = failed ? colorScheme.error : colorScheme.tertiary;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            failed ? Icons.error_outline_rounded : Icons.cloud_sync_outlined,
+            size: 17,
+            color: color,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              failed
+                  ? '部分数据同步失败，已保存在本机'
+                  : '待同步 ${status.pendingCount} 项，联网后自动上传',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
