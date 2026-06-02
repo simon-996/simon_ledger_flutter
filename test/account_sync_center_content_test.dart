@@ -28,7 +28,8 @@ void main() {
       ),
     );
 
-    expect(find.text('正在同步'), findsOneWidget);
+    expect(find.text('正在同步数据'), findsOneWidget);
+    expect(find.text('同步中'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
     expect(
       tester.widget<IconButton>(find.byType(IconButton)).onPressed,

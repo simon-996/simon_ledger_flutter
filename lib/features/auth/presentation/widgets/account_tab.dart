@@ -106,19 +106,7 @@ class _SyncCenterCardState extends ConsumerState<_SyncCenterCard> {
     final overview = ref.watch(syncOverviewProvider);
     return AppSectionCard(
       child: overview.when(
-        loading: () => const Padding(
-          padding: EdgeInsets.symmetric(vertical: 8),
-          child: Row(
-            children: [
-              SizedBox.square(
-                dimension: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-              SizedBox(width: 10),
-              Text('正在读取同步状态'),
-            ],
-          ),
-        ),
+        loading: () => const _AccountInlineLoadingRow(message: '正在读取同步状态'),
         error: (error, stackTrace) =>
             Text(FriendlyError.message(error, fallback: '暂时无法读取同步状态。')),
         data: (overview) {
@@ -184,78 +172,79 @@ class AccountSyncCenterContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final hasPending = overview.pendingCount > 0;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        AppSectionHeader(
-          title: '同步中心',
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
+    return _AccountLoadingOverlay(
+      loading: syncing,
+      message: '正在同步数据',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppSectionHeader(
+            title: '同步中心',
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  hasPending
+                      ? Icons.sync_problem_rounded
+                      : Icons.cloud_done_outlined,
+                  color: hasPending
+                      ? colorScheme.tertiary
+                      : colorScheme.primary,
+                ),
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: '刷新同步状态',
+                  onPressed: syncing ? null : onRefresh,
+                  icon: const Icon(Icons.refresh_rounded),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              Icon(
-                hasPending
-                    ? Icons.sync_problem_rounded
-                    : Icons.cloud_done_outlined,
-                color: hasPending ? colorScheme.tertiary : colorScheme.primary,
+              _SyncCountChip(label: '账本', count: overview.ledgerPendingCount),
+              _SyncCountChip(label: '人员', count: overview.personPendingCount),
+              _SyncCountChip(
+                label: '流水',
+                count: overview.transactionPendingCount,
               ),
-              const SizedBox(width: 4),
-              IconButton(
-                tooltip: '刷新同步状态',
-                onPressed: syncing ? null : onRefresh,
-                icon: const Icon(Icons.refresh_rounded),
+              _SyncCountChip(
+                label: '仅本地账本',
+                count: overview.localOnlyLedgerCount,
               ),
             ],
           ),
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _SyncCountChip(label: '账本', count: overview.ledgerPendingCount),
-            _SyncCountChip(label: '人员', count: overview.personPendingCount),
-            _SyncCountChip(
-              label: '流水',
-              count: overview.transactionPendingCount,
+          const SizedBox(height: 10),
+          Text(
+            overview.failedCount > 0
+                ? '${overview.failedCount} 项同步失败，可点击下方按钮重试'
+                : hasPending
+                ? '数据已保存在本机，联网后会自动同步'
+                : '本机没有待同步数据',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
             ),
-            _SyncCountChip(
-              label: '仅本地账本',
-              count: overview.localOnlyLedgerCount,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _lastSyncText(overview.lastSuccessfulSyncAt),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+          if (hasPending) ...[
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: syncing ? null : onSync,
+              icon: const Icon(Icons.sync_rounded),
+              label: Text(syncing ? '同步中' : '立即同步'),
             ),
           ],
-        ),
-        const SizedBox(height: 10),
-        Text(
-          overview.failedCount > 0
-              ? '${overview.failedCount} 项同步失败，可点击下方按钮重试'
-              : hasPending
-              ? '数据已保存在本机，联网后会自动同步'
-              : '本机没有待同步数据',
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          _lastSyncText(overview.lastSuccessfulSyncAt),
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
-        ),
-        if (hasPending) ...[
-          const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: syncing ? null : onSync,
-            icon: syncing
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.sync_rounded),
-            label: Text(syncing ? '正在同步' : '立即同步'),
-          ),
         ],
-      ],
+      ),
     );
   }
 
@@ -295,6 +284,154 @@ class _SyncCountChip extends StatelessWidget {
   }
 }
 
+class _AccountLoadingOverlay extends StatelessWidget {
+  const _AccountLoadingOverlay({
+    super.key,
+    required this.loading,
+    required this.message,
+    required this.child,
+  });
+
+  final bool loading;
+  final String message;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Stack(
+      children: [
+        AnimatedOpacity(
+          duration: AppMotion.normal,
+          curve: AppMotion.standard,
+          opacity: loading ? 0.34 : 1,
+          child: IgnorePointer(ignoring: loading, child: child),
+        ),
+        Positioned.fill(
+          child: IgnorePointer(
+            child: AnimatedSwitcher(
+              duration: AppMotion.normal,
+              switchInCurve: AppMotion.emphasized,
+              switchOutCurve: AppMotion.standard,
+              transitionBuilder: (child, animation) {
+                return FadeTransition(
+                  opacity: animation,
+                  child: ScaleTransition(
+                    scale: Tween<double>(
+                      begin: 0.96,
+                      end: 1,
+                    ).animate(animation),
+                    child: child,
+                  ),
+                );
+              },
+              child: loading
+                  ? ColoredBox(
+                      key: ValueKey(message),
+                      color: colorScheme.surface.withValues(alpha: 0.5),
+                      child: Center(
+                        child: Semantics(
+                          liveRegion: true,
+                          label: message,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: colorScheme.surfaceContainerLowest,
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: colorScheme.primary.withValues(
+                                  alpha: 0.2,
+                                ),
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: colorScheme.shadow.withValues(
+                                    alpha: 0.08,
+                                  ),
+                                  blurRadius: 16,
+                                  offset: const Offset(0, 6),
+                                ),
+                              ],
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 11,
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  SizedBox(
+                                    width: 17,
+                                    height: 17,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.2,
+                                      color: colorScheme.primary,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 9),
+                                  Text(
+                                    message,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelLarge
+                                        ?.copyWith(
+                                          color: colorScheme.onSurface,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  : const SizedBox.shrink(key: ValueKey('account-idle')),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AccountInlineLoadingRow extends StatelessWidget {
+  const _AccountInlineLoadingRow({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          SizedBox.square(
+            dimension: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.2,
+              color: colorScheme.primary,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _JoinInviteCard extends ConsumerStatefulWidget {
   const _JoinInviteCard();
 
@@ -315,37 +452,37 @@ class _JoinInviteCardState extends ConsumerState<_JoinInviteCard> {
   @override
   Widget build(BuildContext context) {
     return AppSectionCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const AppSectionHeader(title: '加入共享账本'),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _codeController,
-            textCapitalization: TextCapitalization.characters,
-            decoration: const InputDecoration(
-              labelText: '邀请码',
-              prefixIcon: Icon(Icons.key_outlined),
+      child: _AccountLoadingOverlay(
+        loading: _joining,
+        message: '正在加入共享账本',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const AppSectionHeader(title: '加入共享账本'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _codeController,
+              textCapitalization: TextCapitalization.characters,
+              decoration: const InputDecoration(
+                labelText: '邀请码',
+                prefixIcon: Icon(Icons.key_outlined),
+              ),
+              onSubmitted: (_) => _join(),
             ),
-            onSubmitted: (_) => _join(),
-          ),
-          const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: _joining ? null : _join,
-            icon: _joining
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.group_add_outlined),
-            label: Text(_joining ? '加入中' : '加入账本'),
-          ),
-        ],
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: _joining ? null : _join,
+              icon: const Icon(Icons.group_add_outlined),
+              label: Text(_joining ? '加入中' : '加入账本'),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Future<void> _join() async {
+    if (_joining) return;
     final code = _codeController.text.trim();
     if (code.isEmpty) {
       ScaffoldMessenger.of(
@@ -442,91 +579,80 @@ class _UnifiedProfileCardState extends ConsumerState<_UnifiedProfileCard> {
 
         return AppSectionCard(
           child: AppAnimatedSwitcher(
-            child: InkWell(
+            child: _AccountLoadingOverlay(
               key: ValueKey(
                 '${profile.normalizedNickname}-${profile.personAvatar}-${profile.pendingSync}-$syncing',
               ),
-              borderRadius: BorderRadius.circular(18),
-              onTap: () => _editProfile(profile),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    AppSectionHeader(
-                      title: '账户昵称和头像',
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
+              loading: syncing,
+              message: '正在同步账户资料',
+              child: InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: () => _editProfile(profile),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      AppSectionHeader(
+                        title: '账户昵称和头像',
+                        trailing: TextButton.icon(
+                          onPressed: () => _editProfile(profile),
+                          icon: const Icon(Icons.edit_rounded, size: 18),
+                          label: const Text('修改'),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
                         children: [
-                          if (syncing) ...[
-                            const SizedBox.square(
-                              dimension: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                          CircleAvatar(
+                            radius: 28,
+                            backgroundColor: colorScheme.primaryContainer,
+                            child: Text(
+                              profile.personAvatar,
+                              style: Theme.of(context).textTheme.titleLarge,
                             ),
-                            const SizedBox(width: 8),
-                          ],
-                          TextButton.icon(
-                            onPressed: () => _editProfile(profile),
-                            icon: const Icon(Icons.edit_rounded, size: 18),
-                            label: const Text('修改'),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  profile.normalizedNickname,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w800),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  widget.account ??
+                                      (widget.isSignedIn ? '已登录' : '未登录本地使用'),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(
+                                        color: colorScheme.onSurfaceVariant,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            Icons.chevron_right_rounded,
+                            color: colorScheme.onSurfaceVariant,
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 28,
-                          backgroundColor: colorScheme.primaryContainer,
-                          child: Text(
-                            profile.personAvatar,
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                profile.normalizedNickname,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(fontWeight: FontWeight.w800),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                widget.account ??
-                                    (widget.isSignedIn ? '已登录' : '未登录本地使用'),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(
-                                      color: colorScheme.onSurfaceVariant,
-                                    ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Icon(
-                          Icons.chevron_right_rounded,
-                          color: colorScheme.onSurfaceVariant,
+                      if (profile.pendingSync && !syncing) ...[
+                        const SizedBox(height: 12),
+                        _ProfileSyncBanner(
+                          errorText: profile.syncError,
+                          onRetry: widget.isSignedIn ? _retrySyncProfile : null,
                         ),
                       ],
-                    ),
-                    if (syncing || profile.pendingSync) ...[
-                      const SizedBox(height: 12),
-                      _ProfileSyncBanner(
-                        syncing: syncing,
-                        errorText: profile.syncError,
-                        onRetry: widget.isSignedIn && !syncing
-                            ? _retrySyncProfile
-                            : null,
-                      ),
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -629,13 +755,8 @@ class _UnifiedProfileCardState extends ConsumerState<_UnifiedProfileCard> {
 }
 
 class _ProfileSyncBanner extends StatelessWidget {
-  const _ProfileSyncBanner({
-    required this.syncing,
-    required this.errorText,
-    required this.onRetry,
-  });
+  const _ProfileSyncBanner({required this.errorText, required this.onRetry});
 
-  final bool syncing;
   final String? errorText;
   final VoidCallback? onRetry;
 
@@ -652,22 +773,14 @@ class _ProfileSyncBanner extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (syncing)
-            const SizedBox.square(
-              dimension: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          else
-            Icon(
-              Icons.cloud_off_outlined,
-              color: colorScheme.onTertiaryContainer,
-            ),
+          Icon(
+            Icons.cloud_off_outlined,
+            color: colorScheme.onTertiaryContainer,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              syncing
-                  ? '正在同步账户资料...'
-                  : errorText == null || errorText!.isEmpty
+              errorText == null || errorText!.isEmpty
                   ? '账户资料已在本地保存，尚未同步到云端。'
                   : '账户资料已在本地保存，尚未同步到云端，${FriendlyError.syncMessage(errorText)}',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -675,7 +788,7 @@ class _ProfileSyncBanner extends StatelessWidget {
               ),
             ),
           ),
-          if (!syncing && onRetry != null) ...[
+          if (onRetry != null) ...[
             const SizedBox(width: 8),
             TextButton(onPressed: onRetry, child: const Text('重试')),
           ],
@@ -826,7 +939,7 @@ class _CloudImportCardState extends ConsumerState<_CloudImportCard> {
               ),
               const SizedBox(height: 8),
               if (snapshot.connectionState == ConnectionState.waiting)
-                const Center(child: CircularProgressIndicator())
+                const _AccountInlineLoadingRow(message: '正在扫描本地账本')
               else if (snapshot.hasError)
                 const Text('扫描失败，请稍后重试。')
               else ...[
@@ -973,12 +1086,7 @@ class _CloudImportDialogState extends ConsumerState<_CloudImportDialog> {
           onPressed: _importing || _selectedLedgerUuids.isEmpty
               ? null
               : _startImport,
-          child: _importing
-              ? const SizedBox.square(
-                  dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('导入'),
+          child: Text(_importing ? '导入中' : '导入'),
         ),
       ],
     );
@@ -1078,85 +1186,91 @@ class _AuthPanelState extends ConsumerState<_AuthPanel> {
         ),
         const SizedBox(height: 16),
         AppSectionCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (_isRegister) ...[
-                TextField(
-                  controller: _nicknameController,
-                  textInputAction: TextInputAction.next,
-                  decoration: const InputDecoration(
-                    labelText: '昵称',
-                    prefixIcon: Icon(Icons.badge_outlined),
+          child: _AccountLoadingOverlay(
+            loading: _submitting,
+            message: _isRegister ? '正在注册账户' : '正在登录账户',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (_isRegister) ...[
+                  TextField(
+                    controller: _nicknameController,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: '昵称',
+                      prefixIcon: Icon(Icons.badge_outlined),
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: '邮箱',
+                      prefixIcon: Icon(Icons.mail_outline_rounded),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: '手机号',
+                      prefixIcon: Icon(Icons.phone_outlined),
+                    ),
+                  ),
+                ] else
+                  TextField(
+                    controller: _accountController,
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: '邮箱或手机号',
+                      prefixIcon: Icon(Icons.person_outline_rounded),
+                    ),
+                  ),
                 const SizedBox(height: 12),
                 TextField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  textInputAction: TextInputAction.next,
+                  controller: _passwordController,
+                  obscureText: true,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _submit(),
                   decoration: const InputDecoration(
-                    labelText: '邮箱',
-                    prefixIcon: Icon(Icons.mail_outline_rounded),
+                    labelText: '密码',
+                    prefixIcon: Icon(Icons.lock_outline_rounded),
                   ),
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _phoneController,
-                  keyboardType: TextInputType.phone,
-                  textInputAction: TextInputAction.next,
-                  decoration: const InputDecoration(
-                    labelText: '手机号',
-                    prefixIcon: Icon(Icons.phone_outlined),
+                if (_errorText != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    _errorText!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
                   ),
-                ),
-              ] else
-                TextField(
-                  controller: _accountController,
-                  keyboardType: TextInputType.emailAddress,
-                  textInputAction: TextInputAction.next,
-                  decoration: const InputDecoration(
-                    labelText: '邮箱或手机号',
-                    prefixIcon: Icon(Icons.person_outline_rounded),
-                  ),
-                ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _passwordController,
-                obscureText: true,
-                textInputAction: TextInputAction.done,
-                onSubmitted: (_) => _submit(),
-                decoration: const InputDecoration(
-                  labelText: '密码',
-                  prefixIcon: Icon(Icons.lock_outline_rounded),
-                ),
-              ),
-              if (_errorText != null) ...[
-                const SizedBox(height: 12),
-                Text(
-                  _errorText!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
         const SizedBox(height: 16),
         FilledButton.icon(
           onPressed: _submitting ? null : _submit,
-          icon: _submitting
-              ? const SizedBox.square(
-                  dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Icon(_isRegister ? Icons.person_add_alt_rounded : Icons.login),
-          label: Text(_isRegister ? '注册并登录' : '登录'),
+          icon: Icon(_isRegister ? Icons.person_add_alt_rounded : Icons.login),
+          label: Text(
+            _submitting
+                ? (_isRegister ? '注册中' : '登录中')
+                : (_isRegister ? '注册并登录' : '登录'),
+          ),
         ),
       ],
     );
   }
 
   Future<void> _submit() async {
+    if (_submitting) return;
     FocusScope.of(context).unfocus();
     setState(() {
       _submitting = true;
