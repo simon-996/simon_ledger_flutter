@@ -343,4 +343,50 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
     },
   );
+
+  testWidgets('wide ledger delete dialog keeps title away from top edge', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.binding.setSurfaceSize(const Size(1024, 768));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final database = DatabaseService();
+    final ledger = Ledger()
+      ..uuid = 'wide-ledger'
+      ..name = '宽屏账本'
+      ..baseCurrencyCode = 'CNY';
+    await database.saveLedger(ledger);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          authTokenProvider.overrideWith((ref) async => null),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: LedgerListTab(
+              ledgers: [ledger],
+              ledgerStats: const {},
+              onTap: (_) {},
+              onEdit: (_) {},
+              onShare: (_) async {},
+              onDelete: (_) async {},
+              onCreate: () {},
+              onSync: (_) async {},
+              autoSyncEnabled: false,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.text('宽屏账本'), const Offset(-420, 0));
+    await tester.pumpAndSettle();
+
+    final dialogTop = tester.getTopLeft(find.byType(Dialog)).dy;
+    final titleTop = tester.getTopLeft(find.text('删除账本')).dy;
+    expect(titleTop - dialogTop, greaterThanOrEqualTo(20));
+  });
 }

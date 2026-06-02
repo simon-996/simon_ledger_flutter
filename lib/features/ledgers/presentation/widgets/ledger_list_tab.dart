@@ -226,12 +226,13 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
         .getTransactionsForLedger(ledger.uuid);
     if (!mounted) return false;
 
+    final isCompact = MediaQuery.sizeOf(context).width < 640;
     final panel = _DeleteLedgerConfirmPanel(
       ledger: ledger,
       transactionCount: transactions.length,
       onDelete: () => _deleteLedger(ledger),
+      compact: isCompact,
     );
-    final isCompact = MediaQuery.sizeOf(context).width < 640;
     final deleted = isCompact
         ? await showModalBottomSheet<bool>(
             context: context,
@@ -266,11 +267,13 @@ class _DeleteLedgerConfirmPanel extends StatefulWidget {
     required this.ledger,
     required this.transactionCount,
     required this.onDelete,
+    required this.compact,
   });
 
   final Ledger ledger;
   final int transactionCount;
   final Future<void> Function() onDelete;
+  final bool compact;
 
   @override
   State<_DeleteLedgerConfirmPanel> createState() =>
@@ -300,7 +303,8 @@ class _DeleteLedgerConfirmPanelState extends State<_DeleteLedgerConfirmPanel> {
         constraints: const BoxConstraints(maxWidth: 480),
         child: SingleChildScrollView(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+            key: const ValueKey('delete-ledger-panel-content'),
+            padding: EdgeInsets.fromLTRB(20, widget.compact ? 4 : 20, 20, 20),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
