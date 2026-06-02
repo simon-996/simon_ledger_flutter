@@ -278,14 +278,11 @@ class _HomePageState extends ConsumerState<HomePage> {
     ref.invalidate(ledgerNotifierProvider);
   }
 
-  void _deleteLedger(Ledger ledger) async {
-    try {
-      await ref.read(ledgerNotifierProvider.notifier).deleteLedger(ledger.uuid);
-
-      await LastSelectedLedgerPreference.clearIfMatches(ledger.uuid);
-    } catch (e) {
-      _showWriteError(e);
-    }
+  Future<void> _deleteLedger(Ledger ledger) async {
+    await ref.read(ledgerNotifierProvider.notifier).deleteLedger(ledger.uuid);
+    await LastSelectedLedgerPreference.clearIfMatches(ledger.uuid);
+    ref.invalidate(ledgerStatsProvider);
+    ref.invalidate(syncOverviewProvider);
   }
 
   void _openLedger(Ledger ledger) {

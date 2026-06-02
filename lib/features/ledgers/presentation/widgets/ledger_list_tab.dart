@@ -6,6 +6,7 @@ import '../../../../core/models/ledger.dart';
 import '../../../../core/models/money.dart';
 import '../../../../core/models/person.dart';
 import '../../../../core/models/person_lookup.dart';
+import '../../../../core/network/friendly_error.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
@@ -32,7 +33,7 @@ class LedgerListTab extends ConsumerStatefulWidget {
   final ValueChanged<Ledger> onTap;
   final ValueChanged<Ledger> onEdit;
   final Future<void> Function(Ledger ledger) onShare;
-  final ValueChanged<Ledger> onDelete;
+  final Future<void> Function(Ledger ledger) onDelete;
   final VoidCallback onCreate;
   final Future<void> Function(Ledger ledger) onSync;
   final bool autoSyncEnabled;
@@ -120,8 +121,7 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
           direction: isBusy
               ? DismissDirection.none
               : DismissDirection.endToStart,
-          confirmDismiss: (direction) => _confirmDelete(context, ledger),
-          onDismissed: (_) => widget.onDelete(ledger),
+          confirmDismiss: (direction) => _confirmDelete(ledger),
           background: _DeleteBackground(),
           child: AppAnimatedEntry(
             delay: Duration(milliseconds: delayMs),
@@ -172,6 +172,14 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
     );
   }
 
+  Future<void> _deleteLedger(Ledger ledger) async {
+    await _runLedgerOperation(
+      ledger,
+      _LedgerCardOperation.delete,
+      () => widget.onDelete(ledger),
+    );
+  }
+
   Future<void> _runLedgerOperation(
     Ledger ledger,
     _LedgerCardOperation operation,
@@ -212,33 +220,260 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
     }
   }
 
-  Future<bool?> _confirmDelete(BuildContext context, Ledger ledger) {
-    return showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('删除账本'),
-        content: Text(
-          '确定要删除账本“${ledger.name}”吗？\n${ledger.displayCode}\n删除后无法恢复。',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-            ),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+  Future<bool> _confirmDelete(Ledger ledger) async {
+    final transactions = await ref
+        .read(databaseProvider)
+        .getTransactionsForLedger(ledger.uuid);
+    if (!mounted) return false;
+
+    final panel = _DeleteLedgerConfirmPanel(
+      ledger: ledger,
+      transactionCount: transactions.length,
+      onDelete: () => _deleteLedger(ledger),
     );
+    final isCompact = MediaQuery.sizeOf(context).width < 640;
+    final deleted = isCompact
+        ? await showModalBottomSheet<bool>(
+            context: context,
+            isScrollControlled: true,
+            useSafeArea: true,
+            isDismissible: false,
+            enableDrag: false,
+            showDragHandle: true,
+            builder: (context) => panel,
+          )
+        : await showDialog<bool>(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => Dialog(child: panel),
+          );
+    if (deleted == true && mounted) {
+      AppNotice.success(
+        context,
+        ledger.isLocalOnly ? '账本已删除' : '账本已在本机删除，将同步到云端',
+      );
+    }
+
+    // The provider removes the ledger after its local deletion completes.
+    return false;
   }
 }
 
-enum _LedgerCardOperation { share, sync }
+enum _LedgerCardOperation { share, sync, delete }
+
+class _DeleteLedgerConfirmPanel extends StatefulWidget {
+  const _DeleteLedgerConfirmPanel({
+    required this.ledger,
+    required this.transactionCount,
+    required this.onDelete,
+  });
+
+  final Ledger ledger;
+  final int transactionCount;
+  final Future<void> Function() onDelete;
+
+  @override
+  State<_DeleteLedgerConfirmPanel> createState() =>
+      _DeleteLedgerConfirmPanelState();
+}
+
+class _DeleteLedgerConfirmPanelState extends State<_DeleteLedgerConfirmPanel> {
+  bool _deleting = false;
+  String? _errorText;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isLocalOnly = widget.ledger.isLocalOnly;
+    final typeLabel = widget.ledger.shouldUploadToCloud
+        ? '待同步账本'
+        : isLocalOnly
+        ? '本机账本'
+        : '云端账本';
+    final description = isLocalOnly
+        ? '删除后，本机中的账本和流水会立即移除。'
+        : '删除后会先从本机移除；如果暂时离线，联网后会自动同步删除操作。';
+
+    return PopScope(
+      canPop: !_deleting,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: colorScheme.errorContainer,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(
+                        Icons.delete_outline_rounded,
+                        color: colorScheme.onErrorContainer,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '删除账本',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            '此操作无法恢复',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: colorScheme.error,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  widget.ledger.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  widget.ledger.displayCode,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: _MetaChip(text: typeLabel),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  description,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                if (widget.transactionCount > 0) ...[
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: colorScheme.errorContainer.withValues(alpha: 0.54),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: colorScheme.error.withValues(alpha: 0.18),
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          size: 19,
+                          color: colorScheme.error,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '该账本包含 ${widget.transactionCount} 条流水，删除后无法恢复。',
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: colorScheme.onErrorContainer,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                if (_errorText != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    _errorText!,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: colorScheme.error),
+                  ),
+                ],
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: _deleting
+                            ? null
+                            : () => Navigator.of(context).pop(false),
+                        child: const Text('取消'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: _deleting ? null : _delete,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: colorScheme.error,
+                          foregroundColor: colorScheme.onError,
+                        ),
+                        icon: _deleting
+                            ? SizedBox.square(
+                                dimension: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: colorScheme.onError,
+                                ),
+                              )
+                            : const Icon(Icons.delete_outline_rounded),
+                        label: Text(_deleting ? '正在删除' : '删除'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _delete() async {
+    if (_deleting) return;
+    setState(() {
+      _deleting = true;
+      _errorText = null;
+    });
+    try {
+      await widget.onDelete();
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _deleting = false;
+        _errorText = FriendlyError.message(error, fallback: '删除失败，请稍后重试。');
+      });
+    }
+  }
+}
 
 class _LedgerCard extends StatelessWidget {
   const _LedgerCard({
@@ -525,8 +760,11 @@ class _LedgerOperationOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final isSharing = operation == _LedgerCardOperation.share;
-    final message = isSharing ? '正在生成邀请' : '正在同步账本';
+    final message = switch (operation) {
+      _LedgerCardOperation.share => '正在生成邀请',
+      _LedgerCardOperation.sync => '正在同步账本',
+      _LedgerCardOperation.delete => '正在删除账本',
+    };
 
     return ColoredBox(
       color: colorScheme.surface.withValues(alpha: 0.5),

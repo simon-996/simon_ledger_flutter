@@ -8,6 +8,7 @@ import 'package:simon_ledger_flutter/core/database/database_service.dart';
 import 'package:simon_ledger_flutter/core/di/providers.dart';
 import 'package:simon_ledger_flutter/core/models/ledger.dart';
 import 'package:simon_ledger_flutter/core/models/person.dart';
+import 'package:simon_ledger_flutter/core/models/transaction_record.dart';
 import 'package:simon_ledger_flutter/core/network/token_store.dart';
 import 'package:simon_ledger_flutter/features/ledgers/presentation/widgets/ledger_list_tab.dart';
 
@@ -43,7 +44,7 @@ void main() {
               onTap: (_) {},
               onEdit: (_) {},
               onShare: (_) async {},
-              onDelete: (_) {},
+              onDelete: (_) async {},
               onCreate: () {},
               onSync: (_) async {
                 syncCalls += 1;
@@ -116,7 +117,7 @@ void main() {
               onTap: (_) {},
               onEdit: (_) {},
               onShare: (_) async {},
-              onDelete: (_) {},
+              onDelete: (_) async {},
               onCreate: () {},
               onSync: (_) async {},
               autoSyncEnabled: false,
@@ -169,7 +170,7 @@ void main() {
                 shareCalls += 1;
                 await releaseShare.future;
               },
-              onDelete: (_) {},
+              onDelete: (_) async {},
               onCreate: () {},
               onSync: (_) async {},
               autoSyncEnabled: false,
@@ -237,7 +238,7 @@ void main() {
                 onTap: (_) {},
                 onEdit: (_) {},
                 onShare: (_) async {},
-                onDelete: (_) {},
+                onDelete: (_) async {},
                 onCreate: () {},
                 onSync: (_) async {},
                 autoSyncEnabled: false,
@@ -261,6 +262,85 @@ void main() {
           (sharedOffset.dy == manualOffset.dy &&
               sharedOffset.dx < manualOffset.dx);
       expect(sharedBeforeManual, isTrue);
+    },
+  );
+
+  testWidgets(
+    'ledger delete sheet shows details and waits for local deletion',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final database = DatabaseService();
+      final ledger = Ledger()
+        ..uuid = 'trip-ledger'
+        ..name = '旅行账本'
+        ..baseCurrencyCode = 'CNY';
+      await database.saveLedger(ledger);
+      for (var index = 0; index < 2; index += 1) {
+        await database.saveTransaction(
+          TransactionRecord()
+            ..uuid = 'tx-$index'
+            ..ledgerUuid = ledger.uuid
+            ..amount = 20
+            ..currencyCode = 'CNY'
+            ..category = '餐饮'
+            ..note = ''
+            ..createdAt = DateTime(2026, 6, index + 1),
+        );
+      }
+      final releaseDelete = Completer<void>();
+      var deleteCalls = 0;
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            databaseProvider.overrideWithValue(database),
+            authTokenProvider.overrideWith((ref) async => null),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: LedgerListTab(
+                ledgers: [ledger],
+                ledgerStats: const {},
+                onTap: (_) {},
+                onEdit: (_) {},
+                onShare: (_) async {},
+                onDelete: (_) async {
+                  deleteCalls += 1;
+                  await releaseDelete.future;
+                },
+                onCreate: () {},
+                onSync: (_) async {},
+                autoSyncEnabled: false,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.drag(find.text('旅行账本'), const Offset(-420, 0));
+      await tester.pumpAndSettle();
+
+      expect(find.text('删除账本'), findsOneWidget);
+      expect(find.text('旅行账本'), findsWidgets);
+      expect(find.text(ledger.displayCode), findsWidgets);
+      expect(find.text('本机账本'), findsOneWidget);
+      expect(find.text('该账本包含 2 条流水，删除后无法恢复。'), findsOneWidget);
+
+      await tester.tap(find.text('删除'));
+      await tester.pump();
+
+      expect(find.text('正在删除'), findsOneWidget);
+      expect(deleteCalls, 1);
+
+      releaseDelete.complete();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('账本已删除'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 2));
     },
   );
 }
