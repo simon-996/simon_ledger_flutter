@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:simon_ledger_flutter/core/database/database_service.dart';
+import 'package:simon_ledger_flutter/core/di/providers.dart';
+import 'package:simon_ledger_flutter/core/network/token_store.dart';
 import 'package:simon_ledger_flutter/core/services/sync_overview_service.dart';
+import 'package:simon_ledger_flutter/features/auth/presentation/providers/auth_provider.dart';
 import 'package:simon_ledger_flutter/features/auth/presentation/widgets/account_tab.dart';
 
 void main() {
@@ -97,4 +103,34 @@ void main() {
     expect(find.text('网络恢复后会自动重试。'), findsOneWidget);
     expect(find.textContaining('SocketException'), findsNothing);
   });
+
+  testWidgets(
+    'sync center ignores stale pending state when local queue is empty',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final database = DatabaseService();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            databaseProvider.overrideWithValue(database),
+            authTokenProvider.overrideWith(
+              (ref) async => const AuthToken(name: 'satoken', value: 'token'),
+            ),
+            currentUserProvider.overrideWith((ref) async => null),
+            syncOverviewProvider.overrideWith((ref) async => overview),
+          ],
+          child: const MaterialApp(home: Scaffold(body: AccountTab())),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('立即同步'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('暂无需要同步的数据'), findsOneWidget);
+      expect(find.text('同步完成'), findsNothing);
+      await tester.pump(const Duration(seconds: 2));
+    },
+  );
 }

@@ -125,14 +125,23 @@ class _SyncCenterCardState extends ConsumerState<_SyncCenterCard> {
     if (_syncing) return;
     setState(() => _syncing = true);
     try {
+      final overviewService = ref.read(syncOverviewServiceProvider);
+      final beforeSync = await overviewService.read();
+      if (!mounted) return;
+      if (beforeSync.pendingCount == 0) {
+        AppNotice.info(context, '暂无需要同步的数据');
+        return;
+      }
+
       final synced = await ref
           .read(syncCoordinatorProvider)
           .syncAllPendingResult(force: true);
+      final afterSync = await overviewService.read();
       if (!mounted) return;
-      if (!synced.attempted) {
-        AppNotice.info(context, '暂无需要同步的数据');
-      } else if (synced.hasError) {
+      if (afterSync.failedCount > 0 || synced.hasError) {
         AppNotice.error(context, '部分数据暂时无法同步，已保存在本机，联网后会继续同步');
+      } else if (afterSync.pendingCount > 0) {
+        AppNotice.info(context, '部分数据仍在等待同步，联网后会自动重试');
       } else {
         AppNotice.success(context, '同步完成');
       }
