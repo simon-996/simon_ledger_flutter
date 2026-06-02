@@ -10,6 +10,7 @@ import 'package:simon_ledger_flutter/core/repositories/ledger_repository.dart';
 import 'package:simon_ledger_flutter/core/repositories/person_repository.dart';
 import 'package:simon_ledger_flutter/core/repositories/transaction_repository.dart';
 import 'package:simon_ledger_flutter/core/services/sync_coordinator.dart';
+import 'package:simon_ledger_flutter/core/services/sync_overview_service.dart';
 
 void main() {
   setUp(() {
@@ -154,6 +155,24 @@ void main() {
       expect(result.error, isNotNull);
     },
   );
+
+  test('does not mark ledger sync successful when result has error', () async {
+    final calls = <String>[];
+    final database = DatabaseService();
+    final coordinator = SyncCoordinator(
+      ledgerRepository: _LedgerRepository(calls),
+      personRepository: _PersonRepository(calls),
+      transactionRepository: _TransactionErrorResultRepository(calls),
+      database: database,
+      now: () => DateTime.utc(2026, 6, 1, 8),
+    );
+
+    final result = await coordinator.syncLedger('remote-ledger', force: true);
+    final overview = await SyncOverviewService(database).read();
+
+    expect(result.error, isNotNull);
+    expect(overview.lastSuccessfulSyncAt, isNull);
+  });
 
   test('reuses an in-flight sync for the same ledger', () async {
     final calls = <String>[];

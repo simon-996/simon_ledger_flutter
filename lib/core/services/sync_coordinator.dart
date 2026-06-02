@@ -183,6 +183,10 @@ class SyncCoordinator {
       final result = await _transactionRepository.syncPendingTransactions(
         ledgerUuid,
       );
+      if (result.error != null) {
+        _ledgerRetryAfter[ledgerUuid] = _now().add(_retryDelay);
+        return result;
+      }
       _ledgerRetryAfter.remove(ledgerUuid);
       await _syncOverviewService.markSuccessfulSync(_now());
       return result;
