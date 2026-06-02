@@ -11,6 +11,7 @@ import '../../../../core/services/sync_overview_service.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../ledgers/presentation/providers/ledger_provider.dart';
 import '../../../ledgers/presentation/providers/ledger_stats_provider.dart';
+import '../../../ledgers/presentation/widgets/ledger_invite_widgets.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
 import '../../../transactions/presentation/providers/transaction_provider.dart';
 import '../providers/auth_provider.dart';
@@ -497,7 +498,7 @@ class _JoinInviteCard extends ConsumerStatefulWidget {
 
 class _JoinInviteCardState extends ConsumerState<_JoinInviteCard> {
   final _codeController = TextEditingController();
-  bool _joining = false;
+  bool _previewing = false;
 
   @override
   void dispose() {
@@ -509,8 +510,8 @@ class _JoinInviteCardState extends ConsumerState<_JoinInviteCard> {
   Widget build(BuildContext context) {
     return AppSectionCard(
       child: _AccountLoadingOverlay(
-        loading: _joining,
-        message: '正在加入共享账本',
+        loading: _previewing,
+        message: '正在读取邀请信息',
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -523,13 +524,13 @@ class _JoinInviteCardState extends ConsumerState<_JoinInviteCard> {
                 labelText: '邀请码',
                 prefixIcon: Icon(Icons.key_outlined),
               ),
-              onSubmitted: (_) => _join(),
+              onSubmitted: (_) => _preview(),
             ),
             const SizedBox(height: 12),
             FilledButton.icon(
-              onPressed: _joining ? null : _join,
-              icon: const Icon(Icons.group_add_outlined),
-              label: Text(_joining ? '加入中' : '加入账本'),
+              onPressed: _previewing ? null : _preview,
+              icon: const Icon(Icons.search_rounded),
+              label: Text(_previewing ? '读取中' : '查看邀请'),
             ),
           ],
         ),
@@ -537,17 +538,32 @@ class _JoinInviteCardState extends ConsumerState<_JoinInviteCard> {
     );
   }
 
-  Future<void> _join() async {
-    if (_joining) return;
-    final code = _codeController.text.trim();
+  Future<void> _preview() async {
+    if (_previewing) return;
+    final code = _codeController.text.trim().toUpperCase();
     if (code.isEmpty) {
       AppNotice.error(context, '请输入邀请码');
       return;
     }
 
-    setState(() => _joining = true);
+    setState(() => _previewing = true);
     try {
-      final invite = await ref.read(inviteRepositoryProvider).join(code);
+      final repository = ref.read(inviteRepositoryProvider);
+      final invite = await repository.preview(code);
+      if (!mounted) return;
+      setState(() => _previewing = false);
+      final joined = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (context) => LedgerInvitePreviewSheet(
+          invite: invite,
+          onJoin: () async {
+            await repository.join(code);
+          },
+        ),
+      );
+      if (joined != true) return;
       ref.invalidate(ledgerNotifierProvider);
       ref.invalidate(ledgerStatsProvider);
       if (!mounted) return;
@@ -557,11 +573,11 @@ class _JoinInviteCardState extends ConsumerState<_JoinInviteCard> {
       if (!mounted) return;
       AppNotice.error(
         context,
-        FriendlyError.message(error, fallback: '加入账本失败，请检查邀请码后重试。'),
+        FriendlyError.message(error, fallback: '读取邀请失败，请检查邀请码后重试。'),
       );
     } finally {
       if (mounted) {
-        setState(() => _joining = false);
+        setState(() => _previewing = false);
       }
     }
   }

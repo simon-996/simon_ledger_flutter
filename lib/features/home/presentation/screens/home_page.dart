@@ -12,6 +12,7 @@ import '../../../auth/presentation/widgets/account_tab.dart';
 import '../../../transactions/presentation/widgets/bookkeeping_tab.dart';
 import '../../../ledgers/presentation/widgets/ledger_list_tab.dart';
 import '../../../ledgers/presentation/widgets/create_ledger_sheet.dart';
+import '../../../ledgers/presentation/widgets/ledger_invite_widgets.dart';
 import '../../../ledgers/presentation/screens/ledger_dashboard_page.dart';
 import '../../../ledgers/presentation/providers/ledger_provider.dart';
 import '../../../ledgers/presentation/providers/ledger_stats_provider.dart';
@@ -332,29 +333,20 @@ class _HomePageState extends ConsumerState<HomePage> {
           '邀请你加入 Simon Ledger 账本“${ledger.name}”。\n'
           '邀请码：${invite.code}\n'
           '登录后在“我的”页面输入邀请码即可加入。';
-      await Clipboard.setData(ClipboardData(text: text));
-      if (!mounted) return;
       await showDialog<void>(
         context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('分享账本'),
-          content: SelectableText(text),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('关闭'),
-            ),
-            FilledButton.icon(
-              onPressed: () async {
-                await Clipboard.setData(ClipboardData(text: text));
-                if (context.mounted) {
-                  AppNotice.success(context, '邀请文本已复制');
-                }
-              },
-              icon: const Icon(Icons.copy_rounded),
-              label: const Text('复制邀请文本'),
-            ),
-          ],
+        builder: (dialogContext) => LedgerInviteShareDialog(
+          invite: invite,
+          onCopyCode: () async {
+            await Clipboard.setData(ClipboardData(text: invite.code));
+            if (!dialogContext.mounted) return;
+            AppNotice.success(dialogContext, '邀请码已复制');
+          },
+          onCopyText: () async {
+            await Clipboard.setData(ClipboardData(text: text));
+            if (!dialogContext.mounted) return;
+            AppNotice.success(dialogContext, '邀请文本已复制');
+          },
         ),
       );
     } catch (error) {
