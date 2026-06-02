@@ -23,17 +23,19 @@ class SyncOverview {
     required this.transactionPendingCount,
     required this.failedCount,
     required this.localOnlyLedgerCount,
-    this.failures = const [],
+    List<SyncFailureItem>? failures,
     this.lastSuccessfulSyncAt,
-  });
+  }) : _failures = failures;
 
   final int ledgerPendingCount;
   final int personPendingCount;
   final int transactionPendingCount;
   final int failedCount;
   final int localOnlyLedgerCount;
-  final List<SyncFailureItem> failures;
+  final List<SyncFailureItem>? _failures;
   final DateTime? lastSuccessfulSyncAt;
+
+  List<SyncFailureItem> get failures => _failures ?? const [];
 
   int get pendingCount =>
       ledgerPendingCount + personPendingCount + transactionPendingCount;

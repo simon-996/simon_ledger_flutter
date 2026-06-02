@@ -7,6 +7,19 @@ import 'package:simon_ledger_flutter/core/models/transaction_record.dart';
 import 'package:simon_ledger_flutter/core/services/sync_overview_service.dart';
 
 void main() {
+  test('SyncOverview treats a missing failure list as empty', () {
+    const overview = SyncOverview(
+      ledgerPendingCount: 0,
+      personPendingCount: 0,
+      transactionPendingCount: 0,
+      failedCount: 0,
+      localOnlyLedgerCount: 0,
+      failures: null,
+    );
+
+    expect(overview.failures, isEmpty);
+  });
+
   test('SyncOverviewService summarizes local pending writes', () async {
     SharedPreferences.setMockInitialValues({});
     final database = DatabaseService();
