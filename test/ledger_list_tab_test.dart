@@ -130,9 +130,9 @@ void main() {
 
     expect(find.byTooltip('分享邀请'), findsOneWidget);
     expect(find.text('本地已同步'), findsNothing);
-    expect(find.text('仅本地'), findsNothing);
-    expect(find.text('等待上传'), findsNothing);
-    expect(find.text('已同步至云端'), findsOneWidget);
+    expect(find.text('本机'), findsNothing);
+    expect(find.text('待同步'), findsNothing);
+    expect(find.text('已同步'), findsOneWidget);
   });
 
   testWidgets('ledger share action animates card and blocks repeated taps', (

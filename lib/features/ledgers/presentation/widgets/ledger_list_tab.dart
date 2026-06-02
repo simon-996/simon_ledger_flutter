@@ -366,11 +366,15 @@ class _LedgerCard extends StatelessWidget {
                                         _MetaChip(
                                           text: ledger.baseCurrencyCode,
                                         ),
-                                        if (isLocalUnsynced)
+                                        if (hasPendingSync)
+                                          _SyncMetaChip(
+                                            status: syncStatusValue!,
+                                          )
+                                        else if (isLocalUnsynced)
                                           _MetaChip(
                                             text: ledger.shouldUploadToCloud
-                                                ? '等待上传'
-                                                : '仅本地',
+                                                ? '待同步'
+                                                : '本机',
                                             emphasized:
                                                 ledger.shouldUploadToCloud,
                                           ),
@@ -385,13 +389,9 @@ class _LedgerCard extends StatelessWidget {
                                             tooltip:
                                                 '1 ${ledger.baseCurrencyCode} = ${ledger.exchangeRateToCNY.toStringAsFixed(4)} CNY',
                                           ),
-                                        if (hasPendingSync)
-                                          _SyncMetaChip(
-                                            status: syncStatusValue!,
-                                          )
-                                        else if (isCloudSynced)
+                                        if (isCloudSynced)
                                           const _MetaChip(
-                                            text: '已同步至云端',
+                                            text: '已同步',
                                             tooltip: '账本数据已同步至云端',
                                           ),
                                       ],
@@ -739,10 +739,10 @@ class _SyncMetaChip extends StatelessWidget {
       if (status.transactionPendingCount > 0)
         '流水 ${status.transactionPendingCount}',
     ].join(' · ');
-    final text = failed
-        ? '失败 ${status.failedCount}/${status.pendingCount}'
-        : '待同步 ${status.pendingCount}';
-    final tooltip = failed ? '同步失败：$details' : '待同步：$details';
+    final text = failed ? '同步失败' : '待同步 ${status.pendingCount}';
+    final tooltip = failed
+        ? '同步失败 ${status.failedCount}/${status.pendingCount}：$details'
+        : '待同步：$details';
 
     return Tooltip(
       message: tooltip,
