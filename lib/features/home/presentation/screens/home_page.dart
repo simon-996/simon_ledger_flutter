@@ -35,6 +35,8 @@ class _HomePageState extends ConsumerState<HomePage> {
     final ledgersAsyncValue = ref.watch(ledgerNotifierProvider);
     final ledgerStatsAsyncValue = ref.watch(ledgerStatsProvider);
     final isAccountTab = _currentIndex == 3;
+    final showLedgerFab =
+        _currentIndex == 1 && ledgersAsyncValue.valueOrNull?.isNotEmpty == true;
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
@@ -113,7 +115,7 @@ class _HomePageState extends ConsumerState<HomePage> {
             child: FadeTransition(opacity: animation, child: child),
           );
         },
-        child: _currentIndex == 1
+        child: showLedgerFab
             ? FloatingActionButton.extended(
                 key: const ValueKey('ledger-fab'),
                 onPressed: _openCreateLedger,
