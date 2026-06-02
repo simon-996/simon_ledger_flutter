@@ -303,22 +303,16 @@ class _HomePageState extends ConsumerState<HomePage> {
 
       final error = result.error;
       if (error != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              FriendlyError.message(error, fallback: '部分数据同步失败，请稍后重试。'),
-            ),
-          ),
+        AppNotice.error(
+          context,
+          FriendlyError.message(error, fallback: '部分数据同步失败，请稍后重试。'),
         );
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            result.synced > 0 ? '同步完成，已上传 ${result.synced} 条流水' : '同步完成',
-          ),
-        ),
+      AppNotice.success(
+        context,
+        result.synced > 0 ? '同步完成，已上传 ${result.synced} 条流水' : '同步完成',
       );
     } catch (error) {
       _showWriteError(error);
@@ -351,9 +345,7 @@ class _HomePageState extends ConsumerState<HomePage> {
               onPressed: () async {
                 await Clipboard.setData(ClipboardData(text: text));
                 if (context.mounted) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(const SnackBar(content: Text('邀请文本已复制')));
+                  AppNotice.success(context, '邀请文本已复制');
                 }
               },
               icon: const Icon(Icons.copy_rounded),
@@ -429,26 +421,19 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   void _showSelfJoinError(Ledger ledger, Object error) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          FriendlyError.message(error, fallback: '账本已创建，但暂时无法加入本人，请稍后重试。'),
-        ),
-        duration: const Duration(seconds: 8),
-        action: SnackBarAction(
-          label: '重试',
-          onPressed: () => _addSelfToLedgerWithRetry(ledger),
-        ),
-      ),
+    AppNotice.error(
+      context,
+      FriendlyError.message(error, fallback: '账本已创建，但暂时无法加入本人，请稍后重试。'),
+      actionLabel: '重试',
+      onAction: () => _addSelfToLedgerWithRetry(ledger),
     );
   }
 
   void _showWriteError(Object error) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(FriendlyError.message(error, fallback: '操作失败，请稍后重试。')),
-      ),
+    AppNotice.error(
+      context,
+      FriendlyError.message(error, fallback: '操作失败，请稍后重试。'),
     );
   }
 }

@@ -129,15 +129,12 @@ class _SyncCenterCardState extends ConsumerState<_SyncCenterCard> {
           .read(syncCoordinatorProvider)
           .syncAllPending(force: true);
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(synced ? '同步完成' : '暂无需要同步的数据')));
+      AppNotice.success(context, synced ? '同步完成' : '暂无需要同步的数据');
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(FriendlyError.message(error, fallback: '同步失败，请稍后重试。')),
-        ),
+      AppNotice.error(
+        context,
+        FriendlyError.message(error, fallback: '同步失败，请稍后重试。'),
       );
     } finally {
       ref.invalidate(syncOverviewProvider);
@@ -485,9 +482,7 @@ class _JoinInviteCardState extends ConsumerState<_JoinInviteCard> {
     if (_joining) return;
     final code = _codeController.text.trim();
     if (code.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('请输入邀请码')));
+      AppNotice.error(context, '请输入邀请码');
       return;
     }
 
@@ -498,17 +493,12 @@ class _JoinInviteCardState extends ConsumerState<_JoinInviteCard> {
       ref.invalidate(ledgerStatsProvider);
       if (!mounted) return;
       _codeController.clear();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('已加入账本：${invite.ledgerName}')));
+      AppNotice.success(context, '已加入账本：${invite.ledgerName}');
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            FriendlyError.message(error, fallback: '加入账本失败，请检查邀请码后重试。'),
-          ),
-        ),
+      AppNotice.error(
+        context,
+        FriendlyError.message(error, fallback: '加入账本失败，请检查邀请码后重试。'),
       );
     } finally {
       if (mounted) {
@@ -559,9 +549,7 @@ class _UnifiedProfileCardState extends ConsumerState<_UnifiedProfileCard> {
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('账户资料已同步')));
+        AppNotice.success(context, '账户资料已同步');
       });
     });
 
@@ -681,12 +669,9 @@ class _UnifiedProfileCardState extends ConsumerState<_UnifiedProfileCard> {
       _showSyncResult(syncResult);
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            FriendlyError.message(error, fallback: '账户资料保存失败，请稍后重试。'),
-          ),
-        ),
+      AppNotice.error(
+        context,
+        FriendlyError.message(error, fallback: '账户资料保存失败，请稍后重试。'),
       );
     } finally {
       if (widget.isSignedIn) {
@@ -736,18 +721,15 @@ class _UnifiedProfileCardState extends ConsumerState<_UnifiedProfileCard> {
   }
 
   void _showSyncResult(ProfileSyncResult result) {
-    final messenger = ScaffoldMessenger.of(context);
     switch (result.status) {
       case ProfileSyncStatus.synced:
-        messenger.showSnackBar(const SnackBar(content: Text('账户资料已同步')));
+        AppNotice.success(context, '账户资料已同步');
       case ProfileSyncStatus.queued:
-        messenger.showSnackBar(
-          const SnackBar(content: Text('账户资料已保存，联网后会继续同步')),
-        );
+        AppNotice.info(context, '账户资料已保存，联网后会继续同步');
       case ProfileSyncStatus.localOnly:
-        messenger.showSnackBar(const SnackBar(content: Text('账户资料已保存')));
+        AppNotice.success(context, '账户资料已保存');
       case ProfileSyncStatus.skipped:
-        messenger.showSnackBar(const SnackBar(content: Text('暂无需要同步的资料')));
+        AppNotice.info(context, '暂无需要同步的资料');
       case ProfileSyncStatus.stale:
         break;
     }
@@ -877,9 +859,7 @@ class _ProfileDialogState extends State<_ProfileDialog> {
   void _submit() {
     final nickname = _nicknameController.text.trim();
     if (nickname.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('请输入昵称')));
+      AppNotice.error(context, '请输入昵称');
       return;
     }
 
@@ -979,9 +959,7 @@ class _CloudImportCardState extends ConsumerState<_CloudImportCard> {
     ref.invalidate(transactionNotifierProvider);
     ref.invalidate(ledgerStatsProvider);
     ref.invalidate(syncOverviewProvider);
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('本地账本导入完成')));
+    AppNotice.success(context, '本地账本导入完成');
   }
 }
 

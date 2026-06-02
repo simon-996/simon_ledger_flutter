@@ -136,6 +136,7 @@ class TransactionDetailSheet extends ConsumerWidget {
                       color: colorScheme.error,
                     ),
                     onPressed: () async {
+                      final noticeContext = context;
                       final confirm = await showDialog<bool>(
                         context: context,
                         builder: (context) => AlertDialog(
@@ -158,7 +159,6 @@ class TransactionDetailSheet extends ConsumerWidget {
                       );
 
                       if (confirm == true && context.mounted) {
-                        final messenger = ScaffoldMessenger.of(context);
                         Navigator.pop(context);
                         try {
                           await ref
@@ -169,16 +169,12 @@ class TransactionDetailSheet extends ConsumerWidget {
                               )
                               .deleteTransaction(transaction.uuid);
                         } catch (e) {
-                          messenger.showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                FriendlyError.message(
-                                  e,
-                                  fallback: '删除失败，请稍后重试。',
-                                ),
-                              ),
-                            ),
-                          );
+                          if (noticeContext.mounted) {
+                            AppNotice.error(
+                              noticeContext,
+                              FriendlyError.message(e, fallback: '删除失败，请稍后重试。'),
+                            );
+                          }
                         }
                       }
                     },

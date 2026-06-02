@@ -295,16 +295,12 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
 
     final amount = double.tryParse(_amountController.text);
     if (amount == null || amount <= 0) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('请输入大于 0 的有效金额')));
+      AppNotice.error(context, '请输入大于 0 的有效金额');
       return;
     }
 
     if (_selectedPersonIds.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('请至少选择一个参与人员')));
+      AppNotice.error(context, '请至少选择一个参与人员');
       return;
     }
 
@@ -313,9 +309,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     final ledgerId = _selectedLedgerUuid;
 
     if (ledgerId == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('请先选择一个所属账本')));
+      AppNotice.error(context, '请先选择一个所属账本');
       return;
     }
 
@@ -348,10 +342,9 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
           .addTransaction(record);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(FriendlyError.message(e, fallback: '保存失败，请稍后重试。')),
-        ),
+      AppNotice.error(
+        context,
+        FriendlyError.message(e, fallback: '保存失败，请稍后重试。'),
       );
       return;
     } finally {

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../network/friendly_error.dart';
@@ -9,6 +11,274 @@ class AppMotion {
 
   static const Curve standard = Curves.easeOutCubic;
   static const Curve emphasized = Curves.easeOutQuart;
+}
+
+enum AppNoticeType { success, info, error }
+
+class AppNotice {
+  AppNotice._();
+
+  static OverlayEntry? _currentEntry;
+  static Timer? _dismissTimer;
+
+  static void success(
+    BuildContext context,
+    String message, {
+    String? actionLabel,
+    VoidCallback? onAction,
+  }) {
+    show(
+      context,
+      message,
+      type: AppNoticeType.success,
+      actionLabel: actionLabel,
+      onAction: onAction,
+    );
+  }
+
+  static void info(
+    BuildContext context,
+    String message, {
+    String? actionLabel,
+    VoidCallback? onAction,
+  }) {
+    show(
+      context,
+      message,
+      type: AppNoticeType.info,
+      actionLabel: actionLabel,
+      onAction: onAction,
+    );
+  }
+
+  static void error(
+    BuildContext context,
+    String message, {
+    String? actionLabel,
+    VoidCallback? onAction,
+  }) {
+    show(
+      context,
+      message,
+      type: AppNoticeType.error,
+      actionLabel: actionLabel,
+      onAction: onAction,
+    );
+  }
+
+  static void show(
+    BuildContext context,
+    String message, {
+    AppNoticeType type = AppNoticeType.info,
+    String? actionLabel,
+    VoidCallback? onAction,
+    Duration? duration,
+  }) {
+    if (!context.mounted) return;
+    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    if (overlay == null) return;
+
+    ScaffoldMessenger.maybeOf(context)?.clearSnackBars();
+    dismiss();
+
+    late final OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (context) {
+        return _AppNoticeOverlay(
+          message: message,
+          type: type,
+          actionLabel: actionLabel,
+          onAction: onAction == null
+              ? null
+              : () {
+                  dismiss();
+                  onAction();
+                },
+          onClose: dismiss,
+        );
+      },
+    );
+
+    _currentEntry = entry;
+    overlay.insert(entry);
+    _dismissTimer = Timer(
+      duration ?? _durationFor(type, hasAction: actionLabel != null),
+      dismiss,
+    );
+  }
+
+  static void dismiss() {
+    _dismissTimer?.cancel();
+    _dismissTimer = null;
+    _currentEntry?.remove();
+    _currentEntry = null;
+  }
+
+  static Duration _durationFor(AppNoticeType type, {required bool hasAction}) {
+    if (hasAction) return const Duration(seconds: 4);
+    return switch (type) {
+      AppNoticeType.success => const Duration(milliseconds: 1400),
+      AppNoticeType.info => const Duration(milliseconds: 1800),
+      AppNoticeType.error => const Duration(milliseconds: 3200),
+    };
+  }
+}
+
+class _AppNoticeOverlay extends StatelessWidget {
+  const _AppNoticeOverlay({
+    required this.message,
+    required this.type,
+    required this.onClose,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final String message;
+  final AppNoticeType type;
+  final VoidCallback onClose;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final config = _config(colorScheme);
+
+    return Positioned(
+      top: 0,
+      left: 0,
+      right: 0,
+      child: SafeArea(
+        bottom: false,
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: 1),
+              duration: AppMotion.normal,
+              curve: AppMotion.emphasized,
+              builder: (context, value, child) {
+                return Opacity(
+                  opacity: value,
+                  child: Transform.translate(
+                    offset: Offset(0, -10 + 10 * value),
+                    child: Transform.scale(
+                      scale: 0.98 + value * 0.02,
+                      child: child,
+                    ),
+                  ),
+                );
+              },
+              child: Material(
+                color: Colors.transparent,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 560),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: colorScheme.surfaceContainerLowest,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: config.borderColor),
+                      boxShadow: [
+                        BoxShadow(
+                          color: colorScheme.shadow.withValues(alpha: 0.12),
+                          blurRadius: 22,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 30,
+                            height: 30,
+                            decoration: BoxDecoration(
+                              color: config.color.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Icon(
+                              config.icon,
+                              size: 18,
+                              color: config.color,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Flexible(
+                            child: Text(
+                              message,
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(
+                                    color: colorScheme.onSurface,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                          ),
+                          if (actionLabel != null && onAction != null) ...[
+                            const SizedBox(width: 8),
+                            TextButton(
+                              onPressed: onAction,
+                              child: Text(actionLabel!),
+                            ),
+                          ],
+                          const SizedBox(width: 2),
+                          IconButton(
+                            tooltip: '关闭',
+                            visualDensity: VisualDensity.compact,
+                            icon: const Icon(Icons.close_rounded, size: 18),
+                            onPressed: onClose,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  _AppNoticeVisualConfig _config(ColorScheme colorScheme) {
+    return switch (type) {
+      AppNoticeType.success => _AppNoticeVisualConfig(
+        icon: Icons.check_rounded,
+        color: colorScheme.primary,
+        borderColor: colorScheme.primary.withValues(alpha: 0.28),
+      ),
+      AppNoticeType.info => _AppNoticeVisualConfig(
+        icon: Icons.info_outline_rounded,
+        color: colorScheme.tertiary,
+        borderColor: colorScheme.tertiary.withValues(alpha: 0.28),
+      ),
+      AppNoticeType.error => _AppNoticeVisualConfig(
+        icon: Icons.error_outline_rounded,
+        color: colorScheme.error,
+        borderColor: colorScheme.error.withValues(alpha: 0.3),
+      ),
+    };
+  }
+}
+
+class _AppNoticeVisualConfig {
+  const _AppNoticeVisualConfig({
+    required this.icon,
+    required this.color,
+    required this.borderColor,
+  });
+
+  final IconData icon;
+  final Color color;
+  final Color borderColor;
 }
 
 class AppAnimatedEntry extends StatefulWidget {

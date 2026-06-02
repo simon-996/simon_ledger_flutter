@@ -69,16 +69,12 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
   void _saveChanges() async {
     final amount = double.tryParse(_amountController.text);
     if (amount == null || amount <= 0) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('请输入有效金额')));
+      AppNotice.error(context, '请输入有效金额');
       return;
     }
 
     if (_selectedPersonIds.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('请至少选择一个参与人员')));
+      AppNotice.error(context, '请至少选择一个参与人员');
       return;
     }
 
@@ -113,10 +109,9 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
       widget.transaction.note = oldNote;
       widget.transaction.personUuids = oldPersonUuids;
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(FriendlyError.message(e, fallback: '保存失败，请稍后重试。')),
-        ),
+      AppNotice.error(
+        context,
+        FriendlyError.message(e, fallback: '保存失败，请稍后重试。'),
       );
       return;
     }

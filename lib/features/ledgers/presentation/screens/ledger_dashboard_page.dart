@@ -143,9 +143,7 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
       final hasAccess = await ImageSaver.ensureAccess();
       if (!hasAccess) {
         if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('需要相册权限才能保存图片')));
+          AppNotice.error(context, '需要相册权限才能保存图片');
           setState(() {
             _isGeneratingImage = false;
           });
@@ -206,51 +204,36 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              ImageSaver.canOpenSavedImage
-                  ? (pages.length > 1 ? '已保存 ${pages.length} 张到相册' : '长图已保存到相册')
-                  : (pages.length > 1
-                        ? '已下载 ${pages.length} 张分享图片'
-                        : '分享图片已下载'),
-            ),
-            duration: const Duration(seconds: 6),
-            action: ImageSaver.canOpenSavedImage
-                ? SnackBarAction(
-                    label: '打开相册',
-                    onPressed: () async {
-                      try {
-                        if (firstImageName != null) {
-                          await GalleryLauncher.openImageByName(firstImageName);
-                        } else {
-                          await GalleryLauncher.openGalleryApp();
-                        }
-                      } catch (e) {
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              FriendlyError.message(
-                                e,
-                                fallback: '无法打开相册，请手动查看。',
-                              ),
-                            ),
-                          ),
-                        );
-                      }
-                    },
-                  )
-                : null,
-          ),
+        AppNotice.success(
+          context,
+          ImageSaver.canOpenSavedImage
+              ? (pages.length > 1 ? '已保存 ${pages.length} 张到相册' : '长图已保存到相册')
+              : (pages.length > 1 ? '已下载 ${pages.length} 张分享图片' : '分享图片已下载'),
+          actionLabel: ImageSaver.canOpenSavedImage ? '打开相册' : null,
+          onAction: ImageSaver.canOpenSavedImage
+              ? () async {
+                  try {
+                    if (firstImageName != null) {
+                      await GalleryLauncher.openImageByName(firstImageName);
+                    } else {
+                      await GalleryLauncher.openGalleryApp();
+                    }
+                  } catch (e) {
+                    if (!mounted) return;
+                    AppNotice.error(
+                      context,
+                      FriendlyError.message(e, fallback: '无法打开相册，请手动查看。'),
+                    );
+                  }
+                }
+              : null,
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(FriendlyError.message(e, fallback: '生成长图失败，请稍后重试。')),
-          ),
+        AppNotice.error(
+          context,
+          FriendlyError.message(e, fallback: '生成长图失败，请稍后重试。'),
         );
       }
     } finally {

@@ -221,9 +221,7 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
       ..._draftPeople,
     ].any((item) => item.uuid != currentUuid && item.name.trim() == name);
     if (!exists) return true;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('手动人员名称不能重复')));
+    AppNotice.error(context, '手动人员名称不能重复');
     return false;
   }
 
@@ -233,10 +231,9 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
 
   void _showWriteError(Object error) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(FriendlyError.message(error, fallback: '操作失败，请稍后重试。')),
-      ),
+    AppNotice.error(
+      context,
+      FriendlyError.message(error, fallback: '操作失败，请稍后重试。'),
     );
   }
 
@@ -477,9 +474,7 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
 
     final rate = double.tryParse(_rateController.text);
     if (rate == null || rate <= 0) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('请输入大于 0 的有效汇率')));
+      AppNotice.error(context, '请输入大于 0 的有效汇率');
       return;
     }
 
