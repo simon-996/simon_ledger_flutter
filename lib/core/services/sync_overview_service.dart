@@ -2,6 +2,20 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../database/database_service.dart';
 
+enum SyncFailureType { ledger, person, transaction }
+
+class SyncFailureItem {
+  const SyncFailureItem({
+    required this.type,
+    required this.title,
+    required this.errorText,
+  });
+
+  final SyncFailureType type;
+  final String title;
+  final String errorText;
+}
+
 class SyncOverview {
   const SyncOverview({
     required this.ledgerPendingCount,
@@ -9,6 +23,7 @@ class SyncOverview {
     required this.transactionPendingCount,
     required this.failedCount,
     required this.localOnlyLedgerCount,
+    this.failures = const [],
     this.lastSuccessfulSyncAt,
   });
 
@@ -17,6 +32,7 @@ class SyncOverview {
   final int transactionPendingCount;
   final int failedCount;
   final int localOnlyLedgerCount;
+  final List<SyncFailureItem> failures;
   final DateTime? lastSuccessfulSyncAt;
 
   int get pendingCount =>
@@ -57,6 +73,29 @@ class SyncOverviewService {
         )
         .toList();
     final prefs = await SharedPreferences.getInstance();
+    final failures = [
+      for (final ledger in pendingLedgers)
+        if (_hasError(ledger.syncError))
+          SyncFailureItem(
+            type: SyncFailureType.ledger,
+            title: '账本 · ${ledger.name}',
+            errorText: ledger.syncError!,
+          ),
+      for (final person in pendingPeople)
+        if (_hasError(person.syncError))
+          SyncFailureItem(
+            type: SyncFailureType.person,
+            title: '人员 · ${person.name}',
+            errorText: person.syncError!,
+          ),
+      for (final transaction in pendingTransactions)
+        if (_hasError(transaction.syncError))
+          SyncFailureItem(
+            type: SyncFailureType.transaction,
+            title: '流水 · ${transaction.category}',
+            errorText: transaction.syncError!,
+          ),
+    ];
 
     return SyncOverview(
       ledgerPendingCount: pendingLedgers.length,
@@ -65,12 +104,8 @@ class SyncOverviewService {
       localOnlyLedgerCount: ledgers
           .where((ledger) => ledger.isLocalOnly)
           .length,
-      failedCount:
-          pendingLedgers.where((ledger) => _hasError(ledger.syncError)).length +
-          pendingPeople.where((person) => _hasError(person.syncError)).length +
-          pendingTransactions
-              .where((transaction) => _hasError(transaction.syncError))
-              .length,
+      failedCount: failures.length,
+      failures: failures,
       lastSuccessfulSyncAt: DateTime.tryParse(
         prefs.getString(_lastSuccessfulSyncAtKey) ?? '',
       ),

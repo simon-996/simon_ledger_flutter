@@ -11,6 +11,20 @@ void main() {
     failedCount: 0,
     localOnlyLedgerCount: 1,
   );
+  const failedOverview = SyncOverview(
+    ledgerPendingCount: 0,
+    personPendingCount: 0,
+    transactionPendingCount: 1,
+    failedCount: 1,
+    localOnlyLedgerCount: 0,
+    failures: [
+      SyncFailureItem(
+        type: SyncFailureType.transaction,
+        title: '流水 · 餐饮',
+        errorText: 'SocketException: offline',
+      ),
+    ],
+  );
 
   testWidgets('sync center shows progress and disables actions while syncing', (
     tester,
@@ -59,5 +73,28 @@ void main() {
     await tester.tap(find.text('立即同步'));
 
     expect(syncCalls, 1);
+  });
+
+  testWidgets('sync center shows friendly failure details', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AccountSyncCenterContent(
+            overview: failedOverview,
+            syncing: false,
+            onRefresh: () {},
+            onSync: () {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('查看失败详情'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('同步失败详情'), findsOneWidget);
+    expect(find.text('流水 · 餐饮'), findsOneWidget);
+    expect(find.text('网络恢复后会自动重试。'), findsOneWidget);
+    expect(find.textContaining('SocketException'), findsNothing);
   });
 }

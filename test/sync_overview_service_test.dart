@@ -44,6 +44,9 @@ void main() {
     expect(overview.transactionPendingCount, 1);
     expect(overview.pendingCount, 3);
     expect(overview.failedCount, 1);
+    expect(overview.failures.single.type, SyncFailureType.transaction);
+    expect(overview.failures.single.title, '流水 · 餐饮');
+    expect(overview.failures.single.errorText, 'offline');
   });
 
   test('SyncOverviewService stores the last successful sync time', () async {

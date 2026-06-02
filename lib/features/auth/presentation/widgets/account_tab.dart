@@ -225,6 +225,19 @@ class AccountSyncCenterContent extends StatelessWidget {
               color: colorScheme.onSurfaceVariant,
             ),
           ),
+          if (overview.failures.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: syncing
+                    ? null
+                    : () => _showSyncFailures(context, overview.failures),
+                icon: const Icon(Icons.error_outline_rounded),
+                label: const Text('查看失败详情'),
+              ),
+            ),
+          ],
           if (hasPending) ...[
             const SizedBox(height: 12),
             FilledButton.icon(
@@ -246,6 +259,50 @@ class AccountSyncCenterContent extends StatelessWidget {
     final clock =
         '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
     return '上次同步 $date $clock';
+  }
+
+  Future<void> _showSyncFailures(
+    BuildContext context,
+    List<SyncFailureItem> failures,
+  ) {
+    return showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+            children: [
+              Text('同步失败详情', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 4),
+              Text(
+                '数据仍保存在本机，联网后可以再次同步。',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 12),
+              for (final failure in failures)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(_failureIcon(failure.type)),
+                  title: Text(failure.title),
+                  subtitle: Text(FriendlyError.syncMessage(failure.errorText)),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  IconData _failureIcon(SyncFailureType type) {
+    return switch (type) {
+      SyncFailureType.ledger => Icons.account_balance_wallet_outlined,
+      SyncFailureType.person => Icons.person_outline_rounded,
+      SyncFailureType.transaction => Icons.receipt_long_outlined,
+    };
   }
 }
 
