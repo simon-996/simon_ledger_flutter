@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/di/providers.dart';
 import '../../../../core/models/ledger.dart';
@@ -21,14 +20,22 @@ import '../../../statistics/presentation/widgets/statistics_tab.dart';
 import '../../../transactions/presentation/providers/transaction_provider.dart';
 
 class HomePage extends ConsumerStatefulWidget {
-  const HomePage({super.key});
+  const HomePage({super.key, this.initialIndex = 0});
+
+  final int initialIndex;
 
   @override
   ConsumerState<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends ConsumerState<HomePage> {
-  int _currentIndex = 0;
+  late int _currentIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -329,24 +336,9 @@ class _HomePageState extends ConsumerState<HomePage> {
           .read(inviteRepositoryProvider)
           .createInvite(ledger.remoteSyncUuid);
       if (!mounted) return;
-      final text =
-          '邀请你加入 Simon Ledger 账本“${ledger.name}”。\n'
-          '邀请码：${invite.code}\n'
-          '登录后在“我的”页面输入邀请码即可加入。';
-      await showDialog<void>(
-        context: context,
-        builder: (dialogContext) => LedgerInviteShareDialog(
-          invite: invite,
-          onCopyCode: () async {
-            await Clipboard.setData(ClipboardData(text: invite.code));
-            if (!dialogContext.mounted) return;
-            AppNotice.success(dialogContext, '邀请码已复制');
-          },
-          onCopyText: () async {
-            await Clipboard.setData(ClipboardData(text: text));
-            if (!dialogContext.mounted) return;
-            AppNotice.success(dialogContext, '邀请文本已复制');
-          },
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (context) => LedgerInviteSharePage(invite: invite),
         ),
       );
     } catch (error) {

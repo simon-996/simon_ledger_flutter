@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/config/avatar_config.dart';
@@ -8,6 +9,7 @@ import '../../../../core/network/friendly_error.dart';
 import '../../../../core/services/cloud_import_service.dart';
 import '../../../../core/services/profile_sync_service.dart';
 import '../../../../core/services/sync_overview_service.dart';
+import '../../../../core/services/invite_link_service.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../ledgers/presentation/providers/ledger_provider.dart';
 import '../../../ledgers/presentation/providers/ledger_stats_provider.dart';
@@ -526,7 +528,15 @@ class _JoinInviteCardState extends ConsumerState<_JoinInviteCard> {
               ),
               onSubmitted: (_) => _preview(),
             ),
-            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: _previewing ? null : _pasteAndPreview,
+                icon: const Icon(Icons.content_paste_rounded),
+                label: const Text('粘贴并查看'),
+              ),
+            ),
+            const SizedBox(height: 4),
             FilledButton.icon(
               onPressed: _previewing ? null : _preview,
               icon: const Icon(Icons.search_rounded),
@@ -548,27 +558,12 @@ class _JoinInviteCardState extends ConsumerState<_JoinInviteCard> {
 
     setState(() => _previewing = true);
     try {
-      final repository = ref.read(inviteRepositoryProvider);
-      final invite = await repository.preview(code);
-      if (!mounted) return;
       setState(() => _previewing = false);
-      final joined = await showModalBottomSheet<bool>(
-        context: context,
-        isScrollControlled: true,
-        showDragHandle: true,
-        builder: (context) => LedgerInvitePreviewSheet(
-          invite: invite,
-          onJoin: () async {
-            await repository.join(code);
-          },
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (context) => LedgerInviteJoinPage(code: code),
         ),
       );
-      if (joined != true) return;
-      ref.invalidate(ledgerNotifierProvider);
-      ref.invalidate(ledgerStatsProvider);
-      if (!mounted) return;
-      _codeController.clear();
-      AppNotice.success(context, '已加入账本：${invite.ledgerName}');
     } catch (error) {
       if (!mounted) return;
       AppNotice.error(
@@ -580,6 +575,18 @@ class _JoinInviteCardState extends ConsumerState<_JoinInviteCard> {
         setState(() => _previewing = false);
       }
     }
+  }
+
+  Future<void> _pasteAndPreview() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    if (!mounted) return;
+    final code = InviteLinks.codeFromText(data?.text ?? '');
+    if (code == null) {
+      AppNotice.info(context, '剪贴板中没有可识别的账本邀请');
+      return;
+    }
+    _codeController.text = code;
+    await _preview();
   }
 }
 

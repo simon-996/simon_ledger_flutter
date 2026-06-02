@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:simon_ledger_flutter/core/di/providers.dart';
+import 'package:simon_ledger_flutter/core/network/token_store.dart';
 import 'package:simon_ledger_flutter/core/repositories/invite_repository.dart';
 import 'package:simon_ledger_flutter/features/ledgers/presentation/widgets/ledger_invite_widgets.dart';
 
@@ -11,8 +14,8 @@ void main() {
     ledgerBaseCurrencyCode: 'USD',
     ledgerMemberCount: 2,
     ledgerMembers: [
-      LedgerInviteMember(nickname: 'Simon', avatar: '😎', role: 'owner'),
-      LedgerInviteMember(nickname: '小王', avatar: '🙂', role: 'editor'),
+      const LedgerInviteMember(nickname: 'Simon', avatar: '😎', role: 'owner'),
+      const LedgerInviteMember(nickname: '小王', avatar: '🙂', role: 'editor'),
     ],
     role: 'editor',
     maxUses: 20,
@@ -22,56 +25,51 @@ void main() {
     disabled: false,
   );
 
-  testWidgets('share dialog emphasizes code and exposes both copy actions', (
+  testWidgets('share page emphasizes code and exposes three copy actions', (
     tester,
   ) async {
-    var copiedCode = false;
-    var copiedText = false;
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: LedgerInviteShareDialog(
-            invite: invite,
-            onCopyCode: () async => copiedCode = true,
-            onCopyText: () async => copiedText = true,
-          ),
-        ),
-      ),
+      MaterialApp(home: LedgerInviteSharePage(invite: invite)),
     );
 
+    expect(find.byType(AlertDialog), findsNothing);
     expect(find.text('ABCD1234'), findsOneWidget);
     expect(find.text('旅行账本'), findsOneWidget);
     expect(find.text('USD 美元'), findsOneWidget);
     expect(find.text('Simon'), findsOneWidget);
-
-    await tester.tap(find.text('复制邀请码'));
-    await tester.pump();
-    expect(copiedCode, isTrue);
-
-    await tester.tap(find.text('复制邀请文本'));
-    await tester.pump();
-    expect(copiedText, isTrue);
+    expect(find.text('复制邀请码'), findsOneWidget);
+    expect(find.text('复制邀请链接'), findsOneWidget);
+    expect(find.text('复制完整邀请'), findsOneWidget);
   });
 
-  testWidgets('preview sheet joins only after explicit confirmation', (
+  testWidgets('join page joins only after explicit confirmation', (
     tester,
   ) async {
     var joinCalls = 0;
     await tester.pumpWidget(
-      MaterialApp(
-        home: Builder(
-          builder: (context) => Scaffold(
-            body: FilledButton(
-              onPressed: () {
-                showModalBottomSheet<bool>(
-                  context: context,
-                  builder: (context) => LedgerInvitePreviewSheet(
-                    invite: invite,
-                    onJoin: () async => joinCalls += 1,
-                  ),
-                );
-              },
-              child: const Text('打开'),
+      ProviderScope(
+        overrides: [
+          authTokenProvider.overrideWith(
+            (ref) async => const AuthToken(name: 'satoken', value: 'token'),
+          ),
+        ],
+        child: MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: FilledButton(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<bool>(
+                      builder: (context) => LedgerInviteJoinPage(
+                        code: invite.code,
+                        initialInvite: invite,
+                        onJoin: () async => joinCalls += 1,
+                      ),
+                    ),
+                  );
+                },
+                child: const Text('打开'),
+              ),
             ),
           ),
         ),
@@ -87,5 +85,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(joinCalls, 1);
     expect(find.text('确认加入共享账本'), findsNothing);
+    await tester.pump(const Duration(seconds: 2));
   });
 }

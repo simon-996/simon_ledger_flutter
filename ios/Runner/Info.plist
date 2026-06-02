@@ -18,6 +18,8 @@
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	<key>FlutterDeepLinkingEnabled</key>
+	<false/>
 	<key>CFBundleName</key>
 	<string>simon_ledger_flutter</string>
 	<key>CFBundlePackageType</key>

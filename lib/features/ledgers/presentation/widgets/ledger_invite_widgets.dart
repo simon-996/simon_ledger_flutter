@@ -1,134 +1,82 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/config/avatar_config.dart';
+import '../../../../core/di/providers.dart';
 import '../../../../core/network/friendly_error.dart';
 import '../../../../core/repositories/invite_repository.dart';
+import '../../../../core/services/invite_link_service.dart';
+import '../../../../core/widgets/app_components.dart';
+import '../../presentation/providers/ledger_provider.dart';
+import '../../presentation/providers/ledger_stats_provider.dart';
 
-class LedgerInviteShareDialog extends StatelessWidget {
-  const LedgerInviteShareDialog({
-    super.key,
-    required this.invite,
-    required this.onCopyCode,
-    required this.onCopyText,
-  });
+class LedgerInviteSharePage extends StatelessWidget {
+  const LedgerInviteSharePage({super.key, required this.invite});
 
   final LedgerInvite invite;
-  final Future<void> Function() onCopyCode;
-  final Future<void> Function() onCopyText;
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      icon: const Icon(Icons.group_add_outlined),
-      title: const Text('邀请加入账本'),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 440),
-        child: SingleChildScrollView(
-          child: LedgerInviteOverview(invite: invite, emphasizeCode: true),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('关闭'),
-        ),
-        OutlinedButton.icon(
-          onPressed: onCopyCode,
-          icon: const Icon(Icons.key_rounded),
-          label: const Text('复制邀请码'),
-        ),
-        FilledButton.icon(
-          onPressed: onCopyText,
-          icon: const Icon(Icons.copy_rounded),
-          label: const Text('复制邀请文本'),
-        ),
-      ],
+    final text = InviteLinks.shareText(
+      ledgerName: invite.ledgerName,
+      code: invite.code,
     );
-  }
-}
-
-class LedgerInvitePreviewSheet extends StatefulWidget {
-  const LedgerInvitePreviewSheet({
-    super.key,
-    required this.invite,
-    required this.onJoin,
-  });
-
-  final LedgerInvite invite;
-  final Future<void> Function() onJoin;
-
-  @override
-  State<LedgerInvitePreviewSheet> createState() =>
-      _LedgerInvitePreviewSheetState();
-}
-
-class _LedgerInvitePreviewSheetState extends State<LedgerInvitePreviewSheet> {
-  bool _joining = false;
-  String? _errorText;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final unavailableReason = widget.invite.unavailableReason;
-
-    return SafeArea(
-      child: FractionallySizedBox(
-        heightFactor: 0.9,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('确认加入共享账本', style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 4),
-              Text(
-                '请核对账本信息，确认后才会加入。',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 18),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      LedgerInviteOverview(invite: widget.invite),
-                      if (unavailableReason != null) ...[
-                        const SizedBox(height: 14),
-                        _InviteMessage(
-                          icon: Icons.error_outline_rounded,
-                          message: unavailableReason,
-                          color: colorScheme.error,
-                        ),
-                      ],
-                      if (_errorText != null) ...[
-                        const SizedBox(height: 14),
-                        _InviteMessage(
-                          icon: Icons.info_outline_rounded,
-                          message: _errorText!,
-                          color: colorScheme.error,
-                        ),
-                      ],
-                    ],
+    return Scaffold(
+      appBar: AppBar(title: const Text('分享账本')),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
+              children: [
+                Text(
+                  '邀请好友加入',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
+                const SizedBox(height: 4),
+                Text(
+                  '对方可以先查看账本信息，再决定是否加入。',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                LedgerInviteOverview(invite: invite, emphasizeCode: true),
+              ],
+            ),
+          ),
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.end,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () => _copy(context, invite.code, '邀请码已复制'),
+                icon: const Icon(Icons.key_rounded),
+                label: const Text('复制邀请码'),
               ),
-              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: () => _copy(
+                  context,
+                  InviteLinks.urlForCode(invite.code),
+                  '邀请链接已复制',
+                ),
+                icon: const Icon(Icons.link_rounded),
+                label: const Text('复制邀请链接'),
+              ),
               FilledButton.icon(
-                onPressed: !widget.invite.isUsable || _joining ? null : _join,
-                icon: _joining
-                    ? const SizedBox.square(
-                        dimension: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.group_add_outlined),
-                label: Text(_joining ? '正在加入' : '确认加入'),
-              ),
-              const SizedBox(height: 4),
-              TextButton(
-                onPressed: _joining ? null : () => Navigator.of(context).pop(),
-                child: const Text('暂不加入'),
+                onPressed: () => _copy(context, text, '邀请文本已复制'),
+                icon: const Icon(Icons.copy_rounded),
+                label: const Text('复制完整邀请'),
               ),
             ],
           ),
@@ -137,21 +85,216 @@ class _LedgerInvitePreviewSheetState extends State<LedgerInvitePreviewSheet> {
     );
   }
 
+  Future<void> _copy(BuildContext context, String text, String notice) async {
+    InviteClipboardMemory.ignore(invite.code);
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!context.mounted) return;
+    AppNotice.success(context, notice);
+  }
+}
+
+class LedgerInviteJoinPage extends ConsumerStatefulWidget {
+  const LedgerInviteJoinPage({
+    super.key,
+    required this.code,
+    this.initialInvite,
+    this.onJoin,
+  });
+
+  final String code;
+  final LedgerInvite? initialInvite;
+  final Future<void> Function()? onJoin;
+
+  @override
+  ConsumerState<LedgerInviteJoinPage> createState() =>
+      _LedgerInviteJoinPageState();
+}
+
+class _LedgerInviteJoinPageState extends ConsumerState<LedgerInviteJoinPage> {
+  LedgerInvite? _invite;
+  String? _loadErrorText;
+  bool _loading = false;
+  bool _joining = false;
+  String? _joinErrorText;
+
+  @override
+  void initState() {
+    super.initState();
+    _invite = widget.initialInvite;
+    if (_invite == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final invite = _invite;
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('账本邀请')),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: _buildBody(context, invite),
+          ),
+        ),
+      ),
+      bottomNavigationBar: invite == null ? null : _buildBottomAction(invite),
+    );
+  }
+
+  Widget _buildBody(BuildContext context, LedgerInvite? invite) {
+    if (_loading || (invite == null && _loadErrorText == null)) {
+      return const AppLoadingState(
+        title: '正在读取邀请',
+        message: '获取共享账本信息',
+        icon: Icons.mark_email_read_outlined,
+      );
+    }
+    if (invite == null) {
+      return AppEmptyState(
+        icon: Icons.link_off_rounded,
+        title: '暂时无法读取邀请',
+        message: _loadErrorText ?? '请稍后重试。',
+        action: FilledButton.icon(
+          onPressed: _load,
+          icon: const Icon(Icons.refresh_rounded),
+          label: const Text('重新加载'),
+        ),
+      );
+    }
+
+    final colorScheme = Theme.of(context).colorScheme;
+    final unavailableReason = invite.unavailableReason;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+      children: [
+        Text(
+          '确认加入共享账本',
+          style: Theme.of(
+            context,
+          ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '请核对账本信息，确认后才会加入。',
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 20),
+        LedgerInviteOverview(invite: invite),
+        if (unavailableReason != null) ...[
+          const SizedBox(height: 14),
+          _InviteMessage(
+            icon: Icons.error_outline_rounded,
+            message: unavailableReason,
+            color: colorScheme.error,
+          ),
+        ],
+        if (_joinErrorText != null) ...[
+          const SizedBox(height: 14),
+          _InviteMessage(
+            icon: Icons.info_outline_rounded,
+            message: _joinErrorText!,
+            color: colorScheme.error,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildBottomAction(LedgerInvite invite) {
+    final token = ref.watch(authTokenProvider).valueOrNull;
+    final isSignedIn = token != null && token.isValid;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: FilledButton.icon(
+          onPressed: !invite.isUsable || _joining
+              ? null
+              : isSignedIn
+              ? _join
+              : _openLogin,
+          icon: _joining
+              ? const SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Icon(
+                  isSignedIn ? Icons.group_add_outlined : Icons.login_rounded,
+                ),
+          label: Text(
+            _joining
+                ? '正在加入'
+                : isSignedIn
+                ? '确认加入'
+                : '登录后加入',
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _load() async {
+    if (_loading) return;
+    setState(() {
+      _loading = true;
+      _loadErrorText = null;
+    });
+    try {
+      final invite = await ref
+          .read(inviteRepositoryProvider)
+          .preview(widget.code);
+      if (!mounted) return;
+      setState(() => _invite = invite);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadErrorText = FriendlyError.message(
+          error,
+          fallback: '读取邀请失败，请检查网络或邀请码后重试。',
+        );
+      });
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _openLogin() {
+    AppNotice.info(context, '请先登录，完成后返回此页面继续加入');
+    Navigator.of(context).pushNamed('/account');
+  }
+
   Future<void> _join() async {
     if (_joining) return;
     setState(() {
       _joining = true;
-      _errorText = null;
+      _joinErrorText = null;
     });
     try {
-      await widget.onJoin();
+      await (widget.onJoin?.call() ??
+          ref.read(inviteRepositoryProvider).join(widget.code));
+      ref.invalidate(ledgerNotifierProvider);
+      ref.invalidate(ledgerStatsProvider);
+      ref.invalidate(syncOverviewProvider);
       if (!mounted) return;
-      Navigator.of(context).pop(true);
+      AppNotice.success(context, '已加入账本：${_invite?.ledgerName ?? ''}');
+      final navigator = Navigator.of(context);
+      if (navigator.canPop()) {
+        navigator.pop(true);
+      } else {
+        navigator.pushReplacementNamed('/');
+      }
     } catch (error) {
       if (!mounted) return;
       setState(() {
         _joining = false;
-        _errorText = FriendlyError.message(error, fallback: '加入账本失败，请稍后重试。');
+        _joinErrorText = FriendlyError.message(
+          error,
+          fallback: '加入账本失败，请稍后重试。',
+        );
       });
     }
   }
