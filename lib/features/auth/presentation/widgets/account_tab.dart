@@ -177,24 +177,11 @@ class AccountSyncCenterContent extends StatelessWidget {
         children: [
           AppSectionHeader(
             title: '同步中心',
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  hasPending
-                      ? Icons.sync_problem_rounded
-                      : Icons.cloud_done_outlined,
-                  color: hasPending
-                      ? colorScheme.tertiary
-                      : colorScheme.primary,
-                ),
-                const SizedBox(width: 4),
-                IconButton(
-                  tooltip: '刷新同步状态',
-                  onPressed: syncing ? null : onRefresh,
-                  icon: const Icon(Icons.refresh_rounded),
-                ),
-              ],
+            trailing: Icon(
+              hasPending
+                  ? Icons.sync_problem_rounded
+                  : Icons.cloud_done_outlined,
+              color: hasPending ? colorScheme.tertiary : colorScheme.primary,
             ),
           ),
           const SizedBox(height: 12),

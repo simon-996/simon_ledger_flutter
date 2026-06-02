@@ -31,10 +31,7 @@ void main() {
     expect(find.text('正在同步数据'), findsOneWidget);
     expect(find.text('同步中'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
-    expect(
-      tester.widget<IconButton>(find.byType(IconButton)).onPressed,
-      isNull,
-    );
+    expect(find.byTooltip('刷新同步状态'), findsNothing);
     expect(
       tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
       isNull,
@@ -44,7 +41,6 @@ void main() {
   testWidgets('sync center exposes refresh and sync actions when idle', (
     tester,
   ) async {
-    var refreshCalls = 0;
     var syncCalls = 0;
     await tester.pumpWidget(
       MaterialApp(
@@ -52,17 +48,16 @@ void main() {
           body: AccountSyncCenterContent(
             overview: overview,
             syncing: false,
-            onRefresh: () => refreshCalls += 1,
+            onRefresh: () {},
             onSync: () => syncCalls += 1,
           ),
         ),
       ),
     );
 
-    await tester.tap(find.byTooltip('刷新同步状态'));
+    expect(find.byTooltip('刷新同步状态'), findsNothing);
     await tester.tap(find.text('立即同步'));
 
-    expect(refreshCalls, 1);
     expect(syncCalls, 1);
   });
 }
