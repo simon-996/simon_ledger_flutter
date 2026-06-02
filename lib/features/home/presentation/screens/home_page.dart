@@ -310,10 +310,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         return;
       }
 
-      AppNotice.success(
-        context,
-        result.synced > 0 ? '同步完成，已上传 ${result.synced} 条流水' : '同步完成',
-      );
+      AppNotice.success(context, '同步完成');
     } catch (error) {
       _showWriteError(error);
     }

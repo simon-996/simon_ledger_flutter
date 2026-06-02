@@ -174,6 +174,72 @@ void main() {
     expect(overview.lastSuccessfulSyncAt, isNull);
   });
 
+  test('reports failed sync when pending person keeps sync error', () async {
+    final calls = <String>[];
+    final database = DatabaseService();
+    await database.saveLedger(
+      Ledger()
+        ..uuid = '1234567890abcdef1234567890abcdef'
+        ..name = 'remote ledger'
+        ..baseCurrencyCode = 'CNY',
+    );
+    await database.savePerson(
+      Person()
+        ..uuid = 'local-person'
+        ..name = '成员'
+        ..pendingLedgerUuid = '1234567890abcdef1234567890abcdef'
+        ..pendingSync = true,
+    );
+    final coordinator = SyncCoordinator(
+      ledgerRepository: _LedgerRepository(calls),
+      personRepository: _FailingStatePersonRepository(database, calls),
+      transactionRepository: _TransactionRepository(calls),
+      database: database,
+      now: () => DateTime.utc(2026, 6, 1, 8),
+    );
+
+    final result = await coordinator.syncAllPendingResult(force: true);
+    final overview = await SyncOverviewService(database).read();
+
+    expect(result.attempted, isTrue);
+    expect(result.hasError, isTrue);
+    expect(result.failedCount, 1);
+    expect(overview.lastSuccessfulSyncAt, isNull);
+  });
+
+  test('reports incomplete sync when pending person remains queued', () async {
+    final calls = <String>[];
+    final database = DatabaseService();
+    await database.saveLedger(
+      Ledger()
+        ..uuid = '1234567890abcdef1234567890abcdef'
+        ..name = 'remote ledger'
+        ..baseCurrencyCode = 'CNY',
+    );
+    await database.savePerson(
+      Person()
+        ..uuid = 'local-person'
+        ..name = '成员'
+        ..pendingLedgerUuid = '1234567890abcdef1234567890abcdef'
+        ..pendingSync = true,
+    );
+    final coordinator = SyncCoordinator(
+      ledgerRepository: _LedgerRepository(calls),
+      personRepository: _PendingStatePersonRepository(calls),
+      transactionRepository: _TransactionRepository(calls),
+      database: database,
+      now: () => DateTime.utc(2026, 6, 1, 8),
+    );
+
+    final result = await coordinator.syncAllPendingResult(force: true);
+    final overview = await SyncOverviewService(database).read();
+
+    expect(result.attempted, isTrue);
+    expect(result.hasError, isTrue);
+    expect(result.failedCount, 1);
+    expect(overview.lastSuccessfulSyncAt, isNull);
+  });
+
   test('reuses an in-flight sync for the same ledger', () async {
     final calls = <String>[];
     final transactionRepository = _BlockingTransactionRepository(calls);
@@ -280,6 +346,26 @@ class _PersonRepository implements PersonRepository {
 
   @override
   Future<void> deletePerson(String uuid, {String? ledgerUuid}) async {}
+}
+
+class _FailingStatePersonRepository extends _PersonRepository {
+  const _FailingStatePersonRepository(this.database, super.calls);
+
+  final DatabaseService database;
+
+  @override
+  Future<void> syncPendingPeople(String ledgerUuid) async {
+    calls.add('people:$ledgerUuid');
+    final people = await database.getAllPeople(includeDeleted: true);
+    for (final person in people) {
+      if (person.pendingLedgerUuid != ledgerUuid) continue;
+      await database.savePerson(person..syncError = 'offline');
+    }
+  }
+}
+
+class _PendingStatePersonRepository extends _PersonRepository {
+  const _PendingStatePersonRepository(super.calls);
 }
 
 class _TransactionRepository implements TransactionRepository {

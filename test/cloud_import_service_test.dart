@@ -118,7 +118,10 @@ class _LedgerRepository implements LedgerRepository {
     if (ledgerUuid == null) return;
     final ledgers = await database.getAllLedgers();
     final ledger = ledgers.where((ledger) => ledger.uuid == ledgerUuid).single;
-    ledger.syncedRemoteUuid = _remoteLedgerUuid;
+    ledger
+      ..syncedRemoteUuid = _remoteLedgerUuid
+      ..cloudPolicy = LedgerCloudPolicy.cloudManaged
+      ..pendingSync = false;
     await database.saveLedger(ledger);
   }
 

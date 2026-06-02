@@ -30,6 +30,20 @@ class SyncAllPendingResult {
   bool get hasError => failedCount > 0 || error != null;
 }
 
+class _LedgerPendingAudit {
+  const _LedgerPendingAudit({
+    required this.pendingCount,
+    required this.failedCount,
+    this.error,
+  });
+
+  final int pendingCount;
+  final int failedCount;
+  final Object? error;
+
+  bool get hasPending => pendingCount > 0;
+}
+
 class SyncCoordinator {
   SyncCoordinator({
     required LedgerRepository ledgerRepository,
@@ -128,14 +142,20 @@ class SyncCoordinator {
           syncLedgerWrites: false,
         );
         syncedCount += result.synced;
+        final audit = await _auditLedgerPendingState(ledgerUuid);
         if (result.error != null) {
           failedCount += 1;
           firstError ??= result.error;
+        } else if (audit.hasPending) {
+          failedCount += audit.failedCount > 0 ? audit.failedCount : 1;
+          firstError ??= audit.error ?? StateError('部分数据仍在等待同步。');
         }
       }
-      _allPendingRetryAfter = null;
       if (firstError == null) {
+        _allPendingRetryAfter = null;
         await _syncOverviewService.markSuccessfulSync(_now());
+      } else {
+        _allPendingRetryAfter = _now().add(_retryDelay);
       }
       return SyncAllPendingResult(
         attemptedCount: ledgerUuids.length,
@@ -183,9 +203,13 @@ class SyncCoordinator {
       final result = await _transactionRepository.syncPendingTransactions(
         ledgerUuid,
       );
-      if (result.error != null) {
+      final audit = await _auditLedgerPendingState(ledgerUuid);
+      if (result.error != null || audit.hasPending) {
         _ledgerRetryAfter[ledgerUuid] = _now().add(_retryDelay);
-        return result;
+        return TransactionSyncResult(
+          synced: result.synced,
+          error: result.error ?? audit.error ?? StateError('部分数据仍在等待同步。'),
+        );
       }
       _ledgerRetryAfter.remove(ledgerUuid);
       await _syncOverviewService.markSuccessfulSync(_now());
@@ -195,6 +219,59 @@ class SyncCoordinator {
       rethrow;
     }
   }
+
+  Future<_LedgerPendingAudit> _auditLedgerPendingState(
+    String ledgerUuid,
+  ) async {
+    final ledgers = await _database.getAllLedgers(includeDeleted: true);
+    final ledger = ledgers.where((item) => item.uuid == ledgerUuid).firstOrNull;
+    final ledgerPending =
+        ledger != null &&
+        !ledger.isLocalOnly &&
+        (ledger.pendingSync || ledger.shouldUploadToCloud);
+    var pendingCount = ledgerPending ? 1 : 0;
+    var failedCount = ledgerPending && _hasError(ledger.syncError) == true
+        ? 1
+        : 0;
+    Object? firstError = _hasError(ledger?.syncError)
+        ? ledger!.syncError
+        : null;
+
+    final people = await _database.getAllPeople(includeDeleted: true);
+    for (final person in people) {
+      if (!person.pendingSync || person.pendingLedgerUuid != ledgerUuid) {
+        continue;
+      }
+      pendingCount += 1;
+      if (_hasError(person.syncError)) {
+        failedCount += 1;
+        firstError ??= person.syncError;
+      }
+    }
+
+    final transactions = await _database.getTransactionsForLedger(
+      ledgerUuid,
+      includeDeleted: true,
+    );
+    for (final transaction in transactions) {
+      if (!transaction.pendingSync) {
+        continue;
+      }
+      pendingCount += 1;
+      if (_hasError(transaction.syncError)) {
+        failedCount += 1;
+        firstError ??= transaction.syncError;
+      }
+    }
+
+    return _LedgerPendingAudit(
+      pendingCount: pendingCount,
+      failedCount: failedCount,
+      error: firstError,
+    );
+  }
+
+  bool _hasError(String? error) => error != null && error.isNotEmpty;
 
   bool _canRetry(DateTime? retryAfter) {
     return retryAfter == null || !_now().isBefore(retryAfter);
