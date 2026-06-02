@@ -236,6 +236,13 @@ class _HomePageState extends ConsumerState<HomePage> {
         oldPersonUuids,
         result.personIds,
       );
+      ref.invalidate(ledgerSyncStatusProvider(ledger.uuid));
+      ref.invalidate(syncOverviewProvider);
+      if (!mounted) return;
+      AppNotice.success(
+        context,
+        ledger.isLocalOnly ? '账本修改已保存' : '账本修改已保存在本机，将自动同步',
+      );
     } catch (e) {
       ledger.name = oldName;
       ledger.baseCurrencyCode = oldBaseCurrencyCode;

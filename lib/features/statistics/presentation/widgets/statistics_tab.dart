@@ -539,6 +539,7 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                               isExpense: t.type == 0,
                               syncStatus: _syncStatusFor(t),
                               syncError: t.syncError,
+                              compactSyncStatus: true,
                               onTap: () {
                                 showModalBottomSheet(
                                   context: context,

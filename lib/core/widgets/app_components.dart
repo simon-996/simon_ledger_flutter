@@ -1107,6 +1107,7 @@ class AppTransactionTile extends StatelessWidget {
     this.selected = false,
     this.syncStatus,
     this.syncError,
+    this.compactSyncStatus = false,
     this.onTap,
     this.onLongPress,
   });
@@ -1124,6 +1125,7 @@ class AppTransactionTile extends StatelessWidget {
   final bool selected;
   final TransactionSyncStatus? syncStatus;
   final String? syncError;
+  final bool compactSyncStatus;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
@@ -1197,6 +1199,7 @@ class AppTransactionTile extends StatelessWidget {
                           _TransactionSyncChip(
                             status: syncStatus!,
                             errorText: syncError,
+                            compact: compactSyncStatus,
                           ),
                         ],
                       ],
@@ -1296,10 +1299,15 @@ class AppTransactionTile extends StatelessWidget {
 enum TransactionSyncStatus { pending, failed }
 
 class _TransactionSyncChip extends StatelessWidget {
-  const _TransactionSyncChip({required this.status, this.errorText});
+  const _TransactionSyncChip({
+    required this.status,
+    this.errorText,
+    this.compact = false,
+  });
 
   final TransactionSyncStatus status;
   final String? errorText;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -1325,14 +1333,16 @@ class _TransactionSyncChip extends StatelessWidget {
               size: 12,
               color: color,
             ),
-            const SizedBox(width: 3),
-            Text(
-              failed ? '失败' : '待同步',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: color,
-                fontWeight: FontWeight.w700,
+            if (!compact) ...[
+              const SizedBox(width: 3),
+              Text(
+                failed ? '失败' : '待同步',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),
