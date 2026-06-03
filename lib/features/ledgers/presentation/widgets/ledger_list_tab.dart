@@ -45,6 +45,13 @@ class LedgerListTab extends ConsumerStatefulWidget {
 class _LedgerListTabState extends ConsumerState<LedgerListTab> {
   bool _autoSyncing = false;
   final Map<String, _LedgerCardOperation> _ledgerOperations = {};
+  final _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -75,16 +82,73 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
       );
     }
 
+    final searchKeyword = _searchController.text.trim().toLowerCase();
+    final searching = searchKeyword.isNotEmpty;
+    final visibleLedgers = searching
+        ? widget.ledgers
+              .where(
+                (ledger) =>
+                    ledger.name.trim().toLowerCase().contains(searchKeyword),
+              )
+              .toList()
+        : widget.ledgers;
+    final searchField = _LedgerSearchField(
+      controller: _searchController,
+      resultCount: visibleLedgers.length,
+      totalCount: widget.ledgers.length,
+      onChanged: (_) => setState(() {}),
+      onClear: () {
+        _searchController.clear();
+        setState(() {});
+      },
+    );
+
+    if (visibleLedgers.isEmpty) {
+      return Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppTheme.pagePadding,
+              12,
+              AppTheme.pagePadding,
+              8,
+            ),
+            child: searchField,
+          ),
+          Expanded(
+            child: AppEmptyState(
+              icon: Icons.search_off_rounded,
+              title: '没有找到匹配账本',
+              message: '换个名称试试。',
+              action: OutlinedButton.icon(
+                onPressed: () {
+                  _searchController.clear();
+                  setState(() {});
+                },
+                icon: const Icon(Icons.close_rounded),
+                label: const Text('清除搜索'),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
     return ReorderableListView.builder(
       buildDefaultDragHandles: false,
+      header: Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: searchField,
+      ),
       padding: const EdgeInsets.fromLTRB(
         AppTheme.pagePadding,
         12,
         AppTheme.pagePadding,
         96,
       ),
-      itemCount: widget.ledgers.length,
+      itemCount: visibleLedgers.length,
       onReorderItem: (oldIndex, newIndex) {
+        if (searching) return;
         ref
             .read(ledgerNotifierProvider.notifier)
             .reorderLedgers(oldIndex, newIndex);
@@ -108,7 +172,7 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
         );
       },
       itemBuilder: (context, index) {
-        final ledger = widget.ledgers[index];
+        final ledger = visibleLedgers[index];
         final stats =
             widget.ledgerStats[ledger.uuid] ??
             {'expense': 0.0, 'income': 0.0, 'balance': 0.0};
@@ -139,7 +203,7 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
               onEdit: () => widget.onEdit(ledger),
               onShare: () => _shareLedger(ledger),
               onSync: () => _syncLedger(ledger),
-              canReorder: true,
+              canReorder: !searching,
               canShare:
                   isCloudMode &&
                   ledger.isCloudManaged &&
@@ -270,6 +334,59 @@ enum _LedgerCardOperation { share, sync, delete }
 bool _isLeaveLedgerAction(Ledger ledger) {
   final role = ledger.role?.trim().toLowerCase();
   return !ledger.isLocalOnly && role != null && role != 'owner';
+}
+
+class _LedgerSearchField extends StatelessWidget {
+  const _LedgerSearchField({
+    required this.controller,
+    required this.resultCount,
+    required this.totalCount,
+    required this.onChanged,
+    required this.onClear,
+  });
+
+  final TextEditingController controller;
+  final int resultCount;
+  final int totalCount;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final keyword = controller.text.trim();
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: TextField(
+        controller: controller,
+        onChanged: onChanged,
+        textInputAction: TextInputAction.search,
+        decoration: InputDecoration(
+          hintText: '搜索账本',
+          prefixIcon: const Icon(Icons.search_rounded),
+          suffixIcon: keyword.isEmpty
+              ? null
+              : IconButton(
+                  tooltip: '清除搜索',
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: onClear,
+                ),
+          suffixText: keyword.isEmpty ? null : '$resultCount/$totalCount',
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 4,
+            vertical: 14,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _DeleteLedgerConfirmPanel extends StatefulWidget {

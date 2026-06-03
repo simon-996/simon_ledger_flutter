@@ -201,6 +201,71 @@ void main() {
     expect(find.text('正在生成邀请'), findsNothing);
   });
 
+  testWidgets('ledger list filters cached ledgers locally by name', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final database = DatabaseService();
+    final travelLedger = Ledger()
+      ..uuid = 'travel-ledger'
+      ..name = '旅行账本'
+      ..baseCurrencyCode = 'CNY';
+    final homeLedger = Ledger()
+      ..uuid = 'home-ledger'
+      ..name = '家庭账本'
+      ..baseCurrencyCode = 'CNY';
+    await database.saveLedger(travelLedger);
+    await database.saveLedger(homeLedger);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(database)],
+        child: MaterialApp(
+          home: Scaffold(
+            body: LedgerListTab(
+              ledgers: [travelLedger, homeLedger],
+              ledgerStats: const {},
+              onTap: (_) {},
+              onEdit: (_) {},
+              onShare: (_) async {},
+              onDelete: (_) async {},
+              onCreate: () {},
+              onSync: (_) async {},
+              autoSyncEnabled: false,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('搜索账本'), findsOneWidget);
+    expect(find.text('旅行账本'), findsOneWidget);
+    expect(find.text('家庭账本'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), '旅行');
+    await tester.pump();
+
+    expect(find.text('旅行账本'), findsOneWidget);
+    expect(find.text('家庭账本'), findsNothing);
+    expect(find.text('1/2'), findsOneWidget);
+    expect(find.byTooltip('排序'), findsNothing);
+
+    await tester.enterText(find.byType(TextField), '不存在');
+    await tester.pump();
+
+    expect(find.text('没有找到匹配账本'), findsOneWidget);
+    expect(find.text('清除搜索'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('清除搜索'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('旅行账本'), findsOneWidget);
+    expect(find.text('家庭账本'), findsOneWidget);
+  });
+
   testWidgets(
     'ledger card shows one compact people list without group labels',
     (tester) async {
