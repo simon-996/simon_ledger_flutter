@@ -84,6 +84,7 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
   }
 
   Future<void> _showLedgerPicker() async {
+    final currentLedger = _effectiveLedger();
     final selected = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
@@ -96,7 +97,7 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
             separatorBuilder: (context, index) => const SizedBox(height: 8),
             itemBuilder: (context, index) {
               final ledger = widget.ledgers[index];
-              final selected = ledger.uuid == _selectedLedgerUuid;
+              final selected = ledger.uuid == currentLedger?.uuid;
               return _LedgerPickerTile(
                 ledger: ledger,
                 selected: selected,
@@ -118,12 +119,20 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
     unawaited(
       StatisticsPreference.write(
         StatisticsPreference(
-          ledgerUuid: _selectedLedgerUuid,
+          ledgerUuid: _effectiveLedger()?.uuid ?? _selectedLedgerUuid,
           timeFilter: _timeFilter.name,
           transactionType: _transactionType,
           displayCurrency: _displayCurrency,
         ),
       ),
+    );
+  }
+
+  Ledger? _effectiveLedger() {
+    if (widget.ledgers.isEmpty) return null;
+    return widget.ledgers.firstWhere(
+      (ledger) => ledger.uuid == _selectedLedgerUuid,
+      orElse: () => widget.ledgers.first,
     );
   }
 
@@ -187,26 +196,15 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
       );
     }
 
-    if (_selectedLedgerUuid == null) {
-      return const AppLoadingState(
-        title: '正在准备统计',
-        message: '读取账本和筛选条件',
-        icon: Icons.bar_chart_outlined,
-      );
-    }
-
-    final currentLedger = widget.ledgers.firstWhere(
-      (l) => l.uuid == _selectedLedgerUuid,
-      orElse: () => widget.ledgers.first,
-    );
+    final currentLedger = _effectiveLedger()!;
 
     final transactionsAsyncValue = ref.watch(
-      transactionNotifierProvider(_selectedLedgerUuid!),
+      transactionNotifierProvider(currentLedger.uuid),
     );
     final peopleAsyncValue = ref.watch(
       personNotifierProvider(
         includeDeleted: true,
-        ledgerUuid: _selectedLedgerUuid,
+        ledgerUuid: currentLedger.uuid,
       ),
     );
 
@@ -936,30 +934,63 @@ class _StatsFilterPanel extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           _ResponsiveControls(
-            first: SegmentedButton<int>(
-              showSelectedIcon: false,
-              segments: const [
-                ButtonSegment(
-                  value: 0,
-                  icon: Icon(Icons.remove_rounded),
-                  label: Text('支出'),
-                ),
-                ButtonSegment(
-                  value: 1,
-                  icon: Icon(Icons.add_rounded),
-                  label: Text('收入'),
-                ),
-              ],
-              selected: {transactionType},
-              onSelectionChanged: (selection) => onTypeChanged(selection.first),
+            first: _StatsControlGroup(
+              label: '收支类型',
+              child: SegmentedButton<int>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(
+                    value: 0,
+                    icon: Icon(Icons.remove_rounded),
+                    label: Text('支出'),
+                  ),
+                  ButtonSegment(
+                    value: 1,
+                    icon: Icon(Icons.add_rounded),
+                    label: Text('收入'),
+                  ),
+                ],
+                selected: {transactionType},
+                onSelectionChanged: (selection) =>
+                    onTypeChanged(selection.first),
+              ),
             ),
-            second: _TimeFilterChips(
-              selected: timeFilter,
-              onChanged: onTimeChanged,
+            second: _StatsControlGroup(
+              label: '时间范围',
+              child: _TimeFilterChips(
+                selected: timeFilter,
+                onChanged: onTimeChanged,
+              ),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _StatsControlGroup extends StatelessWidget {
+  const _StatsControlGroup({required this.label, required this.child});
+
+  final String label;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 8),
+        child,
+      ],
     );
   }
 }
@@ -979,19 +1010,36 @@ class _TimeFilterChips extends StatelessWidget {
       (TimeFilter.all, '全部'),
     ];
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Wrap(
-        spacing: 8,
-        children: items.map((item) {
-          final active = selected == item.$1;
-          return ChoiceChip(
-            label: Text(item.$2),
-            selected: active,
-            onSelected: (_) => onChanged(item.$1),
-          );
-        }).toList(),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const spacing = 8.0;
+        final compact = constraints.maxWidth < 360;
+        final availableWidth = constraints.maxWidth > spacing
+            ? constraints.maxWidth - spacing
+            : 0.0;
+        final itemWidth = compact ? availableWidth / 2 : null;
+        return Wrap(
+          spacing: spacing,
+          runSpacing: 8,
+          children: items.map((item) {
+            final active = selected == item.$1;
+            final chip = ChoiceChip(
+              showCheckmark: false,
+              label: Center(
+                child: Text(
+                  item.$2,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              selected: active,
+              onSelected: (_) => onChanged(item.$1),
+            );
+            if (itemWidth == null) return chip;
+            return SizedBox(width: itemWidth, child: chip);
+          }).toList(),
+        );
+      },
     );
   }
 }
