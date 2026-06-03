@@ -89,6 +89,40 @@ void main() {
   );
 
   test(
+    'RemoteLedgerRepository places newly appeared remote ledgers first',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final database = DatabaseService();
+      await database.saveLedger(
+        Ledger()
+          ..uuid = _anotherRemoteLedgerUuid
+          ..name = '已有账本'
+          ..baseCurrencyCode = 'CNY'
+          ..sortOrder = 10,
+      );
+      final repository = RemoteLedgerRepository(
+        apiClient: _NewRemoteLedgersApiClient(),
+        database: database,
+      );
+
+      final ledgers = await repository.getAllLedgers();
+      final cachedLedgers = await database.getAllLedgers();
+      final newLedger = cachedLedgers.firstWhere(
+        (ledger) => ledger.uuid == _remoteLedgerUuid,
+      );
+      final existingLedger = cachedLedgers.firstWhere(
+        (ledger) => ledger.uuid == _anotherRemoteLedgerUuid,
+      );
+
+      expect(ledgers.map((ledger) => ledger.uuid), [
+        _remoteLedgerUuid,
+        _anotherRemoteLedgerUuid,
+      ]);
+      expect(newLedger.sortOrder, greaterThan(existingLedger.sortOrder));
+    },
+  );
+
+  test(
     'RemoteLedgerRepository exposes only current account cloud cache',
     () async {
       SharedPreferences.setMockInitialValues({});
@@ -985,6 +1019,35 @@ class _OrderedLedgersApiClient extends ApiClient {
         {
           'uuid': _anotherRemoteLedgerUuid,
           'name': '第一个账本',
+          'baseCurrencyCode': 'CNY',
+        },
+      ]);
+    }
+    if (path == '/api/ledgers/people') {
+      return fromJson!({
+        _remoteLedgerUuid: const [],
+        _anotherRemoteLedgerUuid: const [],
+      });
+    }
+    throw UnimplementedError(path);
+  }
+}
+
+class _NewRemoteLedgersApiClient extends ApiClient {
+  _NewRemoteLedgersApiClient() : super(tokenStore: TokenStore());
+
+  @override
+  Future<T> get<T>(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+    T Function(Object? json)? fromJson,
+  }) async {
+    if (path == '/api/ledgers') {
+      return fromJson!([
+        {'uuid': _remoteLedgerUuid, 'name': '新加入账本', 'baseCurrencyCode': 'CNY'},
+        {
+          'uuid': _anotherRemoteLedgerUuid,
+          'name': '已有账本',
           'baseCurrencyCode': 'CNY',
         },
       ]);

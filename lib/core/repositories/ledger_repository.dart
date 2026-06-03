@@ -128,6 +128,22 @@ class RemoteLedgerRepository implements LedgerRepository {
         for (final ledger in cachedLedgers)
           ledger.remoteSyncUuid: ledger.sortOrder,
       };
+      var maxCachedSortOrder = -1;
+      for (final ledger in cachedLedgers) {
+        if (ledger.sortOrder > maxCachedSortOrder) {
+          maxCachedSortOrder = ledger.sortOrder;
+        }
+      }
+      final newRemoteLedgerUuids = [
+        for (final ledger in ledgers)
+          if (!cachedSortOrderByRemoteUuid.containsKey(ledger.uuid))
+            ledger.uuid,
+      ];
+      final newSortOrderByRemoteUuid = {
+        for (var index = 0; index < newRemoteLedgerUuids.length; index += 1)
+          newRemoteLedgerUuids[index]:
+              maxCachedSortOrder + newRemoteLedgerUuids.length - index,
+      };
 
       if (ledgers.isNotEmpty) {
         try {
@@ -156,7 +172,8 @@ class RemoteLedgerRepository implements LedgerRepository {
       for (var index = 0; index < ledgers.length; index += 1) {
         ledgers[index].sortOrder =
             cachedSortOrderByRemoteUuid[ledgers[index].uuid] ??
-            ledgers.length - index - 1;
+            newSortOrderByRemoteUuid[ledgers[index].uuid] ??
+            0;
         await _db.saveLedger(ledgers[index]);
       }
       final localTemporaryLedgers = await _localTemporaryLedgers(
