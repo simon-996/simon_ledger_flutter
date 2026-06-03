@@ -27,13 +27,18 @@ void main() {
 
   testWidgets('share sheet keeps sender flow lightweight', (tester) async {
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Builder(
-            builder: (context) => FilledButton(
-              onPressed: () =>
-                  showLedgerInviteShareSheet(context: context, invite: invite),
-              child: const Text('分享'),
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => FilledButton(
+                onPressed: () => showLedgerInviteShareSheet(
+                  context: context,
+                  ledgerUuid: invite.ledgerUuid,
+                  initialInvite: invite,
+                ),
+                child: const Text('分享'),
+              ),
             ),
           ),
         ),
@@ -52,11 +57,63 @@ void main() {
     expect(find.text('旅行账本'), findsOneWidget);
     expect(find.text('USD 美元'), findsNothing);
     expect(find.text('Simon'), findsNothing);
-    expect(find.textContaining('有效期'), findsNothing);
-    expect(find.textContaining('剩余'), findsNothing);
+    expect(find.textContaining('剩余'), findsOneWidget);
     expect(find.text('复制邀请码'), findsOneWidget);
     expect(find.text('复制邀请链接'), findsOneWidget);
     expect(find.text('复制完整邀请'), findsOneWidget);
+    expect(find.text('重新生成'), findsOneWidget);
+    expect(find.text('生成邀请码'), findsNothing);
+  });
+
+  testWidgets('share sheet configures and regenerates invitation', (
+    tester,
+  ) async {
+    int? submittedDays;
+    int? submittedMaxUses;
+    final newInvite = LedgerInvite(
+      code: 'WXYZ9876',
+      ledgerUuid: invite.ledgerUuid,
+      ledgerName: invite.ledgerName,
+      ledgerBaseCurrencyCode: invite.ledgerBaseCurrencyCode,
+      ledgerMemberCount: invite.ledgerMemberCount,
+      ledgerMembers: invite.ledgerMembers,
+      role: invite.role,
+      maxUses: 5,
+      usedCount: 0,
+      expiresAt: DateTime(2026, 6, 4),
+      expired: false,
+      disabled: false,
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: LedgerInviteShareSheet(
+              ledgerUuid: invite.ledgerUuid,
+              onRegenerate: (days, maxUses) async {
+                submittedDays = days;
+                submittedMaxUses = maxUses;
+                return newInvite;
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.widgetWithText(FilledButton, '生成邀请码'), findsOneWidget);
+    expect(find.text('1 天'), findsOneWidget);
+    expect(find.text('5 次'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, '生成邀请码'));
+    await tester.pumpAndSettle();
+
+    expect(submittedDays, 1);
+    expect(submittedMaxUses, 5);
+    expect(find.text('WXYZ9876'), findsOneWidget);
+    expect(find.text('生成邀请码'), findsNothing);
+    await tester.pump(const Duration(seconds: 2));
   });
 
   testWidgets('join page joins only after explicit confirmation', (

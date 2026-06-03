@@ -120,6 +120,27 @@ class InviteRepository {
 
   final ApiClient _apiClient;
 
+  Future<LedgerInvite?> getCurrentInvite(String ledgerUuid) {
+    return _apiClient.get<LedgerInvite?>(
+      '/api/ledgers/$ledgerUuid/invites/current',
+      fromJson: (json) => json == null ? null : LedgerInvite.fromJson(json),
+    );
+  }
+
+  Future<LedgerInvite> regenerateInvite(
+    String ledgerUuid, {
+    required int days,
+    required int maxUses,
+  }) {
+    return _apiClient.post<LedgerInvite>(
+      '/api/ledgers/$ledgerUuid/invites/regenerate',
+      data: {'role': 'editor', 'days': days, 'maxUses': maxUses},
+      idempotencyKey:
+          'regenerate-invite-$ledgerUuid-${DateTime.now().microsecondsSinceEpoch}',
+      fromJson: LedgerInvite.fromJson,
+    );
+  }
+
   Future<LedgerInvite> createInvite(String ledgerUuid) {
     final expiresAt = DateTime.now().add(const Duration(days: 7));
     return _apiClient.post<LedgerInvite>(

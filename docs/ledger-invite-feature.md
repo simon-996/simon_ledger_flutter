@@ -145,7 +145,7 @@ https://ledger.simon996.com/invite/{code}
 - 账本列表的分享按钮先调用 `InviteRepository.getCurrentInvite`。
 - 有当前可用邀请码时打开分享弹窗。
 - 没有当前可用邀请码时打开生成配置态。
-- 创建成功后打开 `LedgerInviteShareSheet`。
+- 生成成功后更新 `LedgerInviteShareSheet`。
 
 ### 手动输入和粘贴入口
 
@@ -226,7 +226,7 @@ GET /api/ledgers/{ledgerUuid}/invites/current
 行为：
 
 - 需要登录。
-- 需要是账本成员。
+- 需要有管理账本权限。
 - 返回该账本最新的当前可用邀请码。
 - 如果没有当前可用邀请码，返回 `data: null`。
 

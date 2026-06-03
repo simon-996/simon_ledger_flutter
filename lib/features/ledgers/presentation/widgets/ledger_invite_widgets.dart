@@ -13,27 +13,58 @@ import '../../presentation/providers/ledger_stats_provider.dart';
 
 Future<void> showLedgerInviteShareSheet({
   required BuildContext context,
-  required LedgerInvite invite,
+  required String ledgerUuid,
+  LedgerInvite? initialInvite,
 }) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (context) => LedgerInviteShareSheet(invite: invite),
+    builder: (context) => LedgerInviteShareSheet(
+      ledgerUuid: ledgerUuid,
+      initialInvite: initialInvite,
+    ),
   );
 }
 
-class LedgerInviteShareSheet extends StatelessWidget {
-  const LedgerInviteShareSheet({super.key, required this.invite});
+class LedgerInviteShareSheet extends ConsumerStatefulWidget {
+  const LedgerInviteShareSheet({
+    super.key,
+    required this.ledgerUuid,
+    this.initialInvite,
+    this.onRegenerate,
+  });
 
-  final LedgerInvite invite;
+  final String ledgerUuid;
+  final LedgerInvite? initialInvite;
+  final Future<LedgerInvite> Function(int days, int maxUses)? onRegenerate;
+
+  @override
+  ConsumerState<LedgerInviteShareSheet> createState() =>
+      _LedgerInviteShareSheetState();
+}
+
+class _LedgerInviteShareSheetState
+    extends ConsumerState<LedgerInviteShareSheet> {
+  static const _dayOptions = [1, 3, 5, 7];
+  static const _maxUseLimit = 99;
+
+  late LedgerInvite? _invite;
+  late bool _configuring;
+  int _days = 1;
+  int _maxUses = 5;
+  bool _generating = false;
+  String? _errorText;
+
+  @override
+  void initState() {
+    super.initState();
+    _invite = widget.initialInvite;
+    _configuring = widget.initialInvite == null;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final text = InviteLinks.shareText(
-      ledgerName: invite.ledgerName,
-      code: invite.code,
-    );
     final colorScheme = Theme.of(context).colorScheme;
     return SafeArea(
       top: false,
@@ -49,120 +80,9 @@ class LedgerInviteShareSheet extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          color: colorScheme.primaryContainer,
-                          borderRadius: BorderRadius.circular(13),
-                        ),
-                        child: Icon(
-                          Icons.ios_share_rounded,
-                          size: 20,
-                          color: colorScheme.onPrimaryContainer,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '邀请好友加入',
-                              style: Theme.of(context).textTheme.titleLarge
-                                  ?.copyWith(fontWeight: FontWeight.w800),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              invite.ledgerName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
-                    ),
-                    decoration: BoxDecoration(
-                      color: colorScheme.primaryContainer.withValues(
-                        alpha: 0.72,
-                      ),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: colorScheme.primary.withValues(alpha: 0.18),
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '邀请码',
-                          style: Theme.of(context).textTheme.labelLarge
-                              ?.copyWith(
-                                color: colorScheme.onPrimaryContainer,
-                                fontWeight: FontWeight.w700,
-                              ),
-                        ),
-                        const SizedBox(height: 6),
-                        SelectableText(
-                          invite.code,
-                          style: Theme.of(context).textTheme.headlineMedium
-                              ?.copyWith(
-                                color: colorScheme.onPrimaryContainer,
-                                fontWeight: FontWeight.w900,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(44),
-                    ),
-                    onPressed: () => _copy(
-                      context,
-                      InviteLinks.urlForCode(invite.code),
-                      '邀请链接已复制',
-                    ),
-                    icon: const Icon(Icons.link_rounded),
-                    label: const Text('复制邀请链接'),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () =>
-                              _copy(context, invite.code, '邀请码已复制'),
-                          icon: const Icon(Icons.key_rounded),
-                          label: const Text('复制邀请码'),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => _copy(context, text, '邀请文本已复制'),
-                          icon: const Icon(Icons.copy_rounded),
-                          label: const Text('复制完整邀请'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                children: _configuring
+                    ? _buildConfigView(context, colorScheme)
+                    : _buildShareView(context, colorScheme, _invite!),
               ),
             ),
           ),
@@ -171,11 +91,328 @@ class LedgerInviteShareSheet extends StatelessWidget {
     );
   }
 
-  Future<void> _copy(BuildContext context, String text, String notice) async {
-    InviteClipboardMemory.ignore(invite.code);
+  List<Widget> _buildShareView(
+    BuildContext context,
+    ColorScheme colorScheme,
+    LedgerInvite invite,
+  ) {
+    final text = InviteLinks.shareText(
+      ledgerName: invite.ledgerName,
+      code: invite.code,
+    );
+    return [
+      _SheetHeader(
+        icon: Icons.ios_share_rounded,
+        title: '邀请好友加入',
+        subtitle: invite.ledgerName,
+        trailing: TextButton(
+          onPressed: _generating
+              ? null
+              : () => setState(() {
+                  _configuring = true;
+                  _errorText = null;
+                }),
+          child: const Text('重新生成'),
+        ),
+      ),
+      const SizedBox(height: 14),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: colorScheme.primaryContainer.withValues(alpha: 0.72),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: colorScheme.primary.withValues(alpha: 0.18),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '邀请码',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: colorScheme.onPrimaryContainer,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            SelectableText(
+              invite.code,
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                color: colorScheme.onPrimaryContainer,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _inviteStatusText(invite),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onPrimaryContainer.withValues(alpha: 0.78),
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 14),
+      FilledButton.icon(
+        style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(44)),
+        onPressed: () => _copy(
+          context,
+          invite.code,
+          InviteLinks.urlForCode(invite.code),
+          '邀请链接已复制',
+        ),
+        icon: const Icon(Icons.link_rounded),
+        label: const Text('复制邀请链接'),
+      ),
+      const SizedBox(height: 8),
+      Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: () =>
+                  _copy(context, invite.code, invite.code, '邀请码已复制'),
+              icon: const Icon(Icons.key_rounded),
+              label: const Text('复制邀请码'),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: () => _copy(context, invite.code, text, '邀请文本已复制'),
+              icon: const Icon(Icons.copy_rounded),
+              label: const Text('复制完整邀请'),
+            ),
+          ),
+        ],
+      ),
+    ];
+  }
+
+  List<Widget> _buildConfigView(BuildContext context, ColorScheme colorScheme) {
+    final hasExistingInvite = _invite != null;
+    return [
+      _SheetHeader(
+        icon: Icons.autorenew_rounded,
+        title: hasExistingInvite ? '重新生成邀请码' : '生成邀请码',
+        subtitle: hasExistingInvite ? '新邀请码生成后，旧邀请码会失效。' : '设置有效期和可使用次数。',
+      ),
+      const SizedBox(height: 16),
+      Text(
+        '有效期',
+        style: Theme.of(
+          context,
+        ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+      ),
+      const SizedBox(height: 8),
+      SegmentedButton<int>(
+        segments: [
+          for (final day in _dayOptions)
+            ButtonSegment<int>(value: day, label: Text('$day 天')),
+        ],
+        selected: {_days},
+        onSelectionChanged: _generating
+            ? null
+            : (values) => setState(() => _days = values.single),
+      ),
+      const SizedBox(height: 16),
+      Text(
+        '使用次数',
+        style: Theme.of(
+          context,
+        ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+      ),
+      const SizedBox(height: 8),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: colorScheme.outlineVariant),
+        ),
+        child: Row(
+          children: [
+            IconButton.filledTonal(
+              onPressed: _generating || _maxUses <= 1
+                  ? null
+                  : () => setState(() => _maxUses -= 1),
+              icon: const Icon(Icons.remove_rounded),
+              tooltip: '减少次数',
+            ),
+            Expanded(
+              child: Text(
+                '$_maxUses 次',
+                textAlign: TextAlign.center,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+              ),
+            ),
+            IconButton.filledTonal(
+              onPressed: _generating || _maxUses >= _maxUseLimit
+                  ? null
+                  : () => setState(() => _maxUses += 1),
+              icon: const Icon(Icons.add_rounded),
+              tooltip: '增加次数',
+            ),
+          ],
+        ),
+      ),
+      if (_errorText != null) ...[
+        const SizedBox(height: 12),
+        _InviteMessage(
+          icon: Icons.info_outline_rounded,
+          message: _errorText!,
+          color: colorScheme.error,
+        ),
+      ],
+      const SizedBox(height: 16),
+      Row(
+        children: [
+          if (hasExistingInvite) ...[
+            Expanded(
+              child: OutlinedButton(
+                onPressed: _generating
+                    ? null
+                    : () => setState(() {
+                        _configuring = false;
+                        _errorText = null;
+                      }),
+                child: const Text('取消'),
+              ),
+            ),
+            const SizedBox(width: 10),
+          ],
+          Expanded(
+            flex: hasExistingInvite ? 2 : 1,
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(44),
+              ),
+              onPressed: _generating ? null : _regenerate,
+              icon: _generating
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.check_rounded),
+              label: Text(_generating ? '生成中' : '生成邀请码'),
+            ),
+          ),
+        ],
+      ),
+    ];
+  }
+
+  Future<void> _copy(
+    BuildContext context,
+    String code,
+    String text,
+    String notice,
+  ) async {
+    InviteClipboardMemory.ignore(code);
     await Clipboard.setData(ClipboardData(text: text));
     if (!context.mounted) return;
     AppNotice.success(context, notice);
+  }
+
+  Future<void> _regenerate() async {
+    if (_generating) return;
+    setState(() {
+      _generating = true;
+      _errorText = null;
+    });
+    try {
+      final invite =
+          await (widget.onRegenerate?.call(_days, _maxUses) ??
+              ref
+                  .read(inviteRepositoryProvider)
+                  .regenerateInvite(
+                    widget.ledgerUuid,
+                    days: _days,
+                    maxUses: _maxUses,
+                  ));
+      if (!mounted) return;
+      setState(() {
+        _invite = invite;
+        _configuring = false;
+        _generating = false;
+      });
+      AppNotice.success(context, '邀请码已生成');
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _generating = false;
+        _errorText = FriendlyError.message(error, fallback: '生成邀请码失败，请稍后重试。');
+      });
+    }
+  }
+
+  String _inviteStatusText(LedgerInvite invite) {
+    final remainingUses = invite.remainingUses;
+    final usage = remainingUses == null ? '不限次数' : '剩余 $remainingUses 次';
+    final duration = invite.expiresAt.difference(DateTime.now());
+    final expires = duration.isNegative
+        ? '已过期'
+        : duration.inHours < 24
+        ? '今天过期'
+        : '${(duration.inHours / 24).ceil()} 天后过期';
+    return '$usage · $expires';
+  }
+}
+
+class _SheetHeader extends StatelessWidget {
+  const _SheetHeader({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.trailing,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: colorScheme.primaryContainer,
+            borderRadius: BorderRadius.circular(13),
+          ),
+          child: Icon(icon, size: 20, color: colorScheme.onPrimaryContainer),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (trailing != null) ...[const SizedBox(width: 8), trailing!],
+      ],
+    );
   }
 }
 

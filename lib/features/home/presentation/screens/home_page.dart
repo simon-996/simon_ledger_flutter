@@ -334,9 +334,13 @@ class _HomePageState extends ConsumerState<HomePage> {
     try {
       final invite = await ref
           .read(inviteRepositoryProvider)
-          .createInvite(ledger.remoteSyncUuid);
+          .getCurrentInvite(ledger.remoteSyncUuid);
       if (!mounted) return;
-      await showLedgerInviteShareSheet(context: context, invite: invite);
+      await showLedgerInviteShareSheet(
+        context: context,
+        ledgerUuid: ledger.remoteSyncUuid,
+        initialInvite: invite,
+      );
     } catch (error) {
       _showWriteError(error);
     }

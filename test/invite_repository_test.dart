@@ -29,6 +29,40 @@ void main() {
     },
   );
 
+  test(
+    'current invite returns null when server has no usable invite',
+    () async {
+      final apiClient = _InviteApiClient(nextGetJson: null);
+      final repository = InviteRepository(apiClient);
+
+      final invite = await repository.getCurrentInvite('ledger-uuid');
+
+      expect(invite, isNull);
+      expect(
+        apiClient.requestedPath,
+        '/api/ledgers/ledger-uuid/invites/current',
+      );
+    },
+  );
+
+  test('regenerate invite sends selected days and max uses', () async {
+    final apiClient = _InviteApiClient();
+    final repository = InviteRepository(apiClient);
+
+    await repository.regenerateInvite('ledger-uuid', days: 3, maxUses: 5);
+
+    expect(
+      apiClient.requestedPath,
+      '/api/ledgers/ledger-uuid/invites/regenerate',
+    );
+    expect(apiClient.requestedData, {
+      'role': 'editor',
+      'days': 3,
+      'maxUses': 5,
+    });
+    expect(apiClient.requestedIdempotencyKey, startsWith('regenerate-invite-'));
+  });
+
   test('exhausted invite cannot be joined', () {
     final invite = LedgerInvite.fromJson({..._inviteJson, 'usedCount': 20});
 
@@ -55,10 +89,16 @@ final _inviteJson = <String, dynamic>{
   'disabled': false,
 };
 
-class _InviteApiClient extends ApiClient {
-  _InviteApiClient() : super(tokenStore: TokenStore());
+const _defaultGetJson = Object();
 
+class _InviteApiClient extends ApiClient {
+  _InviteApiClient({this.nextGetJson = _defaultGetJson})
+    : super(tokenStore: TokenStore());
+
+  final Object? nextGetJson;
   String? requestedPath;
+  Object? requestedData;
+  String? requestedIdempotencyKey;
 
   @override
   Future<T> get<T>(
@@ -67,6 +107,22 @@ class _InviteApiClient extends ApiClient {
     T Function(Object? json)? fromJson,
   }) async {
     requestedPath = path;
+    final json = identical(nextGetJson, _defaultGetJson)
+        ? _inviteJson
+        : nextGetJson;
+    return fromJson!(json);
+  }
+
+  @override
+  Future<T> post<T>(
+    String path, {
+    Object? data,
+    String? idempotencyKey,
+    T Function(Object? json)? fromJson,
+  }) async {
+    requestedPath = path;
+    requestedData = data;
+    requestedIdempotencyKey = idempotencyKey;
     return fromJson!(_inviteJson);
   }
 }
