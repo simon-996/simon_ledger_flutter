@@ -25,18 +25,29 @@ void main() {
     disabled: false,
   );
 
-  testWidgets('share page emphasizes code and exposes three copy actions', (
-    tester,
-  ) async {
+  testWidgets('share sheet keeps sender flow lightweight', (tester) async {
     await tester.pumpWidget(
-      MaterialApp(home: LedgerInviteSharePage(invite: invite)),
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => FilledButton(
+              onPressed: () =>
+                  showLedgerInviteShareSheet(context: context, invite: invite),
+              child: const Text('分享'),
+            ),
+          ),
+        ),
+      ),
     );
 
-    expect(find.byType(AlertDialog), findsNothing);
+    await tester.tap(find.text('分享'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(LedgerInviteShareSheet), findsOneWidget);
     expect(find.text('ABCD1234'), findsOneWidget);
     expect(find.text('旅行账本'), findsOneWidget);
-    expect(find.text('USD 美元'), findsOneWidget);
-    expect(find.text('Simon'), findsOneWidget);
+    expect(find.text('USD 美元'), findsNothing);
+    expect(find.text('Simon'), findsNothing);
     expect(find.text('复制邀请码'), findsOneWidget);
     expect(find.text('复制邀请链接'), findsOneWidget);
     expect(find.text('复制完整邀请'), findsOneWidget);

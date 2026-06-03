@@ -336,11 +336,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           .read(inviteRepositoryProvider)
           .createInvite(ledger.remoteSyncUuid);
       if (!mounted) return;
-      await Navigator.of(context).push<void>(
-        MaterialPageRoute(
-          builder: (context) => LedgerInviteSharePage(invite: invite),
-        ),
-      );
+      await showLedgerInviteShareSheet(context: context, invite: invite);
     } catch (error) {
       _showWriteError(error);
     }

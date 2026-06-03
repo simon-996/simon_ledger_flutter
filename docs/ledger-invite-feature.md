@@ -9,7 +9,7 @@
 核心原则：
 
 - 邀请不是直接加入，用户必须看到邀请页并主动确认。
-- 分享不再使用弹窗，而是完整页面，避免信息拥挤。
+- 分享使用轻量弹窗，只保留复制邀请所需的信息。
 - 加入也不再使用底部弹窗，而是完整页面，方便展示账本名称、编号、币种、成员、角色和有效期。
 - 同一个邀请入口兼容 Android、iOS、Web 和手动粘贴。
 
@@ -20,7 +20,7 @@
 1. 用户进入账本列表。
 2. 对已同步到云端的账本点击分享。
 3. App 调用后端创建邀请码。
-4. 打开分享页面。
+4. 打开轻量分享弹窗。
 5. 用户可以复制：
    - 单独邀请码
    - 邀请链接
@@ -81,7 +81,7 @@ https://ledger.simon996.com/invite/{code}
 - App 启动和回到前台时，会尝试读取剪贴板里的邀请内容。
 - Web 使用 path URL strategy，支持直接访问 `/invite/{code}`。
 
-### 分享页与加入页
+### 分享弹窗与加入页
 
 文件：
 
@@ -89,8 +89,10 @@ https://ledger.simon996.com/invite/{code}
 
 主要组件：
 
-- `LedgerInviteSharePage`
-  - 展示邀请信息。
+- `showLedgerInviteShareSheet`
+  - 打开轻量分享弹窗。
+- `LedgerInviteShareSheet`
+  - 展示账本名、邀请码、有效期和剩余使用次数。
   - 复制邀请码、邀请链接、完整邀请文本。
 - `LedgerInviteJoinPage`
   - 加载邀请详情。
@@ -109,7 +111,7 @@ https://ledger.simon996.com/invite/{code}
 职责：
 
 - 账本列表的分享按钮调用 `InviteRepository.createInvite`。
-- 创建成功后打开 `LedgerInviteSharePage`。
+- 创建成功后打开 `LedgerInviteShareSheet`。
 
 ### 手动输入和粘贴入口
 

@@ -11,8 +11,21 @@ import '../../../../core/widgets/app_components.dart';
 import '../../presentation/providers/ledger_provider.dart';
 import '../../presentation/providers/ledger_stats_provider.dart';
 
-class LedgerInviteSharePage extends StatelessWidget {
-  const LedgerInviteSharePage({super.key, required this.invite});
+Future<void> showLedgerInviteShareSheet({
+  required BuildContext context,
+  required LedgerInvite invite,
+}) {
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    useSafeArea: true,
+    builder: (context) => LedgerInviteShareSheet(invite: invite),
+  );
+}
+
+class LedgerInviteShareSheet extends StatelessWidget {
+  const LedgerInviteShareSheet({super.key, required this.invite});
 
   final LedgerInvite invite;
 
@@ -22,63 +35,130 @@ class LedgerInviteSharePage extends StatelessWidget {
       ledgerName: invite.ledgerName,
       code: invite.code,
     );
-    return Scaffold(
-      appBar: AppBar(title: const Text('分享账本')),
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
+    final colorScheme = Theme.of(context).colorScheme;
+    return SafeArea(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  '邀请好友加入',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
+                Row(
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(
+                        Icons.ios_share_rounded,
+                        color: colorScheme.onPrimaryContainer,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '邀请好友加入',
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.w800),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            invite.ledgerName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(color: colorScheme.onSurfaceVariant),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: colorScheme.primaryContainer.withValues(alpha: 0.72),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: colorScheme.primary.withValues(alpha: 0.18),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '邀请码',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: colorScheme.onPrimaryContainer,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      SelectableText(
+                        invite.code,
+                        style: Theme.of(context).textTheme.headlineMedium
+                            ?.copyWith(
+                              color: colorScheme.onPrimaryContainer,
+                              fontWeight: FontWeight.w900,
+                            ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        _summaryText(invite),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onPrimaryContainer.withValues(
+                            alpha: 0.78,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '对方可以先查看账本信息，再决定是否加入。',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                const SizedBox(height: 18),
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
                   ),
+                  onPressed: () => _copy(
+                    context,
+                    InviteLinks.urlForCode(invite.code),
+                    '邀请链接已复制',
+                  ),
+                  icon: const Icon(Icons.link_rounded),
+                  label: const Text('复制邀请链接'),
                 ),
-                const SizedBox(height: 20),
-                LedgerInviteOverview(invite: invite, emphasizeCode: true),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _copy(context, invite.code, '邀请码已复制'),
+                        icon: const Icon(Icons.key_rounded),
+                        label: const Text('复制邀请码'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _copy(context, text, '邀请文本已复制'),
+                        icon: const Icon(Icons.copy_rounded),
+                        label: const Text('复制完整邀请'),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
-          ),
-        ),
-      ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            alignment: WrapAlignment.end,
-            children: [
-              OutlinedButton.icon(
-                onPressed: () => _copy(context, invite.code, '邀请码已复制'),
-                icon: const Icon(Icons.key_rounded),
-                label: const Text('复制邀请码'),
-              ),
-              OutlinedButton.icon(
-                onPressed: () => _copy(
-                  context,
-                  InviteLinks.urlForCode(invite.code),
-                  '邀请链接已复制',
-                ),
-                icon: const Icon(Icons.link_rounded),
-                label: const Text('复制邀请链接'),
-              ),
-              FilledButton.icon(
-                onPressed: () => _copy(context, text, '邀请文本已复制'),
-                icon: const Icon(Icons.copy_rounded),
-                label: const Text('复制完整邀请'),
-              ),
-            ],
           ),
         ),
       ),
@@ -90,6 +170,17 @@ class LedgerInviteSharePage extends StatelessWidget {
     await Clipboard.setData(ClipboardData(text: text));
     if (!context.mounted) return;
     AppNotice.success(context, notice);
+  }
+
+  String _summaryText(LedgerInvite invite) {
+    final remainingUses = invite.remainingUses;
+    final usage = remainingUses == null ? '不限次数' : '剩余 $remainingUses 次';
+    return '有效期至 ${_formatDate(invite.expiresAt)} · $usage';
+  }
+
+  String _formatDate(DateTime dateTime) {
+    final local = dateTime.toLocal();
+    return '${local.month} 月 ${local.day} 日';
   }
 }
 
