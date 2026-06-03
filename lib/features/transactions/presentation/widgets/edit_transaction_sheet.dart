@@ -351,59 +351,40 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                             return AppAnimatedSwitcher(
                               child: AppSectionCard(
                                 key: ValueKey(
-                                  'edit-people-${widget.transaction.uuid}-$_transactionType',
+                                  'edit-people-${widget.transaction.uuid}',
                                 ),
                                 child: Column(
                                   crossAxisAlignment:
                                       CrossAxisAlignment.stretch,
                                   children: [
-                                    AnimatedSize(
-                                      duration: AppMotion.normal,
-                                      curve: AppMotion.emphasized,
-                                      alignment: Alignment.topCenter,
-                                      child: AnimatedSwitcher(
-                                        duration: AppMotion.normal,
-                                        switchInCurve: AppMotion.emphasized,
-                                        switchOutCurve: Curves.easeInCubic,
-                                        transitionBuilder:
-                                            transactionTopFadeSizeTransition,
-                                        child: _transactionType == 0
-                                            ? Padding(
-                                                key: const ValueKey(
-                                                  'edit-payment-mode-panel',
-                                                ),
-                                                padding: const EdgeInsets.only(
-                                                  bottom: 10,
-                                                ),
-                                                child: PaymentModePanel(
-                                                  paidByPerson:
-                                                      _payerPersonUuid != null,
-                                                  description:
-                                                      _payerPersonUuid == null
-                                                      ? '使用人员将平均分摊该支出金额。'
-                                                      : '付款人先垫付，总额由使用人员平均分摊。',
-                                                  onChanged: (paidByPerson) {
-                                                    setState(() {
-                                                      if (paidByPerson) {
-                                                        _payerPersonUuid ??=
-                                                            _selectedPersonIds
-                                                                .isNotEmpty
-                                                            ? _selectedPersonIds
-                                                                  .first
-                                                            : visiblePersonIds
-                                                                  .first;
-                                                      } else {
-                                                        _payerPersonUuid = null;
-                                                      }
-                                                    });
-                                                  },
-                                                ),
-                                              )
-                                            : const SizedBox.shrink(
-                                                key: ValueKey(
-                                                  'edit-payment-mode-empty',
-                                                ),
-                                              ),
+                                    TransactionAnimatedVisibility(
+                                      visible: _transactionType == 0,
+                                      visibleKey: 'edit-payment-mode-panel',
+                                      hiddenKey: 'edit-payment-mode-empty',
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: 10,
+                                        ),
+                                        child: PaymentModePanel(
+                                          paidByPerson:
+                                              _payerPersonUuid != null,
+                                          description: _payerPersonUuid == null
+                                              ? '使用人员将平均分摊该支出金额。'
+                                              : '付款人先垫付，总额由使用人员平均分摊。',
+                                          onChanged: (paidByPerson) {
+                                            setState(() {
+                                              if (paidByPerson) {
+                                                _payerPersonUuid ??=
+                                                    _selectedPersonIds
+                                                        .isNotEmpty
+                                                    ? _selectedPersonIds.first
+                                                    : visiblePersonIds.first;
+                                              } else {
+                                                _payerPersonUuid = null;
+                                              }
+                                            });
+                                          },
+                                        ),
                                       ),
                                     ),
                                     AppSectionHeader(
@@ -445,83 +426,52 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                                         });
                                       },
                                     ),
-                                    AnimatedSize(
-                                      duration: AppMotion.normal,
-                                      curve: AppMotion.emphasized,
-                                      alignment: Alignment.topCenter,
-                                      child: AnimatedSwitcher(
-                                        duration: AppMotion.normal,
-                                        switchInCurve: AppMotion.emphasized,
-                                        switchOutCurve: Curves.easeInCubic,
-                                        transitionBuilder:
-                                            transactionTopFadeSizeTransition,
-                                        child:
-                                            _transactionType == 0 &&
-                                                _payerPersonUuid != null
-                                            ? Padding(
-                                                key: const ValueKey(
-                                                  'edit-payer-person-panel',
+                                    TransactionAnimatedVisibility(
+                                      visible:
+                                          _transactionType == 0 &&
+                                          _payerPersonUuid != null,
+                                      visibleKey: 'edit-payer-person-panel',
+                                      hiddenKey: 'edit-payer-person-empty',
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(top: 16),
+                                        child: DecoratedBox(
+                                          decoration: BoxDecoration(
+                                            color:
+                                                colorScheme.surfaceContainerLow,
+                                            borderRadius: BorderRadius.circular(
+                                              16,
+                                            ),
+                                            border: Border.all(
+                                              color: colorScheme.outlineVariant
+                                                  .withValues(alpha: 0.72),
+                                            ),
+                                          ),
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(12),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.stretch,
+                                              children: [
+                                                Text(
+                                                  '付款人',
+                                                  style: Theme.of(
+                                                    context,
+                                                  ).textTheme.titleSmall,
                                                 ),
-                                                padding: const EdgeInsets.only(
-                                                  top: 16,
+                                                const SizedBox(height: 8),
+                                                AppPersonChoiceGrid(
+                                                  items: personChoices,
+                                                  selectedId: _payerPersonUuid,
+                                                  onSelect: (pid) {
+                                                    setState(() {
+                                                      _payerPersonUuid = pid;
+                                                    });
+                                                  },
                                                 ),
-                                                child: DecoratedBox(
-                                                  decoration: BoxDecoration(
-                                                    color: colorScheme
-                                                        .surfaceContainerLow,
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          16,
-                                                        ),
-                                                    border: Border.all(
-                                                      color: colorScheme
-                                                          .outlineVariant
-                                                          .withValues(
-                                                            alpha: 0.72,
-                                                          ),
-                                                    ),
-                                                  ),
-                                                  child: Padding(
-                                                    padding:
-                                                        const EdgeInsets.all(
-                                                          12,
-                                                        ),
-                                                    child: Column(
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .stretch,
-                                                      children: [
-                                                        Text(
-                                                          '付款人',
-                                                          style:
-                                                              Theme.of(context)
-                                                                  .textTheme
-                                                                  .titleSmall,
-                                                        ),
-                                                        const SizedBox(
-                                                          height: 8,
-                                                        ),
-                                                        AppPersonChoiceGrid(
-                                                          items: personChoices,
-                                                          selectedId:
-                                                              _payerPersonUuid,
-                                                          onSelect: (pid) {
-                                                            setState(() {
-                                                              _payerPersonUuid =
-                                                                  pid;
-                                                            });
-                                                          },
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ),
-                                              )
-                                            : const SizedBox.shrink(
-                                                key: ValueKey(
-                                                  'edit-payer-person-empty',
-                                                ),
-                                              ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ],

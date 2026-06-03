@@ -156,6 +156,39 @@ class PaymentModePanel extends StatelessWidget {
   }
 }
 
+class TransactionAnimatedVisibility extends StatelessWidget {
+  const TransactionAnimatedVisibility({
+    super.key,
+    required this.visible,
+    required this.visibleKey,
+    required this.hiddenKey,
+    required this.child,
+  });
+
+  final bool visible;
+  final Object visibleKey;
+  final Object hiddenKey;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSize(
+      duration: AppMotion.normal,
+      curve: AppMotion.emphasized,
+      alignment: Alignment.topCenter,
+      child: AnimatedSwitcher(
+        duration: AppMotion.fast,
+        switchInCurve: AppMotion.emphasized,
+        switchOutCurve: AppMotion.standard,
+        transitionBuilder: transactionTopFadeSlideTransition,
+        child: visible
+            ? KeyedSubtree(key: ValueKey(visibleKey), child: child)
+            : SizedBox.shrink(key: ValueKey(hiddenKey)),
+      ),
+    );
+  }
+}
+
 class CurrencySelector extends StatelessWidget {
   const CurrencySelector({
     super.key,
@@ -594,7 +627,7 @@ class TransactionResponsivePair extends StatelessWidget {
   }
 }
 
-Widget transactionTopFadeSizeTransition(
+Widget transactionTopFadeSlideTransition(
   Widget child,
   Animation<double> animation,
 ) {
@@ -602,12 +635,13 @@ Widget transactionTopFadeSizeTransition(
     parent: animation,
     curve: AppMotion.emphasized,
   );
+  final offset = Tween<Offset>(
+    begin: const Offset(0, -0.035),
+    end: Offset.zero,
+  ).animate(curved);
+
   return FadeTransition(
     opacity: animation,
-    child: SizeTransition(
-      sizeFactor: curved,
-      alignment: Alignment.topCenter,
-      child: child,
-    ),
+    child: SlideTransition(position: offset, child: child),
   );
 }
