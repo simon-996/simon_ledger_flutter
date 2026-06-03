@@ -60,7 +60,7 @@ void main() {
     expect(find.textContaining('剩余'), findsOneWidget);
     expect(find.text('复制邀请码'), findsOneWidget);
     expect(find.text('复制邀请链接'), findsOneWidget);
-    expect(find.text('复制完整邀请'), findsOneWidget);
+    expect(find.text('复制全部信息'), findsOneWidget);
     expect(find.text('重新生成'), findsOneWidget);
     expect(find.text('生成邀请码'), findsNothing);
   });

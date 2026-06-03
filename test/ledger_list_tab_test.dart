@@ -344,6 +344,80 @@ void main() {
     },
   );
 
+  testWidgets('shared non-owner ledger uses leave wording', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final database = DatabaseService();
+    final ledger = Ledger()
+      ..uuid = '0123456789abcdef0123456789abcdef'
+      ..name = '共享旅行'
+      ..baseCurrencyCode = 'CNY'
+      ..role = 'editor'
+      ..memberCount = 2;
+    await database.saveLedger(ledger);
+    await database.saveTransaction(
+      TransactionRecord()
+        ..uuid = 'shared-tx'
+        ..ledgerUuid = ledger.uuid
+        ..amount = 20
+        ..currencyCode = 'CNY'
+        ..category = '餐饮'
+        ..note = ''
+        ..createdAt = DateTime(2026, 6, 1),
+    );
+    final releaseDelete = Completer<void>();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          authTokenProvider.overrideWith(
+            (ref) async => const AuthToken(name: 'satoken', value: 'token'),
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: LedgerListTab(
+              ledgers: [ledger],
+              ledgerStats: const {},
+              onTap: (_) {},
+              onEdit: (_) {},
+              onShare: (_) async {},
+              onDelete: (_) => releaseDelete.future,
+              onCreate: () {},
+              onSync: (_) async {},
+              autoSyncEnabled: false,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.text('共享旅行'), const Offset(-420, 0));
+    await tester.pumpAndSettle();
+
+    expect(find.text('退出账本'), findsOneWidget);
+    expect(find.text('仅从你的列表移除'), findsOneWidget);
+    expect(find.text('共享账本'), findsOneWidget);
+    expect(find.text('该账本包含 1 条流水，退出后仅从你的列表移除，不会删除共享账本数据。'), findsOneWidget);
+    expect(find.text('删除账本'), findsNothing);
+
+    await tester.tap(find.text('退出'));
+    await tester.pump();
+
+    expect(find.text('正在退出'), findsOneWidget);
+    expect(find.text('正在退出账本'), findsOneWidget);
+
+    releaseDelete.complete();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('已退出账本，将同步到云端'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 2));
+  });
+
   testWidgets('wide ledger delete dialog keeps title away from top edge', (
     tester,
   ) async {

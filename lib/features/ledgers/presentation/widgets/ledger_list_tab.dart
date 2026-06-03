@@ -249,9 +249,14 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
             builder: (context) => Dialog(child: panel),
           );
     if (deleted == true && mounted) {
+      final isLeaveAction = _isLeaveLedgerAction(ledger);
       AppNotice.success(
         context,
-        ledger.isLocalOnly ? '账本已删除' : '账本已在本机删除，将同步到云端',
+        ledger.isLocalOnly
+            ? '账本已删除'
+            : isLeaveAction
+            ? '已退出账本，将同步到云端'
+            : '账本已在本机删除，将同步到云端',
       );
     }
 
@@ -261,6 +266,11 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
 }
 
 enum _LedgerCardOperation { share, sync, delete }
+
+bool _isLeaveLedgerAction(Ledger ledger) {
+  final role = ledger.role?.trim().toLowerCase();
+  return !ledger.isLocalOnly && role != null && role != 'owner';
+}
 
 class _DeleteLedgerConfirmPanel extends StatefulWidget {
   const _DeleteLedgerConfirmPanel({
@@ -288,14 +298,31 @@ class _DeleteLedgerConfirmPanelState extends State<_DeleteLedgerConfirmPanel> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isLocalOnly = widget.ledger.isLocalOnly;
+    final isLeaveAction = _isLeaveAction;
+    final actionColor = isLeaveAction ? colorScheme.primary : colorScheme.error;
+    final actionContainerColor = isLeaveAction
+        ? colorScheme.primaryContainer
+        : colorScheme.errorContainer;
+    final onActionContainerColor = isLeaveAction
+        ? colorScheme.onPrimaryContainer
+        : colorScheme.onErrorContainer;
     final typeLabel = widget.ledger.shouldUploadToCloud
         ? '待同步账本'
         : isLocalOnly
         ? '本机账本'
+        : isLeaveAction
+        ? '共享账本'
         : '云端账本';
-    final description = isLocalOnly
+    final description = isLeaveAction
+        ? '退出后，该账本不会再显示在你的账本列表中；其他成员和账本历史数据不会受到影响。'
+        : isLocalOnly
         ? '删除后，本机中的账本和流水会立即移除。'
         : '删除后会先从本机移除；如果暂时离线，联网后会自动同步删除操作。';
+    final title = isLeaveAction ? '退出账本' : '删除账本';
+    final subtitle = isLeaveAction ? '仅从你的列表移除' : '此操作无法恢复';
+    final icon = isLeaveAction
+        ? Icons.logout_rounded
+        : Icons.delete_outline_rounded;
 
     return PopScope(
       canPop: !_deleting,
@@ -316,13 +343,10 @@ class _DeleteLedgerConfirmPanelState extends State<_DeleteLedgerConfirmPanel> {
                       width: 44,
                       height: 44,
                       decoration: BoxDecoration(
-                        color: colorScheme.errorContainer,
+                        color: actionContainerColor,
                         borderRadius: BorderRadius.circular(14),
                       ),
-                      child: Icon(
-                        Icons.delete_outline_rounded,
-                        color: colorScheme.onErrorContainer,
-                      ),
+                      child: Icon(icon, color: onActionContainerColor),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -330,15 +354,15 @@ class _DeleteLedgerConfirmPanelState extends State<_DeleteLedgerConfirmPanel> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '删除账本',
+                            title,
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
                           const SizedBox(height: 3),
                           Text(
-                            '此操作无法恢复',
+                            subtitle,
                             style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(
-                                  color: colorScheme.error,
+                                  color: actionColor,
                                   fontWeight: FontWeight.w700,
                                 ),
                           ),
@@ -380,10 +404,10 @@ class _DeleteLedgerConfirmPanelState extends State<_DeleteLedgerConfirmPanel> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: colorScheme.errorContainer.withValues(alpha: 0.54),
+                      color: actionContainerColor.withValues(alpha: 0.54),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: colorScheme.error.withValues(alpha: 0.18),
+                        color: actionColor.withValues(alpha: 0.18),
                       ),
                     ),
                     child: Row(
@@ -392,15 +416,17 @@ class _DeleteLedgerConfirmPanelState extends State<_DeleteLedgerConfirmPanel> {
                         Icon(
                           Icons.warning_amber_rounded,
                           size: 19,
-                          color: colorScheme.error,
+                          color: actionColor,
                         ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            '该账本包含 ${widget.transactionCount} 条流水，删除后无法恢复。',
+                            isLeaveAction
+                                ? '该账本包含 ${widget.transactionCount} 条流水，退出后仅从你的列表移除，不会删除共享账本数据。'
+                                : '该账本包含 ${widget.transactionCount} 条流水，删除后无法恢复。',
                             style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(
-                                  color: colorScheme.onErrorContainer,
+                                  color: onActionContainerColor,
                                   fontWeight: FontWeight.w700,
                                 ),
                           ),
@@ -434,19 +460,27 @@ class _DeleteLedgerConfirmPanelState extends State<_DeleteLedgerConfirmPanel> {
                       child: FilledButton.icon(
                         onPressed: _deleting ? null : _delete,
                         style: FilledButton.styleFrom(
-                          backgroundColor: colorScheme.error,
-                          foregroundColor: colorScheme.onError,
+                          backgroundColor: actionColor,
+                          foregroundColor: isLeaveAction
+                              ? colorScheme.onPrimary
+                              : colorScheme.onError,
                         ),
                         icon: _deleting
                             ? SizedBox.square(
                                 dimension: 16,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  color: colorScheme.onError,
+                                  color: isLeaveAction
+                                      ? colorScheme.onPrimary
+                                      : colorScheme.onError,
                                 ),
                               )
-                            : const Icon(Icons.delete_outline_rounded),
-                        label: Text(_deleting ? '正在删除' : '删除'),
+                            : Icon(icon),
+                        label: Text(
+                          _deleting
+                              ? (isLeaveAction ? '正在退出' : '正在删除')
+                              : (isLeaveAction ? '退出' : '删除'),
+                        ),
                       ),
                     ),
                   ],
@@ -473,9 +507,16 @@ class _DeleteLedgerConfirmPanelState extends State<_DeleteLedgerConfirmPanel> {
       if (!mounted) return;
       setState(() {
         _deleting = false;
-        _errorText = FriendlyError.message(error, fallback: '删除失败，请稍后重试。');
+        _errorText = FriendlyError.message(
+          error,
+          fallback: _isLeaveAction ? '退出失败，请稍后重试。' : '删除失败，请稍后重试。',
+        );
       });
     }
+  }
+
+  bool get _isLeaveAction {
+    return _isLeaveLedgerAction(widget.ledger);
   }
 }
 
@@ -743,6 +784,7 @@ class _LedgerCard extends StatelessWidget {
                           : _LedgerOperationOverlay(
                               key: ValueKey(operation),
                               operation: operation!,
+                              isLeaveAction: _isLeaveLedgerAction(ledger),
                             ),
                     ),
                   ),
@@ -757,9 +799,14 @@ class _LedgerCard extends StatelessWidget {
 }
 
 class _LedgerOperationOverlay extends StatelessWidget {
-  const _LedgerOperationOverlay({super.key, required this.operation});
+  const _LedgerOperationOverlay({
+    super.key,
+    required this.operation,
+    required this.isLeaveAction,
+  });
 
   final _LedgerCardOperation operation;
+  final bool isLeaveAction;
 
   @override
   Widget build(BuildContext context) {
@@ -767,7 +814,7 @@ class _LedgerOperationOverlay extends StatelessWidget {
     final message = switch (operation) {
       _LedgerCardOperation.share => '正在生成邀请',
       _LedgerCardOperation.sync => '正在同步账本',
-      _LedgerCardOperation.delete => '正在删除账本',
+      _LedgerCardOperation.delete => isLeaveAction ? '正在退出账本' : '正在删除账本',
     };
 
     return ColoredBox(

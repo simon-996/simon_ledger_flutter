@@ -181,7 +181,7 @@ class _LedgerInviteShareSheetState
             child: OutlinedButton.icon(
               onPressed: () => _copy(context, invite.code, text, '邀请文本已复制'),
               icon: const Icon(Icons.copy_rounded),
-              label: const Text('复制完整邀请'),
+              label: const Text('复制全部信息'),
             ),
           ),
         ],

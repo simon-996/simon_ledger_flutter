@@ -375,7 +375,7 @@ class RemoteLedgerRepository implements LedgerRepository {
       }
       if (ledger.isDeleted) {
         try {
-          await _deleteRemoteLedger(ledger);
+          await _removeRemoteLedgerAccess(ledger);
         } catch (error) {
           await _db.saveLedger(ledger..syncError = error.toString());
         }
@@ -482,13 +482,13 @@ class RemoteLedgerRepository implements LedgerRepository {
         ..syncError = null,
     );
     unawaited(
-      _deleteRemoteLedger(ledger).catchError(
+      _removeRemoteLedgerAccess(ledger).catchError(
         (error) => _db.saveLedger(ledger..syncError = error.toString()),
       ),
     );
   }
 
-  Future<void> _deleteRemoteLedger(Ledger ledger) async {
+  Future<void> _removeRemoteLedgerAccess(Ledger ledger) async {
     if (!_looksLikeRemoteUuid(ledger.remoteSyncUuid)) {
       await _db.saveLedger(
         ledger
@@ -497,15 +497,27 @@ class RemoteLedgerRepository implements LedgerRepository {
       );
       return;
     }
-    await _apiClient.deleteVoid(
-      '/api/ledgers/${ledger.remoteSyncUuid}',
-      idempotencyKey: 'delete-ledger-${ledger.remoteSyncUuid}',
-    );
+    if (_shouldLeaveRemoteLedger(ledger)) {
+      await _apiClient.postVoid(
+        '/api/ledgers/${ledger.remoteSyncUuid}/leave',
+        idempotencyKey: 'leave-ledger-${ledger.remoteSyncUuid}',
+      );
+    } else {
+      await _apiClient.deleteVoid(
+        '/api/ledgers/${ledger.remoteSyncUuid}',
+        idempotencyKey: 'delete-ledger-${ledger.remoteSyncUuid}',
+      );
+    }
     await _db.saveLedger(
       ledger
         ..pendingSync = false
         ..syncError = null,
     );
+  }
+
+  bool _shouldLeaveRemoteLedger(Ledger ledger) {
+    final role = ledger.role?.trim().toLowerCase();
+    return role != null && role != 'owner';
   }
 
   static Ledger _ledgerFromJson(Object? json) {

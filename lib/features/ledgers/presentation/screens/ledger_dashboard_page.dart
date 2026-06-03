@@ -311,7 +311,8 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
           if (!displayCurrencies.contains(_displayCurrency)) {
             _displayCurrency = 'CNY';
           }
-          final totalExpense = transactions
+          final filteredTransactions = _visibleTransactions(transactions);
+          final totalExpense = filteredTransactions
               .where((t) => t.type == 0)
               .fold(
                 0.0,
@@ -323,7 +324,7 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                       _displayCurrency,
                     ),
               );
-          final totalIncome = transactions
+          final totalIncome = filteredTransactions
               .where((t) => t.type == 1)
               .fold(
                 0.0,
@@ -338,7 +339,7 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
           final balance = totalIncome - totalExpense;
 
           final personStats = calculatePersonTransactionStats(
-            transactions,
+            filteredTransactions,
             amountOf: (transaction) => transactionAmountForDisplay(
               transaction,
               widget.ledger,
@@ -453,22 +454,6 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                   ),
                   data: (peoplePool) {
                     final personMap = peopleByUuid(peoplePool);
-                    final filteredTransactions = List<TransactionRecord>.from(
-                      _selectedFilterPersonUuids.isEmpty
-                          ? transactions
-                          : transactions.where(
-                              (t) =>
-                                  t.personUuids.any(
-                                    (pid) => _selectedFilterPersonUuids
-                                        .contains(pid),
-                                  ) ||
-                                  (t.payerPersonUuid != null &&
-                                      _selectedFilterPersonUuids.contains(
-                                        t.payerPersonUuid,
-                                      )),
-                            ),
-                    )..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
                     final peopleInLedger = _dashboardPersonIds(
                       transactions,
                     ).map((pid) => personOrFallback(personMap, pid)).toList();

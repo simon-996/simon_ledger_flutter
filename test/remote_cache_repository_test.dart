@@ -498,6 +498,43 @@ void main() {
   );
 
   test(
+    'RemoteLedgerRepository leaves non-owner remote ledger instead of deleting',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final database = DatabaseService();
+      final apiClient = _LedgerLeaveApiClient();
+      await database.saveLedger(
+        Ledger()
+          ..uuid = _remoteLedgerUuid
+          ..name = '共享账本'
+          ..baseCurrencyCode = 'CNY'
+          ..exchangeRateToCNY = 1
+          ..role = 'editor'
+          ..memberCount = 2,
+      );
+      final repository = RemoteLedgerRepository(
+        apiClient: apiClient,
+        database: database,
+      );
+
+      await repository.deleteLedger(_remoteLedgerUuid);
+      await _flushBackgroundTasks();
+
+      expect(apiClient.postVoidPaths, [
+        '/api/ledgers/$_remoteLedgerUuid/leave',
+      ]);
+      expect(apiClient.deleteVoidPaths, isEmpty);
+      expect(await database.getAllLedgers(), isEmpty);
+      final ledger = (await database.getAllLedgers(
+        includeDeleted: true,
+      )).single;
+      expect(ledger.isDeleted, isTrue);
+      expect(ledger.pendingSync, isFalse);
+      expect(ledger.syncError, isNull);
+    },
+  );
+
+  test(
     'RemotePersonRepository falls back to cached ledger people offline',
     () async {
       SharedPreferences.setMockInitialValues({});
@@ -798,6 +835,11 @@ class _OfflineApiClient extends ApiClient {
   }
 
   @override
+  Future<void> postVoid(String path, {Object? data, String? idempotencyKey}) {
+    throw Exception('offline');
+  }
+
+  @override
   Future<T> put<T>(
     String path, {
     Object? data,
@@ -916,6 +958,31 @@ class _PersonCreateApiClient extends ApiClient {
       'avatar': '🙂',
       'linkedUserUuid': null,
     });
+  }
+}
+
+class _LedgerLeaveApiClient extends ApiClient {
+  _LedgerLeaveApiClient() : super(tokenStore: TokenStore());
+
+  final List<String> postVoidPaths = [];
+  final List<String> deleteVoidPaths = [];
+
+  @override
+  Future<void> postVoid(
+    String path, {
+    Object? data,
+    String? idempotencyKey,
+  }) async {
+    postVoidPaths.add(path);
+  }
+
+  @override
+  Future<void> deleteVoid(
+    String path, {
+    Object? data,
+    String? idempotencyKey,
+  }) async {
+    deleteVoidPaths.add(path);
   }
 }
 
