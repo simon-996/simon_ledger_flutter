@@ -200,8 +200,14 @@ class _HomePageState extends ConsumerState<HomePage> {
             .read(ledgerNotifierProvider.notifier)
             .addLedgerWithPeople(newLedger, result.people);
       } else {
+        final personRepository = ref.read(personRepositoryProvider);
+        for (final person in result.people) {
+          await personRepository.savePerson(person);
+        }
         await ref.read(ledgerNotifierProvider.notifier).addLedger(newLedger);
       }
+      ref.invalidate(personNotifierProvider);
+      ref.invalidate(cachedPeopleProvider);
       if (!isCloudMode && result.includeSelf) {
         await _addSelfToLedgerWithRetry(newLedger);
       }
