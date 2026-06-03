@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/models/ledger.dart';
 import '../../../../core/models/money.dart';
+import '../../../../core/models/person.dart';
 import '../../../../core/models/person_lookup.dart';
 import '../../../../core/models/transaction_record.dart';
 import '../../../../core/di/providers.dart';
@@ -32,6 +33,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
   String? _payerPersonUuid;
   int _transactionType = 0;
   bool _savingTransaction = false;
+  bool _successDialogVisible = false;
 
   final _amountController = TextEditingController();
   final _noteController = TextEditingController();
@@ -189,7 +191,111 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     super.dispose();
   }
 
-  void _saveTransaction() async {
+  void _showSuccessAnimation(
+    double amount,
+    String currency,
+    String category,
+    Iterable<Person> people,
+  ) {
+    _successDialogVisible = true;
+    showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: Colors.black45,
+      transitionDuration: const Duration(milliseconds: 360),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        final colorScheme = Theme.of(context).colorScheme;
+
+        return Center(
+          child: ScaleTransition(
+            scale: CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutBack,
+            ),
+            child: FadeTransition(
+              opacity: animation,
+              child: Card(
+                margin: const EdgeInsets.symmetric(horizontal: 32),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 28,
+                    vertical: 24,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 72,
+                        height: 72,
+                        decoration: BoxDecoration(
+                          color: colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        child: Icon(
+                          Icons.check_rounded,
+                          size: 42,
+                          color: colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        '记账成功',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 8),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          '$currency ${amount.toStringAsFixed(2)}',
+                          style: Theme.of(context).textTheme.headlineMedium
+                              ?.copyWith(
+                                color: colorScheme.primary,
+                                fontWeight: FontWeight.w900,
+                              ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Chip(
+                        avatar: const Icon(Icons.category_outlined, size: 16),
+                        label: Text(category),
+                      ),
+                      if (people.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          alignment: WrapAlignment.center,
+                          children: people
+                              .map(
+                                (person) =>
+                                    Text('${person.avatar} ${person.name}'),
+                              )
+                              .toList(),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    ).whenComplete(() {
+      _successDialogVisible = false;
+    });
+
+    Future.delayed(const Duration(milliseconds: 1400), () {
+      if (!mounted || !_successDialogVisible) return;
+      final navigator = Navigator.of(context, rootNavigator: true);
+      if (!navigator.canPop()) return;
+      _successDialogVisible = false;
+      navigator.pop();
+    });
+  }
+
+  void _saveTransaction(List<Person> peoplePool) async {
     if (_savingTransaction) return;
 
     final amount = double.tryParse(_amountController.text);
@@ -212,6 +318,10 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
       return;
     }
 
+    final personMap = peopleByUuid(peoplePool);
+    final selectedPeople = _selectedPersonIds
+        .map((pid) => personOrFallback(personMap, pid))
+        .toList();
     setState(() => _savingTransaction = true);
     try {
       final profile = await ref.read(localProfileProvider.future);
@@ -249,10 +359,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     }
 
     if (mounted) {
-      AppNotice.success(
-        context,
-        '已保存 · $currency ${amount.toStringAsFixed(2)}',
-      );
+      _showSuccessAnimation(amount, currency, category, selectedPeople);
       _amountController.clear();
       _noteController.clear();
       FocusScope.of(context).unfocus();
@@ -665,11 +772,11 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
             ),
             child: AppAnimatedSwitcher(
               child: peopleAsyncValue.maybeWhen(
-                data: (_) => _SaveTransactionButton(
+                data: (peoplePool) => _SaveTransactionButton(
                   key: const ValueKey('save-enabled'),
                   onPressed: _selectedLedgerUuid == null || _savingTransaction
                       ? null
-                      : _saveTransaction,
+                      : () => _saveTransaction(peoplePool),
                   loading: _savingTransaction,
                   loadingLabel: '保存中',
                 ),
