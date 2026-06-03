@@ -92,7 +92,7 @@ https://ledger.simon996.com/invite/{code}
 - `showLedgerInviteShareSheet`
   - 打开轻量分享弹窗。
 - `LedgerInviteShareSheet`
-  - 展示账本名、邀请码、有效期和剩余使用次数。
+  - 展示账本名和邀请码。
   - 复制邀请码、邀请链接、完整邀请文本。
 - `LedgerInviteJoinPage`
   - 加载邀请详情。

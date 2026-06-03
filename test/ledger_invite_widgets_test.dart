@@ -48,6 +48,8 @@ void main() {
     expect(find.text('旅行账本'), findsOneWidget);
     expect(find.text('USD 美元'), findsNothing);
     expect(find.text('Simon'), findsNothing);
+    expect(find.textContaining('有效期'), findsNothing);
+    expect(find.textContaining('剩余'), findsNothing);
     expect(find.text('复制邀请码'), findsOneWidget);
     expect(find.text('复制邀请链接'), findsOneWidget);
     expect(find.text('复制完整邀请'), findsOneWidget);

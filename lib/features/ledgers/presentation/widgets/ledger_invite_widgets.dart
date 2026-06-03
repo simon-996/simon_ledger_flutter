@@ -41,7 +41,7 @@ class LedgerInviteShareSheet extends StatelessWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 520),
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -49,14 +49,15 @@ class LedgerInviteShareSheet extends StatelessWidget {
                 Row(
                   children: [
                     Container(
-                      width: 42,
-                      height: 42,
+                      width: 38,
+                      height: 38,
                       decoration: BoxDecoration(
                         color: colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(13),
                       ),
                       child: Icon(
                         Icons.ios_share_rounded,
+                        size: 20,
                         color: colorScheme.onPrimaryContainer,
                       ),
                     ),
@@ -83,12 +84,15 @@ class LedgerInviteShareSheet extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 14),
                 Container(
-                  padding: const EdgeInsets.all(18),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
                   decoration: BoxDecoration(
                     color: colorScheme.primaryContainer.withValues(alpha: 0.72),
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(16),
                     border: Border.all(
                       color: colorScheme.primary.withValues(alpha: 0.18),
                     ),
@@ -112,22 +116,13 @@ class LedgerInviteShareSheet extends StatelessWidget {
                               fontWeight: FontWeight.w900,
                             ),
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        _summaryText(invite),
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onPrimaryContainer.withValues(
-                            alpha: 0.78,
-                          ),
-                        ),
-                      ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 14),
                 FilledButton.icon(
                   style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(48),
+                    minimumSize: const Size.fromHeight(44),
                   ),
                   onPressed: () => _copy(
                     context,
@@ -137,7 +132,7 @@ class LedgerInviteShareSheet extends StatelessWidget {
                   icon: const Icon(Icons.link_rounded),
                   label: const Text('复制邀请链接'),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 Row(
                   children: [
                     Expanded(
@@ -170,17 +165,6 @@ class LedgerInviteShareSheet extends StatelessWidget {
     await Clipboard.setData(ClipboardData(text: text));
     if (!context.mounted) return;
     AppNotice.success(context, notice);
-  }
-
-  String _summaryText(LedgerInvite invite) {
-    final remainingUses = invite.remainingUses;
-    final usage = remainingUses == null ? '不限次数' : '剩余 $remainingUses 次';
-    return '有效期至 ${_formatDate(invite.expiresAt)} · $usage';
-  }
-
-  String _formatDate(DateTime dateTime) {
-    final local = dateTime.toLocal();
-    return '${local.month} 月 ${local.day} 日';
   }
 }
 
