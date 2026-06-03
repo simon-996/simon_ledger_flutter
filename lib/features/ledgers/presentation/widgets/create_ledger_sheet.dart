@@ -61,8 +61,8 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
     _baseCurrencyCode = widget.existingLedger?.baseCurrencyCode ?? 'CNY';
     _rateController = TextEditingController(
       text: _baseCurrencyCode == 'CNY'
-          ? '1.0'
-          : widget.existingLedger?.exchangeRateToCNY.toString() ?? '1.0',
+          ? '1'
+          : _formatRateInput(widget.existingLedger?.exchangeRateToCNY),
     );
 
     if (widget.existingLedger != null) {
@@ -76,6 +76,14 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
     _rateController.dispose();
     _nameFocus.dispose();
     super.dispose();
+  }
+
+  String _formatRateInput(double? rate) {
+    final value = rate ?? 1.0;
+    if (value == value.roundToDouble()) {
+      return value.toStringAsFixed(0);
+    }
+    return value.toString();
   }
 
   Future<void> _addNewPerson() async {
@@ -369,7 +377,7 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
                                 setState(() {
                                   _baseCurrencyCode = value;
                                   if (value == 'CNY') {
-                                    _rateController.text = '1.0';
+                                    _rateController.text = '1';
                                   }
                                 });
                               },

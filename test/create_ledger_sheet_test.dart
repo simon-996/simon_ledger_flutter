@@ -29,7 +29,7 @@ void main() {
 
     final rateField = tester.widget<TextField>(_rateFieldFinder());
     expect(rateField.enabled, isFalse);
-    expect(rateField.controller!.text, '1.0');
+    expect(rateField.controller!.text, '1');
     expect(find.text('人民币账本汇率固定为 1'), findsOneWidget);
   });
 
@@ -57,7 +57,7 @@ void main() {
 
     final rateField = tester.widget<TextField>(_rateFieldFinder());
     expect(rateField.enabled, isFalse);
-    expect(rateField.controller!.text, '1.0');
+    expect(rateField.controller!.text, '1');
   });
 
   testWidgets('foreign currency ledger allows editing exchange rate', (
@@ -82,6 +82,7 @@ void main() {
 
     final rateField = tester.widget<TextField>(_rateFieldFinder());
     expect(rateField.enabled, isTrue);
+    expect(rateField.controller!.text, '1');
     expect(find.text('1 USD = ? CNY'), findsOneWidget);
   });
 

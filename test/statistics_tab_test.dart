@@ -44,6 +44,19 @@ void main() {
       expect(find.text('本月'), findsOneWidget);
       expect(find.text('本年'), findsOneWidget);
       expect(find.text('全部'), findsOneWidget);
+      final timeFilterTop = tester.getTopLeft(find.text('近7天')).dy;
+      expect(
+        tester.getTopLeft(find.text('本月')).dy,
+        moreOrLessEquals(timeFilterTop),
+      );
+      expect(
+        tester.getTopLeft(find.text('本年')).dy,
+        moreOrLessEquals(timeFilterTop),
+      );
+      expect(
+        tester.getTopLeft(find.text('全部')).dy,
+        moreOrLessEquals(timeFilterTop),
+      );
     },
   );
 }

@@ -1010,36 +1010,28 @@ class _TimeFilterChips extends StatelessWidget {
       (TimeFilter.all, '全部'),
     ];
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const spacing = 8.0;
-        final compact = constraints.maxWidth < 360;
-        final availableWidth = constraints.maxWidth > spacing
-            ? constraints.maxWidth - spacing
-            : 0.0;
-        final itemWidth = compact ? availableWidth / 2 : null;
-        return Wrap(
-          spacing: spacing,
-          runSpacing: 8,
-          children: items.map((item) {
-            final active = selected == item.$1;
-            final chip = ChoiceChip(
+    return Row(
+      children: [
+        for (var index = 0; index < items.length; index++) ...[
+          if (index > 0) const SizedBox(width: 6),
+          Expanded(
+            child: ChoiceChip(
               showCheckmark: false,
+              labelPadding: EdgeInsets.zero,
+              visualDensity: VisualDensity.compact,
               label: Center(
                 child: Text(
-                  item.$2,
+                  items[index].$2,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              selected: active,
-              onSelected: (_) => onChanged(item.$1),
-            );
-            if (itemWidth == null) return chip;
-            return SizedBox(width: itemWidth, child: chip);
-          }).toList(),
-        );
-      },
+              selected: selected == items[index].$1,
+              onSelected: (_) => onChanged(items[index].$1),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
