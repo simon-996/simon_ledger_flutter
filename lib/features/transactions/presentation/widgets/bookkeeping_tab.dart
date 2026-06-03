@@ -195,6 +195,8 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     double amount,
     String currency,
     String category,
+    String ledgerName,
+    int transactionType,
     Iterable<Person> people,
   ) {
     _successDialogVisible = true;
@@ -202,83 +204,37 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
       context: context,
       barrierDismissible: true,
       barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
-      barrierColor: Colors.black45,
-      transitionDuration: const Duration(milliseconds: 360),
+      barrierColor: Colors.black.withValues(alpha: 0.38),
+      transitionDuration: const Duration(milliseconds: 420),
       pageBuilder: (context, animation, secondaryAnimation) {
-        final colorScheme = Theme.of(context).colorScheme;
-
         return Center(
-          child: ScaleTransition(
-            scale: CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOutBack,
-            ),
-            child: FadeTransition(
-              opacity: animation,
-              child: Card(
-                margin: const EdgeInsets.symmetric(horizontal: 32),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 28,
-                    vertical: 24,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 72,
-                        height: 72,
-                        decoration: BoxDecoration(
-                          color: colorScheme.primaryContainer,
-                          borderRadius: BorderRadius.circular(24),
-                        ),
-                        child: Icon(
-                          Icons.check_rounded,
-                          size: 42,
-                          color: colorScheme.primary,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        '记账成功',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 8),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          '$currency ${amount.toStringAsFixed(2)}',
-                          style: Theme.of(context).textTheme.headlineMedium
-                              ?.copyWith(
-                                color: colorScheme.primary,
-                                fontWeight: FontWeight.w900,
-                              ),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      Chip(
-                        avatar: const Icon(Icons.category_outlined, size: 16),
-                        label: Text(category),
-                      ),
-                      if (people.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 6,
-                          alignment: WrapAlignment.center,
-                          children: people
-                              .map(
-                                (person) =>
-                                    Text('${person.avatar} ${person.name}'),
-                              )
-                              .toList(),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ),
+          child: _BookkeepingSuccessCard(
+            amount: amount,
+            currency: currency,
+            category: category,
+            ledgerName: ledgerName,
+            transactionType: transactionType,
+            people: people.toList(),
+          ),
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: AppMotion.emphasized,
+          reverseCurve: Curves.easeInCubic,
+        );
+        final scale = Tween<double>(begin: 0.94, end: 1).animate(curved);
+        final offset = Tween<Offset>(
+          begin: const Offset(0, 0.04),
+          end: Offset.zero,
+        ).animate(curved);
+
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: offset,
+            child: ScaleTransition(scale: scale, child: child),
           ),
         );
       },
@@ -312,6 +268,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     final category = _selectedCategory ?? '默认';
     final currency = _selectedCurrency ?? 'CNY';
     final ledgerId = _selectedLedgerUuid;
+    final ledger = _selectedLedger;
 
     if (ledgerId == null) {
       AppNotice.error(context, '请先选择一个所属账本');
@@ -359,7 +316,14 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     }
 
     if (mounted) {
-      _showSuccessAnimation(amount, currency, category, selectedPeople);
+      _showSuccessAnimation(
+        amount,
+        currency,
+        category,
+        ledger?.name ?? '当前账本',
+        _transactionType,
+        selectedPeople,
+      );
       _amountController.clear();
       _noteController.clear();
       FocusScope.of(context).unfocus();
@@ -829,6 +793,198 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
         if (mounted) _persistDraft();
       });
     }
+  }
+}
+
+class _BookkeepingSuccessCard extends StatelessWidget {
+  const _BookkeepingSuccessCard({
+    required this.amount,
+    required this.currency,
+    required this.category,
+    required this.ledgerName,
+    required this.transactionType,
+    required this.people,
+  });
+
+  final double amount;
+  final String currency;
+  final String category;
+  final String ledgerName;
+  final int transactionType;
+  final List<Person> people;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isIncome = transactionType == 1;
+    final toneColor = isIncome ? colorScheme.primary : colorScheme.error;
+    final amountPrefix = isIncome ? '+' : '-';
+    final visiblePeople = people.take(3).toList();
+    final hiddenPeopleCount = people.length - visiblePeople.length;
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 360),
+      child: Card(
+        margin: const EdgeInsets.symmetric(horizontal: 24),
+        elevation: 18,
+        shadowColor: colorScheme.shadow.withValues(alpha: 0.18),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(28),
+          side: BorderSide(color: colorScheme.outlineVariant),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _SuccessCheckBadge(color: toneColor),
+              const SizedBox(height: 16),
+              Text(
+                isIncome ? '收入已记下' : '支出已记下',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                '已保存到 $ledgerName',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 16),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  '$amountPrefix $currency ${amount.toStringAsFixed(2)}',
+                  style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                    color: toneColor,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
+                children: [
+                  _SuccessInfoChip(
+                    icon: Icons.category_outlined,
+                    label: category,
+                  ),
+                  for (final person in visiblePeople)
+                    _SuccessInfoChip(avatar: person.avatar, label: person.name),
+                  if (hiddenPeopleCount > 0)
+                    _SuccessInfoChip(label: '+$hiddenPeopleCount 人'),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(
+                '本机已保存，可以继续记账',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SuccessCheckBadge extends StatelessWidget {
+  const _SuccessCheckBadge({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 520),
+      curve: Curves.easeOutBack,
+      builder: (context, value, child) {
+        return Transform.scale(scale: value, child: child);
+      },
+      child: Container(
+        width: 74,
+        height: 74,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: color.withValues(alpha: 0.18)),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.16),
+              blurRadius: 22,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Center(
+          child: Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Icon(Icons.check_rounded, size: 34, color: color),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SuccessInfoChip extends StatelessWidget {
+  const _SuccessInfoChip({required this.label, this.icon, this.avatar});
+
+  final String label;
+  final IconData? icon;
+  final String? avatar;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final avatarText = avatar;
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 136),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 15, color: colorScheme.onSurfaceVariant),
+            const SizedBox(width: 5),
+          ] else if (avatarText != null && avatarText.isNotEmpty) ...[
+            Text(avatarText, style: const TextStyle(fontSize: 13)),
+            const SizedBox(width: 5),
+          ],
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(
+                context,
+              ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
