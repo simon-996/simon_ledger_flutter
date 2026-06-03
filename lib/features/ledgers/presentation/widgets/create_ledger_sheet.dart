@@ -290,7 +290,11 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final canSubmit = _nameController.text.trim().isNotEmpty;
-    final maxHeight = MediaQuery.sizeOf(context).height * 0.86;
+    final viewportHeight = MediaQuery.sizeOf(context).height;
+    final sheetHeight = _stableSheetHeight(
+      viewportHeight: viewportHeight,
+      bottomInset: bottomInset,
+    );
     final token = ref.watch(authTokenProvider).valueOrNull;
     final isCloudMode = token != null && token.isValid;
     final personLedgerUuid = isCloudMode ? widget.existingLedger?.uuid : null;
@@ -324,10 +328,9 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
       ),
       child: SafeArea(
         top: false,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: maxHeight),
+        child: SizedBox(
+          height: sheetHeight,
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _SheetHeader(
@@ -513,6 +516,21 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
         includeSelf: _shouldIncludeSelfFallback,
       ),
     );
+  }
+
+  double _stableSheetHeight({
+    required double viewportHeight,
+    required double bottomInset,
+  }) {
+    final maxHeight = viewportHeight * 0.86;
+    final availableHeight = (viewportHeight - bottomInset - 24).clamp(
+      280.0,
+      viewportHeight,
+    );
+    if (availableHeight <= 520) {
+      return availableHeight.toDouble();
+    }
+    return availableHeight.clamp(420.0, maxHeight).toDouble();
   }
 
   Future<List<Person>> _buildCreatePeople() async {

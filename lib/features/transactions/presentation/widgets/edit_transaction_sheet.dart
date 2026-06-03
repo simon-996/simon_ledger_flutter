@@ -165,7 +165,11 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    final maxHeight = MediaQuery.sizeOf(context).height * 0.9;
+    final viewportHeight = MediaQuery.sizeOf(context).height;
+    final sheetHeight = _stableSheetHeight(
+      viewportHeight: viewportHeight,
+      bottomInset: bottomInset,
+    );
     final colorScheme = Theme.of(context).colorScheme;
     final currencyOptions = supportedCurrenciesForLedger(widget.ledger);
     if (!currencyOptions.contains(_selectedCurrency)) {
@@ -189,10 +193,9 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
       curve: AppMotion.standard,
       child: SafeArea(
         top: false,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: maxHeight),
+        child: SizedBox(
+          height: sheetHeight,
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _EditSheetHeader(
@@ -587,6 +590,21 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
       return value.toStringAsFixed(0);
     }
     return value.toStringAsFixed(2);
+  }
+
+  double _stableSheetHeight({
+    required double viewportHeight,
+    required double bottomInset,
+  }) {
+    final maxHeight = viewportHeight * 0.9;
+    final availableHeight = (viewportHeight - bottomInset - 24).clamp(
+      280.0,
+      viewportHeight,
+    );
+    if (availableHeight <= 520) {
+      return availableHeight.toDouble();
+    }
+    return availableHeight.clamp(420.0, maxHeight).toDouble();
   }
 }
 
