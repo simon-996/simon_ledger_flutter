@@ -18,7 +18,6 @@ Future<void> showLedgerInviteShareSheet({
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    showDragHandle: true,
     useSafeArea: true,
     builder: (context) => LedgerInviteShareSheet(invite: invite),
   );
@@ -37,122 +36,134 @@ class LedgerInviteShareSheet extends StatelessWidget {
     );
     final colorScheme = Theme.of(context).colorScheme;
     return SafeArea(
-      child: Center(
+      top: false,
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        heightFactor: 1,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 520),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(13),
-                      ),
-                      child: Icon(
-                        Icons.ios_share_rounded,
-                        size: 20,
-                        color: colorScheme.onPrimaryContainer,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '邀请好友加入',
-                            style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(fontWeight: FontWeight.w800),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            invite.ledgerName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(color: colorScheme.onSurfaceVariant),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 14,
-                  ),
-                  decoration: BoxDecoration(
-                    color: colorScheme.primaryContainer.withValues(alpha: 0.72),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: colorScheme.primary.withValues(alpha: 0.18),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          child: SizedBox(
+            width: double.infinity,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
                     children: [
-                      Text(
-                        '邀请码',
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(13),
+                        ),
+                        child: Icon(
+                          Icons.ios_share_rounded,
+                          size: 20,
                           color: colorScheme.onPrimaryContainer,
-                          fontWeight: FontWeight.w700,
                         ),
                       ),
-                      const SizedBox(height: 6),
-                      SelectableText(
-                        invite.code,
-                        style: Theme.of(context).textTheme.headlineMedium
-                            ?.copyWith(
-                              color: colorScheme.onPrimaryContainer,
-                              fontWeight: FontWeight.w900,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '邀请好友加入',
+                              style: Theme.of(context).textTheme.titleLarge
+                                  ?.copyWith(fontWeight: FontWeight.w800),
                             ),
+                            const SizedBox(height: 2),
+                            Text(
+                              invite.ledgerName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 14),
-                FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(44),
-                  ),
-                  onPressed: () => _copy(
-                    context,
-                    InviteLinks.urlForCode(invite.code),
-                    '邀请链接已复制',
-                  ),
-                  icon: const Icon(Icons.link_rounded),
-                  label: const Text('复制邀请链接'),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _copy(context, invite.code, '邀请码已复制'),
-                        icon: const Icon(Icons.key_rounded),
-                        label: const Text('复制邀请码'),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colorScheme.primaryContainer.withValues(
+                        alpha: 0.72,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: colorScheme.primary.withValues(alpha: 0.18),
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _copy(context, text, '邀请文本已复制'),
-                        icon: const Icon(Icons.copy_rounded),
-                        label: const Text('复制完整邀请'),
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '邀请码',
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(
+                                color: colorScheme.onPrimaryContainer,
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                        const SizedBox(height: 6),
+                        SelectableText(
+                          invite.code,
+                          style: Theme.of(context).textTheme.headlineMedium
+                              ?.copyWith(
+                                color: colorScheme.onPrimaryContainer,
+                                fontWeight: FontWeight.w900,
+                              ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ],
+                  ),
+                  const SizedBox(height: 14),
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(44),
+                    ),
+                    onPressed: () => _copy(
+                      context,
+                      InviteLinks.urlForCode(invite.code),
+                      '邀请链接已复制',
+                    ),
+                    icon: const Icon(Icons.link_rounded),
+                    label: const Text('复制邀请链接'),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () =>
+                              _copy(context, invite.code, '邀请码已复制'),
+                          icon: const Icon(Icons.key_rounded),
+                          label: const Text('复制邀请码'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _copy(context, text, '邀请文本已复制'),
+                          icon: const Icon(Icons.copy_rounded),
+                          label: const Text('复制完整邀请'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),

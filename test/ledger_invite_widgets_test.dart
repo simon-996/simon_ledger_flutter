@@ -44,6 +44,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(LedgerInviteShareSheet), findsOneWidget);
+    expect(
+      tester.getSize(find.byType(LedgerInviteShareSheet)).height,
+      lessThan(360),
+    );
     expect(find.text('ABCD1234'), findsOneWidget);
     expect(find.text('旅行账本'), findsOneWidget);
     expect(find.text('USD 美元'), findsNothing);
