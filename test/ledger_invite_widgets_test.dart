@@ -65,6 +65,40 @@ void main() {
     expect(find.text('生成邀请码'), findsNothing);
   });
 
+  testWidgets(
+    'share sheet copy buttons keep labels on one line on narrow screens',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(360, 780));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => FilledButton(
+                  onPressed: () => showLedgerInviteShareSheet(
+                    context: context,
+                    ledgerUuid: invite.ledgerUuid,
+                    initialInvite: invite,
+                  ),
+                  child: const Text('分享'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('分享'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('复制邀请码'), findsOneWidget);
+      expect(find.text('复制全部信息'), findsOneWidget);
+      expect(tester.getSize(find.text('复制全部信息')).height, lessThan(24));
+    },
+  );
+
   testWidgets('share sheet configures and regenerates invitation', (
     tester,
   ) async {

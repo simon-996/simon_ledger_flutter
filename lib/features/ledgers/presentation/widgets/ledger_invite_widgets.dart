@@ -166,25 +166,9 @@ class _LedgerInviteShareSheetState
         label: const Text('复制邀请链接'),
       ),
       const SizedBox(height: 8),
-      Row(
-        children: [
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: () =>
-                  _copy(context, invite.code, invite.code, '邀请码已复制'),
-              icon: const Icon(Icons.key_rounded),
-              label: const Text('复制邀请码'),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: () => _copy(context, invite.code, text, '邀请文本已复制'),
-              icon: const Icon(Icons.copy_rounded),
-              label: const Text('复制全部信息'),
-            ),
-          ),
-        ],
+      _InviteCopyActions(
+        onCopyCode: () => _copy(context, invite.code, invite.code, '邀请码已复制'),
+        onCopyText: () => _copy(context, invite.code, text, '邀请文本已复制'),
       ),
     ];
   }
@@ -357,6 +341,69 @@ class _LedgerInviteShareSheetState
         ? '今天过期'
         : '${(duration.inHours / 24).ceil()} 天后过期';
     return '$usage · $expires';
+  }
+}
+
+class _InviteCopyActions extends StatelessWidget {
+  const _InviteCopyActions({
+    required this.onCopyCode,
+    required this.onCopyText,
+  });
+
+  final VoidCallback onCopyCode;
+  final VoidCallback onCopyText;
+
+  @override
+  Widget build(BuildContext context) {
+    final buttonStyle = OutlinedButton.styleFrom(
+      minimumSize: const Size(0, 44),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
+    final codeButton = OutlinedButton.icon(
+      style: buttonStyle,
+      onPressed: onCopyCode,
+      icon: const Icon(Icons.key_rounded, size: 18),
+      label: const _NoWrapButtonLabel('复制邀请码'),
+    );
+    final textButton = OutlinedButton.icon(
+      style: buttonStyle,
+      onPressed: onCopyText,
+      icon: const Icon(Icons.copy_rounded, size: 18),
+      label: const _NoWrapButtonLabel('复制全部信息'),
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 300) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [codeButton, const SizedBox(height: 8), textButton],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: codeButton),
+            const SizedBox(width: 8),
+            Expanded(child: textButton),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _NoWrapButtonLabel extends StatelessWidget {
+  const _NoWrapButtonLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Text(text, maxLines: 1, softWrap: false),
+    );
   }
 }
 
