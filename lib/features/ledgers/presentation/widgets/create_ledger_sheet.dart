@@ -318,8 +318,8 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
         : null;
 
     return AnimatedPadding(
-      duration: const Duration(milliseconds: 150),
-      curve: Curves.easeOut,
+      duration: AppMotion.fast,
+      curve: AppMotion.standard,
       padding: EdgeInsets.only(
         left: 16,
         right: 16,

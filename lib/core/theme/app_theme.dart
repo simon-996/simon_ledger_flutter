@@ -7,10 +7,23 @@ class AppTheme {
   static const Color tertiaryColor = Color(0xFFB7791F);
   static const Color errorColor = Color(0xFFDC2626);
   static const Color successColor = Color(0xFF15803D);
+  static const Color infoColor = Color(0xFF2563EB);
 
   static const Color surfaceColor = Color(0xFFFAFBF8);
   static const Color surfaceContainerColor = Color(0xFFF0F4F1);
   static const Color onSurfaceColor = Color(0xFF18201D);
+
+  static const List<Color> chartColors = [
+    primaryColor,
+    tertiaryColor,
+    errorColor,
+    Color(0xFF2F6FAD),
+    Color(0xFF7C5B8F),
+    Color(0xFF2B8A78),
+    Color(0xFF6B7280),
+    Color(0xFF9A6A2F),
+    Color(0xFFB4535A),
+  ];
 
   static const double radiusSmall = 10;
   static const double radiusMedium = 14;

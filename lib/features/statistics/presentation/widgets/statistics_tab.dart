@@ -172,18 +172,7 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
   }
 
   Color _getColorForCategory(int index, BuildContext context) {
-    final colors = [
-      Theme.of(context).colorScheme.primary,
-      Theme.of(context).colorScheme.tertiary,
-      Theme.of(context).colorScheme.error,
-      Colors.orange.shade500,
-      Colors.purple.shade400,
-      Colors.cyan.shade500,
-      Colors.indigo.shade400,
-      Colors.lime.shade600,
-      Colors.pink.shade400,
-    ];
-    return colors[index % colors.length];
+    return AppTheme.chartColors[index % AppTheme.chartColors.length];
   }
 
   @override

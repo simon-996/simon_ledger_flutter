@@ -62,7 +62,7 @@ class _TransactionTypeButton extends StatelessWidget {
 
     return AnimatedContainer(
       duration: AppMotion.fast,
-      curve: Curves.easeOut,
+      curve: AppMotion.standard,
       height: 48,
       decoration: BoxDecoration(
         color: selected
@@ -294,7 +294,7 @@ class _CurrencyQuickItem extends StatelessWidget {
     return AnimatedContainer(
       width: fillWidth ? double.infinity : null,
       duration: AppMotion.fast,
-      curve: Curves.easeOut,
+      curve: AppMotion.standard,
       decoration: BoxDecoration(
         color: selected
             ? colorScheme.primaryContainer.withValues(alpha: 0.58)
@@ -464,7 +464,7 @@ class _CategoryQuickItem extends StatelessWidget {
 
     return AnimatedContainer(
       duration: AppMotion.fast,
-      curve: Curves.easeOut,
+      curve: AppMotion.standard,
       decoration: BoxDecoration(
         color: selected
             ? accent.withValues(alpha: 0.12)
@@ -531,7 +531,7 @@ class TransactionSaveButton extends StatelessWidget {
 
     return AnimatedContainer(
       duration: AppMotion.fast,
-      curve: Curves.easeOut,
+      curve: AppMotion.standard,
       height: 54,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),

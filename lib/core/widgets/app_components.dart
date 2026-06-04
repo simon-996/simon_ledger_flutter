@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../models/ledger.dart';
 import '../models/person.dart';
 import '../network/friendly_error.dart';
+import '../theme/app_theme.dart';
 
 class AppMotion {
   static const Duration fast = Duration(milliseconds: 160);
@@ -957,12 +958,12 @@ class _LedgerPersonChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
           color: isShared
-              ? Colors.green.withValues(alpha: 0.08)
+              ? AppTheme.successColor.withValues(alpha: 0.08)
               : colorScheme.surfaceContainerHigh.withValues(alpha: 0.68),
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
             color: isShared
-                ? Colors.green.shade600.withValues(alpha: 0.72)
+                ? AppTheme.successColor.withValues(alpha: 0.72)
                 : colorScheme.outlineVariant.withValues(alpha: 0.72),
           ),
         ),
