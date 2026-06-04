@@ -74,22 +74,127 @@ class _SignedInPanel extends ConsumerWidget {
         const SizedBox(height: 16),
         const _CloudImportCard(),
         const SizedBox(height: 16),
-        FilledButton.icon(
-          onPressed: () async {
-            try {
-              await ref.read(authRepositoryProvider).logout();
-            } catch (_) {
-              await ref.read(tokenStoreProvider).clear();
-            }
-            ref.invalidate(authTokenProvider);
-            ref.invalidate(currentUserProvider);
-            ref.invalidate(ledgerNotifierProvider);
-            ref.invalidate(ledgerStatsProvider);
-          },
-          icon: const Icon(Icons.logout_rounded),
-          label: const Text('退出登录'),
-        ),
+        const _AccountActionsSection(),
       ],
+    );
+  }
+}
+
+class _AccountActionsSection extends ConsumerWidget {
+  const _AccountActionsSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return AppSectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '账号操作',
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: () => _confirmLogout(context, ref),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: colorScheme.error,
+              side: BorderSide(
+                color: colorScheme.error.withValues(alpha: 0.42),
+              ),
+              backgroundColor: colorScheme.errorContainer.withValues(
+                alpha: 0.08,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+            icon: const Icon(Icons.logout_rounded),
+            label: const Text('退出登录'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => const _LogoutConfirmSheet(),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      await ref.read(authRepositoryProvider).logout();
+    } catch (_) {
+      await ref.read(tokenStoreProvider).clear();
+    }
+    ref.invalidate(authTokenProvider);
+    ref.invalidate(currentUserProvider);
+    ref.invalidate(ledgerNotifierProvider);
+    ref.invalidate(ledgerStatsProvider);
+  }
+}
+
+class _LogoutConfirmSheet extends StatelessWidget {
+  const _LogoutConfirmSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '退出登录？',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '本机数据会保留，未同步内容会在下次登录后继续处理。',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('取消'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => Navigator.pop(context, true),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: colorScheme.error,
+                      foregroundColor: colorScheme.onError,
+                    ),
+                    icon: const Icon(Icons.logout_rounded),
+                    label: const Text('退出登录'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

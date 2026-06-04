@@ -207,4 +207,94 @@ void main() {
       greaterThan(FontWeight.w700.value),
     );
   });
+
+  testWidgets('account logout uses quiet danger action with confirmation', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.binding.setSurfaceSize(const Size(390, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final database = DatabaseService();
+    final authRepository = _FakeAuthRepository();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          authRepositoryProvider.overrideWithValue(authRepository),
+          authTokenProvider.overrideWith(
+            (ref) async => const AuthToken(name: 'satoken', value: 'token'),
+          ),
+          currentUserProvider.overrideWith(
+            (ref) async => const AuthUser(
+              uuid: 'user-1',
+              nickname: 'Simon',
+              email: 'simon@example.com',
+            ),
+          ),
+          localProfileProvider.overrideWith(
+            (ref) async =>
+                const LocalProfile(nickname: 'Simon', avatarIcon: 'person'),
+          ),
+          syncOverviewProvider.overrideWith((ref) async => emptyOverview),
+        ],
+        child: const MaterialApp(home: Scaffold(body: AccountTab())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('账号操作'), findsOneWidget);
+    final logoutButton = find.widgetWithText(OutlinedButton, '退出登录');
+    expect(logoutButton, findsOneWidget);
+
+    await tester.tap(logoutButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('退出登录？'), findsOneWidget);
+    expect(find.text('本机数据会保留，未同步内容会在下次登录后继续处理。'), findsOneWidget);
+    expect(authRepository.logoutCalls, 0);
+
+    await tester.tap(find.widgetWithText(FilledButton, '退出登录'));
+    await tester.pumpAndSettle();
+
+    expect(authRepository.logoutCalls, 1);
+  });
+}
+
+class _FakeAuthRepository implements AuthRepository {
+  int logoutCalls = 0;
+
+  @override
+  Future<AuthUser> register({
+    String? email,
+    String? phone,
+    required String password,
+    required String nickname,
+    String? avatar,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<AuthLoginResult> login({
+    required String account,
+    required String password,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<AuthUser> me() {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<AuthUser> updateProfile({required String nickname, String? avatar}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> logout() async {
+    logoutCalls += 1;
+  }
 }
