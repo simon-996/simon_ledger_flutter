@@ -870,34 +870,56 @@ class AppLedgerPeopleChips extends StatelessWidget {
     super.key,
     required this.sharedMembers,
     required this.localManualPeople,
+    this.singleLine = false,
   });
 
   final List<LedgerMemberSummary> sharedMembers;
   final List<Person> localManualPeople;
+  final bool singleLine;
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        ...sharedMembers.map((member) {
-          return _LedgerPersonChip(
-            avatar: member.displayAvatar,
-            name: member.displayName,
-            tooltip: '${member.displayName}${_roleLabel(member.role)} · 共享成员',
-            isShared: true,
-          );
-        }),
-        ...localManualPeople.map((person) {
-          return _LedgerPersonChip(
-            avatar: person.avatar,
-            name: person.name,
-            tooltip: person.name,
-          );
-        }),
-      ],
-    );
+    final chips = [
+      ...sharedMembers.map((member) {
+        return _LedgerPersonChip(
+          avatar: member.displayAvatar,
+          name: member.displayName,
+          tooltip: '${member.displayName}${_roleLabel(member.role)} · 共享成员',
+          isShared: true,
+        );
+      }),
+      ...localManualPeople.map((person) {
+        return _LedgerPersonChip(
+          avatar: person.avatar,
+          name: person.name,
+          tooltip: person.name,
+        );
+      }),
+    ];
+
+    if (chips.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    if (singleLine) {
+      return SizedBox(
+        height: 38,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          clipBehavior: Clip.hardEdge,
+          child: Row(
+            children: [
+              for (var index = 0; index < chips.length; index++) ...[
+                if (index > 0) const SizedBox(width: 8),
+                chips[index],
+              ],
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Wrap(spacing: 8, runSpacing: 8, children: chips);
   }
 
   String _roleLabel(String? role) {

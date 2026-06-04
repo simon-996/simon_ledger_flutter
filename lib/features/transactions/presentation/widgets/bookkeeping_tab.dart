@@ -1088,41 +1088,180 @@ class _QuickEntryHeader extends StatelessWidget {
   Future<void> _showLedgerPicker(BuildContext context) async {
     final picked = await showModalBottomSheet<String>(
       context: context,
+      isScrollControlled: true,
       showDragHandle: true,
       useSafeArea: true,
-      builder: (context) => SafeArea(
-        top: false,
-        child: ListView.separated(
-          shrinkWrap: true,
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          itemCount: ledgers.length + 1,
-          separatorBuilder: (context, index) => index == 0
-              ? const SizedBox(height: 8)
-              : const SizedBox(height: 6),
-          itemBuilder: (context, index) {
-            if (index == 0) {
-              return Text(
-                '选择所属账本',
-                style: Theme.of(context).textTheme.titleMedium,
-              );
-            }
-
-            final item = ledgers[index - 1];
-            final selected = item.uuid == ledger?.uuid;
-            return _LedgerPickerItem(
-              ledger: item,
-              peopleById: peopleById,
-              selected: selected,
-              onTap: () => Navigator.of(context).pop(item.uuid),
-            );
-          },
-        ),
+      builder: (context) => _LedgerPickerSheet(
+        ledgers: ledgers,
+        selectedLedgerUuid: ledger?.uuid,
+        peopleById: peopleById,
       ),
     );
 
     if (picked != null) {
       onLedgerChanged(picked);
     }
+  }
+}
+
+class _LedgerPickerSheet extends StatefulWidget {
+  const _LedgerPickerSheet({
+    required this.ledgers,
+    required this.selectedLedgerUuid,
+    required this.peopleById,
+  });
+
+  final List<Ledger> ledgers;
+  final String? selectedLedgerUuid;
+  final Map<String, Person> peopleById;
+
+  @override
+  State<_LedgerPickerSheet> createState() => _LedgerPickerSheetState();
+}
+
+class _LedgerPickerSheetState extends State<_LedgerPickerSheet> {
+  final _searchController = TextEditingController();
+  String _keyword = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final visibleLedgers = _keyword.isEmpty
+        ? widget.ledgers
+        : widget.ledgers.where(_matchesKeyword).toList();
+
+    return FractionallySizedBox(
+      heightFactor: 0.78,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '选择所属账本',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '${visibleLedgers.length}/${widget.ledgers.length}',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _LedgerPickerSearchField(
+                controller: _searchController,
+                onChanged: (value) {
+                  setState(() => _keyword = value.trim().toLowerCase());
+                },
+                onClear: () {
+                  _searchController.clear();
+                  setState(() => _keyword = '');
+                },
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: visibleLedgers.isEmpty
+                    ? const AppEmptyState(
+                        icon: Icons.search_off_rounded,
+                        title: '没有找到匹配账本',
+                        message: '换个账本名称试试。',
+                      )
+                    : ListView.separated(
+                        clipBehavior: Clip.hardEdge,
+                        itemCount: visibleLedgers.length,
+                        separatorBuilder: (context, index) =>
+                            const SizedBox(height: 8),
+                        itemBuilder: (context, index) {
+                          final item = visibleLedgers[index];
+                          final selected =
+                              item.uuid == widget.selectedLedgerUuid;
+                          return _LedgerPickerItem(
+                            ledger: item,
+                            peopleById: widget.peopleById,
+                            selected: selected,
+                            onTap: () => Navigator.of(context).pop(item.uuid),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  bool _matchesKeyword(Ledger ledger) {
+    final keyword = _keyword;
+    if (keyword.isEmpty) return true;
+    return ledger.name.trim().toLowerCase().contains(keyword) ||
+        ledger.displayCode.toLowerCase().contains(keyword) ||
+        ledger.baseCurrencyCode.toLowerCase().contains(keyword);
+  }
+}
+
+class _LedgerPickerSearchField extends StatelessWidget {
+  const _LedgerPickerSearchField({
+    required this.controller,
+    required this.onChanged,
+    required this.onClear,
+  });
+
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return SizedBox(
+      height: 46,
+      child: TextField(
+        controller: controller,
+        onChanged: onChanged,
+        textInputAction: TextInputAction.search,
+        decoration: InputDecoration(
+          hintText: '搜索账本名称',
+          prefixIcon: const Icon(Icons.search_rounded),
+          suffixIcon: controller.text.isEmpty
+              ? null
+              : IconButton(
+                  tooltip: '清除搜索',
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: onClear,
+                ),
+          filled: true,
+          fillColor: colorScheme.surfaceContainerLow,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: colorScheme.outlineVariant),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: colorScheme.outlineVariant),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -1161,7 +1300,7 @@ class _LedgerPickerItem extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -1177,6 +1316,18 @@ class _LedgerPickerItem extends StatelessWidget {
                       ),
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  _LedgerMetaChip(
+                    icon: Icons.currency_exchange_rounded,
+                    label: ledger.baseCurrencyCode,
+                  ),
+                  if (ledger.isShared) ...[
+                    const SizedBox(width: 6),
+                    _LedgerMetaChip(
+                      icon: Icons.group_outlined,
+                      label: '${ledger.memberCount} 人共享',
+                    ),
+                  ],
                   if (selected) ...[
                     const SizedBox(width: 8),
                     Icon(
@@ -1187,39 +1338,19 @@ class _LedgerPickerItem extends StatelessWidget {
                   ],
                 ],
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 3),
               Text(
                 ledger.displayCode,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: metadataStyle,
               ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  _LedgerMetaChip(
-                    icon: Icons.currency_exchange_rounded,
-                    label: ledger.baseCurrencyCode,
-                  ),
-                  if (ledger.isShared)
-                    _LedgerMetaChip(
-                      icon: Icons.group_outlined,
-                      label: '${ledger.memberCount} 人共享',
-                    )
-                  else
-                    const _LedgerMetaChip(
-                      icon: Icons.person_outline_rounded,
-                      label: '个人账本',
-                    ),
-                ],
-              ),
               if (hasPeople) ...[
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 AppLedgerPeopleChips(
                   sharedMembers: ledger.members,
                   localManualPeople: localManualPeople,
+                  singleLine: true,
                 ),
               ],
             ],
