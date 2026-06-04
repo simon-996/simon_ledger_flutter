@@ -8,6 +8,7 @@ import 'package:simon_ledger_flutter/core/models/local_profile.dart';
 import 'package:simon_ledger_flutter/core/network/token_store.dart';
 import 'package:simon_ledger_flutter/core/repositories/auth_repository.dart';
 import 'package:simon_ledger_flutter/core/services/sync_overview_service.dart';
+import 'package:simon_ledger_flutter/core/widgets/app_components.dart';
 import 'package:simon_ledger_flutter/features/auth/presentation/providers/auth_provider.dart';
 import 'package:simon_ledger_flutter/features/auth/presentation/widgets/account_tab.dart';
 
@@ -243,9 +244,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('账号操作'), findsOneWidget);
+    expect(find.text('账号操作'), findsNothing);
     final logoutButton = find.widgetWithText(OutlinedButton, '退出登录');
     expect(logoutButton, findsOneWidget);
+    expect(
+      find.ancestor(of: logoutButton, matching: find.byType(AppSectionCard)),
+      findsNothing,
+    );
 
     await tester.tap(logoutButton);
     await tester.pumpAndSettle();

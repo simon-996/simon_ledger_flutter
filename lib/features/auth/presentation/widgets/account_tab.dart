@@ -87,37 +87,20 @@ class _AccountActionsSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return AppSectionCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            '账号操作',
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w800,
-            ),
+    return Center(
+      child: OutlinedButton.icon(
+        onPressed: () => _confirmLogout(context, ref),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: colorScheme.error,
+          side: BorderSide(color: colorScheme.error.withValues(alpha: 0.42)),
+          backgroundColor: colorScheme.errorContainer.withValues(alpha: 0.08),
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
           ),
-          const SizedBox(height: 10),
-          OutlinedButton.icon(
-            onPressed: () => _confirmLogout(context, ref),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: colorScheme.error,
-              side: BorderSide(
-                color: colorScheme.error.withValues(alpha: 0.42),
-              ),
-              backgroundColor: colorScheme.errorContainer.withValues(
-                alpha: 0.08,
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-            icon: const Icon(Icons.logout_rounded),
-            label: const Text('退出登录'),
-          ),
-        ],
+        ),
+        icon: const Icon(Icons.logout_rounded),
+        label: const Text('退出登录'),
       ),
     );
   }
