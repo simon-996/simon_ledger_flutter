@@ -1017,34 +1017,38 @@ class _QuickEntryHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final accent = isIncome ? colorScheme.primary : colorScheme.error;
+    final mutedColor = colorScheme.onSurfaceVariant.withValues(alpha: 0.68);
+    final iconColor = colorScheme.onSurfaceVariant.withValues(alpha: 0.72);
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(18),
         onTap: () => _showLedgerPicker(context),
         child: AppSectionCard(
-          padding: const EdgeInsets.all(18),
-          color: colorScheme.primaryContainer.withValues(alpha: 0.38),
-          borderColor: colorScheme.primary.withValues(alpha: 0.12),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          color: colorScheme.surfaceContainerLow.withValues(alpha: 0.46),
+          borderColor: colorScheme.outlineVariant.withValues(alpha: 0.46),
           child: Row(
             children: [
               Container(
-                width: 48,
-                height: 48,
+                width: 38,
+                height: 38,
                 decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(16),
+                  color: colorScheme.surfaceContainerHighest.withValues(
+                    alpha: 0.46,
+                  ),
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(
                   isIncome
                       ? Icons.savings_outlined
                       : Icons.receipt_long_outlined,
-                  color: accent,
+                  size: 20,
+                  color: iconColor,
                 ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1053,9 +1057,13 @@ class _QuickEntryHeader extends StatelessWidget {
                       ledger?.name ?? '点击选择一个账本',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: colorScheme.onSurface,
-                        fontWeight: FontWeight.w900,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: ledger == null
+                            ? colorScheme.onSurfaceVariant
+                            : colorScheme.onSurface,
+                        fontWeight: ledger == null
+                            ? FontWeight.w600
+                            : FontWeight.w800,
                       ),
                     ),
                     if (ledger != null) ...[
@@ -1065,18 +1073,19 @@ class _QuickEntryHeader extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
+                          color: mutedColor,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
                   ],
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Icon(
                 Icons.expand_more_rounded,
-                color: colorScheme.onSurfaceVariant,
+                size: 20,
+                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.72),
               ),
             ],
           ),
