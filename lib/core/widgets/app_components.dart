@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../models/ledger.dart';
+import '../models/person.dart';
 import '../network/friendly_error.dart';
 
 class AppMotion {
@@ -859,6 +861,112 @@ class AppPersonChoiceGrid extends StatelessWidget {
           }).toList(),
         );
       },
+    );
+  }
+}
+
+class AppLedgerPeopleChips extends StatelessWidget {
+  const AppLedgerPeopleChips({
+    super.key,
+    required this.sharedMembers,
+    required this.localManualPeople,
+  });
+
+  final List<LedgerMemberSummary> sharedMembers;
+  final List<Person> localManualPeople;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        ...sharedMembers.map((member) {
+          return _LedgerPersonChip(
+            avatar: member.displayAvatar,
+            name: member.displayName,
+            tooltip: '${member.displayName}${_roleLabel(member.role)} · 共享成员',
+            isShared: true,
+          );
+        }),
+        ...localManualPeople.map((person) {
+          return _LedgerPersonChip(
+            avatar: person.avatar,
+            name: person.name,
+            tooltip: person.name,
+          );
+        }),
+      ],
+    );
+  }
+
+  String _roleLabel(String? role) {
+    return switch (role) {
+      'owner' => ' · 所有者',
+      'admin' => ' · 管理员',
+      'editor' => ' · 可记账',
+      'viewer' => ' · 查看',
+      _ => '',
+    };
+  }
+}
+
+class _LedgerPersonChip extends StatelessWidget {
+  const _LedgerPersonChip({
+    required this.avatar,
+    required this.name,
+    required this.tooltip,
+    this.isShared = false,
+  });
+
+  final String avatar;
+  final String name;
+  final String tooltip;
+  final bool isShared;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Tooltip(
+      message: tooltip,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 156),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: isShared
+              ? Colors.green.withValues(alpha: 0.08)
+              : colorScheme.surfaceContainerHigh.withValues(alpha: 0.68),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: isShared
+                ? Colors.green.shade600.withValues(alpha: 0.72)
+                : colorScheme.outlineVariant.withValues(alpha: 0.72),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(
+              radius: 13,
+              backgroundColor: colorScheme.surfaceContainerHighest,
+              child: Text(avatar, style: const TextStyle(fontSize: 13)),
+            ),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: colorScheme.onSurface,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

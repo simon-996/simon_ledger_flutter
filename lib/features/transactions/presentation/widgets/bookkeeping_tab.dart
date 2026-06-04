@@ -354,6 +354,9 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
         ledgerUuid: selectedLedger?.uuid,
       ),
     );
+    final ledgerPeopleById = ref
+        .watch(cachedPeopleProvider)
+        .maybeWhen(data: peopleByUuid, orElse: () => const <String, Person>{});
     final syncStatus = selectedLedger == null
         ? null
         : ref.watch(ledgerSyncStatusProvider(selectedLedger.uuid)).valueOrNull;
@@ -380,6 +383,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                     ),
                     ledgers: widget.ledgers,
                     ledger: selectedLedger,
+                    peopleById: ledgerPeopleById,
                     currencyCode: _selectedCurrency,
                     isIncome: _transactionType == 1,
                     onLedgerChanged: (ledgerUuid) {
@@ -997,6 +1001,7 @@ class _QuickEntryHeader extends StatelessWidget {
     super.key,
     required this.ledgers,
     required this.ledger,
+    required this.peopleById,
     required this.currencyCode,
     required this.isIncome,
     required this.onLedgerChanged,
@@ -1004,6 +1009,7 @@ class _QuickEntryHeader extends StatelessWidget {
 
   final List<Ledger> ledgers;
   final Ledger? ledger;
+  final Map<String, Person> peopleById;
   final String? currencyCode;
   final bool isIncome;
   final ValueChanged<String> onLedgerChanged;
@@ -1105,6 +1111,7 @@ class _QuickEntryHeader extends StatelessWidget {
             final selected = item.uuid == ledger?.uuid;
             return _LedgerPickerItem(
               ledger: item,
+              peopleById: peopleById,
               selected: selected,
               onTap: () => Navigator.of(context).pop(item.uuid),
             );
@@ -1122,11 +1129,13 @@ class _QuickEntryHeader extends StatelessWidget {
 class _LedgerPickerItem extends StatelessWidget {
   const _LedgerPickerItem({
     required this.ledger,
+    required this.peopleById,
     required this.selected,
     required this.onTap,
   });
 
   final Ledger ledger;
+  final Map<String, Person> peopleById;
   final bool selected;
   final VoidCallback onTap;
 
@@ -1137,6 +1146,11 @@ class _LedgerPickerItem extends StatelessWidget {
       color: colorScheme.onSurfaceVariant.withValues(alpha: 0.72),
       fontWeight: FontWeight.w500,
     );
+    final localManualPeople = ledger.personUuids
+        .map((uuid) => personOrFallback(peopleById, uuid, name: '人员'))
+        .where((person) => person.linkedUserUuid == null && !person.isDeleted)
+        .toList();
+    final hasPeople = ledger.members.isNotEmpty || localManualPeople.isNotEmpty;
 
     return Material(
       color: selected
@@ -1148,81 +1162,66 @@ class _LedgerPickerItem extends StatelessWidget {
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: selected
-                      ? colorScheme.primary.withValues(alpha: 0.14)
-                      : colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(
-                  Icons.menu_book_rounded,
-                  color: selected
-                      ? colorScheme.primary
-                      : colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            ledger.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w900),
-                          ),
-                        ),
-                        if (selected) ...[
-                          const SizedBox(width: 8),
-                          Icon(
-                            Icons.check_circle_rounded,
-                            color: colorScheme.primary,
-                            size: 20,
-                          ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      ledger.displayCode,
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      ledger.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: metadataStyle,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: [
-                        _LedgerMetaChip(
-                          icon: Icons.currency_exchange_rounded,
-                          label: ledger.baseCurrencyCode,
-                        ),
-                        if (ledger.isShared)
-                          _LedgerMetaChip(
-                            icon: Icons.group_outlined,
-                            label: '${ledger.memberCount} 人共享',
-                          )
-                        else
-                          const _LedgerMetaChip(
-                            icon: Icons.person_outline_rounded,
-                            label: '个人账本',
-                          ),
-                      ],
+                  ),
+                  if (selected) ...[
+                    const SizedBox(width: 8),
+                    Icon(
+                      Icons.check_circle_rounded,
+                      color: colorScheme.primary,
+                      size: 20,
                     ),
                   ],
-                ),
+                ],
               ),
+              const SizedBox(height: 4),
+              Text(
+                ledger.displayCode,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: metadataStyle,
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  _LedgerMetaChip(
+                    icon: Icons.currency_exchange_rounded,
+                    label: ledger.baseCurrencyCode,
+                  ),
+                  if (ledger.isShared)
+                    _LedgerMetaChip(
+                      icon: Icons.group_outlined,
+                      label: '${ledger.memberCount} 人共享',
+                    )
+                  else
+                    const _LedgerMetaChip(
+                      icon: Icons.person_outline_rounded,
+                      label: '个人账本',
+                    ),
+                ],
+              ),
+              if (hasPeople) ...[
+                const SizedBox(height: 10),
+                AppLedgerPeopleChips(
+                  sharedMembers: ledger.members,
+                  localManualPeople: localManualPeople,
+                ),
+              ],
             ],
           ),
         ),
