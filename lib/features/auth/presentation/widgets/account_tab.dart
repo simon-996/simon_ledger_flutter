@@ -187,6 +187,20 @@ class AccountSyncCenterContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final hasPending = overview.pendingCount > 0;
+    final hasFailures = overview.failedCount > 0;
+    final statusText = hasFailures
+        ? '${overview.failedCount} 项同步失败，可点击下方按钮重试'
+        : hasPending
+        ? '数据已保存在本机，联网后会自动同步'
+        : '暂无待同步';
+    final statusStyle = hasPending || hasFailures
+        ? Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant)
+        : Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: colorScheme.onSurfaceVariant.withValues(alpha: 0.56),
+            fontWeight: FontWeight.w500,
+          );
     return _AccountLoadingOverlay(
       loading: syncing,
       message: '正在同步数据',
@@ -220,21 +234,14 @@ class AccountSyncCenterContent extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          Text(
-            overview.failedCount > 0
-                ? '${overview.failedCount} 项同步失败，可点击下方按钮重试'
-                : hasPending
-                ? '数据已保存在本机，联网后会自动同步'
-                : '本机没有待同步数据',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
+          Text(statusText, style: statusStyle),
           const SizedBox(height: 4),
           Text(
             _lastSyncText(overview.lastSuccessfulSyncAt),
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
+              color: hasPending || hasFailures
+                  ? colorScheme.onSurfaceVariant
+                  : colorScheme.onSurfaceVariant.withValues(alpha: 0.52),
             ),
           ),
           if (overview.failures.isNotEmpty) ...[
@@ -663,26 +670,17 @@ class _UnifiedProfileCardState extends ConsumerState<_UnifiedProfileCard> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      AppSectionHeader(
-                        title: '账户昵称和头像',
-                        trailing: TextButton.icon(
-                          onPressed: () => _editProfile(profile),
-                          icon: const Icon(Icons.edit_rounded, size: 18),
-                          label: const Text('修改'),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
                       Row(
                         children: [
                           CircleAvatar(
-                            radius: 28,
+                            radius: 30,
                             backgroundColor: colorScheme.primaryContainer,
                             child: Text(
                               profile.personAvatar,
-                              style: Theme.of(context).textTheme.titleLarge,
+                              style: Theme.of(context).textTheme.headlineSmall,
                             ),
                           ),
-                          const SizedBox(width: 14),
+                          const SizedBox(width: 16),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -691,18 +689,20 @@ class _UnifiedProfileCardState extends ConsumerState<_UnifiedProfileCard> {
                                   profile.normalizedNickname,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(fontWeight: FontWeight.w800),
+                                  style: Theme.of(context).textTheme.titleLarge
+                                      ?.copyWith(fontWeight: FontWeight.w900),
                                 ),
-                                const SizedBox(height: 4),
+                                const SizedBox(height: 3),
                                 Text(
                                   widget.account ??
                                       (widget.isSignedIn ? '已登录' : '未登录本地使用'),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodyMedium
+                                  style: Theme.of(context).textTheme.bodySmall
                                       ?.copyWith(
-                                        color: colorScheme.onSurfaceVariant,
+                                        color: colorScheme.onSurfaceVariant
+                                            .withValues(alpha: 0.66),
+                                        fontWeight: FontWeight.w500,
                                       ),
                                 ),
                               ],
