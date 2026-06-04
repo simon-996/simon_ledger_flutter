@@ -59,6 +59,7 @@ class _TransactionTypeButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final accent = value == 0 ? colorScheme.error : colorScheme.primary;
+    final mutedColor = colorScheme.onSurfaceVariant.withValues(alpha: 0.48);
 
     return AnimatedContainer(
       duration: AppMotion.fast,
@@ -67,12 +68,12 @@ class _TransactionTypeButton extends StatelessWidget {
       decoration: BoxDecoration(
         color: selected
             ? accent.withValues(alpha: 0.12)
-            : colorScheme.surfaceContainerLowest,
+            : colorScheme.surfaceContainerLow.withValues(alpha: 0.42),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: selected
               ? accent.withValues(alpha: 0.52)
-              : colorScheme.outlineVariant,
+              : colorScheme.outlineVariant.withValues(alpha: 0.42),
         ),
       ),
       child: Material(
@@ -83,17 +84,13 @@ class _TransactionTypeButton extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                icon,
-                size: 20,
-                color: selected ? accent : colorScheme.onSurfaceVariant,
-              ),
+              Icon(icon, size: 20, color: selected ? accent : mutedColor),
               const SizedBox(width: 8),
               Text(
                 label,
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: selected ? accent : colorScheme.onSurface,
-                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                  color: selected ? accent : mutedColor,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
                 ),
               ),
             ],
@@ -123,22 +120,30 @@ class PaymentModePanel extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SegmentedButton<bool>(
-          showSelectedIcon: false,
-          segments: const [
-            ButtonSegment(
-              value: false,
-              icon: Icon(Icons.account_balance_wallet_outlined),
-              label: Text('共同钱包'),
+        Row(
+          children: [
+            Expanded(
+              child: _PaymentModeOption(
+                selected: !paidByPerson,
+                icon: Icons.account_balance_wallet_outlined,
+                label: '共同钱包',
+                onTap: () {
+                  if (paidByPerson) onChanged(false);
+                },
+              ),
             ),
-            ButtonSegment(
-              value: true,
-              icon: Icon(Icons.person_outline_rounded),
-              label: Text('某人代付'),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _PaymentModeOption(
+                selected: paidByPerson,
+                icon: Icons.person_outline_rounded,
+                label: '某人代付',
+                onTap: () {
+                  if (!paidByPerson) onChanged(true);
+                },
+              ),
             ),
           ],
-          selected: {paidByPerson},
-          onSelectionChanged: (selection) => onChanged(selection.first),
         ),
         const SizedBox(height: 10),
         AnimatedSwitcher(
@@ -152,6 +157,73 @@ class PaymentModePanel extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _PaymentModeOption extends StatelessWidget {
+  const _PaymentModeOption({
+    required this.selected,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final bool selected;
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final mutedColor = colorScheme.onSurfaceVariant.withValues(alpha: 0.5);
+
+    return AnimatedContainer(
+      duration: AppMotion.fast,
+      curve: AppMotion.standard,
+      height: 44,
+      decoration: BoxDecoration(
+        color: selected
+            ? colorScheme.primaryContainer.withValues(alpha: 0.58)
+            : colorScheme.surfaceContainerLow.withValues(alpha: 0.42),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: selected
+              ? colorScheme.primary.withValues(alpha: 0.52)
+              : colorScheme.outlineVariant.withValues(alpha: 0.42),
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: selected ? colorScheme.primary : mutedColor,
+              ),
+              const SizedBox(width: 7),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: selected ? colorScheme.primary : mutedColor,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -290,6 +362,7 @@ class _CurrencyQuickItem extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final label = currency.trim().toUpperCase();
     final displayName = _currencyDisplayName(label);
+    final mutedColor = colorScheme.onSurfaceVariant.withValues(alpha: 0.52);
 
     return AnimatedContainer(
       width: fillWidth ? double.infinity : null,
@@ -298,12 +371,12 @@ class _CurrencyQuickItem extends StatelessWidget {
       decoration: BoxDecoration(
         color: selected
             ? colorScheme.primaryContainer.withValues(alpha: 0.58)
-            : colorScheme.surfaceContainerLowest,
+            : colorScheme.surfaceContainerLow.withValues(alpha: 0.42),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: selected
               ? colorScheme.primary.withValues(alpha: 0.52)
-              : colorScheme.outlineVariant,
+              : colorScheme.outlineVariant.withValues(alpha: 0.42),
         ),
       ),
       child: Material(
@@ -332,12 +405,10 @@ class _CurrencyQuickItem extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: selected
-                              ? colorScheme.primary
-                              : colorScheme.onSurface,
+                          color: selected ? colorScheme.primary : mutedColor,
                           fontWeight: selected
                               ? FontWeight.w800
-                              : FontWeight.w600,
+                              : FontWeight.w500,
                         ),
                       ),
                       Text(
@@ -345,8 +416,12 @@ class _CurrencyQuickItem extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
+                          color: selected
+                              ? colorScheme.onSurfaceVariant
+                              : mutedColor,
+                          fontWeight: selected
+                              ? FontWeight.w600
+                              : FontWeight.w500,
                         ),
                       ),
                     ],
@@ -461,6 +536,7 @@ class _CategoryQuickItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final accent = isIncome ? colorScheme.primary : colorScheme.error;
+    final mutedColor = colorScheme.onSurfaceVariant.withValues(alpha: 0.5);
 
     return AnimatedContainer(
       duration: AppMotion.fast,
@@ -468,12 +544,12 @@ class _CategoryQuickItem extends StatelessWidget {
       decoration: BoxDecoration(
         color: selected
             ? accent.withValues(alpha: 0.12)
-            : colorScheme.surfaceContainerLowest,
+            : colorScheme.surfaceContainerLow.withValues(alpha: 0.42),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: selected
               ? accent.withValues(alpha: 0.52)
-              : colorScheme.outlineVariant,
+              : colorScheme.outlineVariant.withValues(alpha: 0.42),
         ),
       ),
       child: Material(
@@ -486,19 +562,15 @@ class _CategoryQuickItem extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  icon,
-                  size: 18,
-                  color: selected ? accent : colorScheme.onSurfaceVariant,
-                ),
+                Icon(icon, size: 18, color: selected ? accent : mutedColor),
                 const SizedBox(width: 6),
                 Text(
                   category,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: selected ? accent : colorScheme.onSurface,
-                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                    color: selected ? accent : mutedColor,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
                   ),
                 ),
               ],

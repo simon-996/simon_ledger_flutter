@@ -1156,15 +1156,18 @@ class _PersonChoiceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final mutedColor = colorScheme.onSurfaceVariant.withValues(alpha: 0.52);
 
     return _AnimatedTapSurface(
       color: selected
           ? colorScheme.primaryContainer.withValues(alpha: 0.72)
-          : colorScheme.surfaceContainerLowest,
+          : colorScheme.surfaceContainerLow.withValues(alpha: 0.42),
       borderRadius: 16,
       borderSide: BorderSide(
         width: selected ? 1.5 : 1,
-        color: selected ? colorScheme.primary : colorScheme.outlineVariant,
+        color: selected
+            ? colorScheme.primary
+            : colorScheme.outlineVariant.withValues(alpha: 0.42),
       ),
       onTap: onTap,
       child: Padding(
@@ -1175,8 +1178,14 @@ class _PersonChoiceTile extends StatelessWidget {
               radius: 17,
               backgroundColor: selected
                   ? colorScheme.primary.withValues(alpha: 0.13)
-                  : colorScheme.surfaceContainerHigh,
-              child: Text(item.avatar, style: const TextStyle(fontSize: 17)),
+                  : colorScheme.surfaceContainerHigh.withValues(alpha: 0.5),
+              child: Text(
+                item.avatar,
+                style: TextStyle(
+                  fontSize: 17,
+                  color: selected ? null : mutedColor,
+                ),
+              ),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -1186,7 +1195,7 @@ class _PersonChoiceTile extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
                   fontWeight: FontWeight.w700,
-                  color: selected ? colorScheme.primary : colorScheme.onSurface,
+                  color: selected ? colorScheme.primary : mutedColor,
                 ),
               ),
             ),
@@ -1202,7 +1211,7 @@ class _PersonChoiceTile extends StatelessWidget {
                 border: Border.all(
                   color: selected
                       ? colorScheme.primary
-                      : colorScheme.outlineVariant,
+                      : colorScheme.outlineVariant.withValues(alpha: 0.42),
                 ),
               ),
               child: selected
