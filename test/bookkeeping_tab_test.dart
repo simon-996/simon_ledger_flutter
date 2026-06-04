@@ -54,6 +54,48 @@ void main() {
       colorScheme.outlineVariant.withValues(alpha: 0.46),
     );
   });
+
+  testWidgets('bookkeeping page accent follows transaction type', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final database = DatabaseService();
+    final ledger = await _saveLedgerFixture(database);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          authTokenProvider.overrideWith((ref) async => null),
+        ],
+        child: MaterialApp(
+          home: Scaffold(body: BookkeepingTab(ledgers: [ledger])),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final rootScheme = Theme.of(
+      tester.element(find.byType(BookkeepingTab)),
+    ).colorScheme;
+    expect(
+      tester.widget<Icon>(find.byIcon(Icons.receipt_long_outlined)).color,
+      rootScheme.error,
+    );
+    expect(_saveButtonScheme(tester).primary, rootScheme.error);
+
+    await tester.tap(find.text('收入'));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<Icon>(find.byIcon(Icons.savings_outlined)).color,
+      rootScheme.primary,
+    );
+    expect(_saveButtonScheme(tester).primary, rootScheme.primary);
+  });
 }
 
 Future<Ledger> _saveLedgerFixture(DatabaseService database) async {
@@ -77,4 +119,9 @@ Future<Ledger> _saveLedgerFixture(DatabaseService database) async {
       ..avatar = '🙂',
   );
   return ledger;
+}
+
+ColorScheme _saveButtonScheme(WidgetTester tester) {
+  final saveButtonContext = tester.element(find.text('保存记账'));
+  return Theme.of(saveButtonContext).colorScheme;
 }
