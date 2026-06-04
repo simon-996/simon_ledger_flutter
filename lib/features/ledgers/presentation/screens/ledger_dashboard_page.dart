@@ -151,7 +151,8 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
         return;
       }
 
-      const maxTransactionsPerImage = 25;
+      const exportImageWidth = 400.0;
+      const maxTransactionsPerImage = 18;
       final pageCount = includeTransactions
           ? (transactions.length / maxTransactionsPerImage).ceil().clamp(
               1,
@@ -194,7 +195,7 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
           ),
           context: context,
           pixelRatio: pixelRatio,
-          constraints: const BoxConstraints(maxWidth: 400),
+          constraints: const BoxConstraints.tightFor(width: exportImageWidth),
           delay: const Duration(milliseconds: 100),
         );
 

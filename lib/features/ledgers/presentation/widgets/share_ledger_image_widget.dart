@@ -45,9 +45,67 @@ class ShareLedgerImageWidget extends StatelessWidget {
       return personOrFallback(personMap, pid);
     }).toList();
 
+    final content = _ShareLedgerImageContent(
+      ledger: ledger,
+      transactions: transactions,
+      includeTransactions: includeTransactions,
+      pageIndex: pageIndex,
+      totalPages: totalPages,
+      personMap: personMap,
+      totalExpense: totalExpense,
+      totalIncome: totalIncome,
+      balance: balance,
+      personBalances: personBalances,
+      peopleInImage: peopleInImage,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (!constraints.hasBoundedHeight) {
+          return content;
+        }
+
+        return SingleChildScrollView(
+          clipBehavior: Clip.hardEdge,
+          child: content,
+        );
+      },
+    );
+  }
+}
+
+class _ShareLedgerImageContent extends StatelessWidget {
+  const _ShareLedgerImageContent({
+    required this.ledger,
+    required this.transactions,
+    required this.includeTransactions,
+    required this.pageIndex,
+    required this.totalPages,
+    required this.personMap,
+    required this.totalExpense,
+    required this.totalIncome,
+    required this.balance,
+    required this.personBalances,
+    required this.peopleInImage,
+  });
+
+  final Ledger ledger;
+  final List<TransactionRecord> transactions;
+  final bool includeTransactions;
+  final int? pageIndex;
+  final int? totalPages;
+  final Map<String, Person> personMap;
+  final double totalExpense;
+  final double totalIncome;
+  final double balance;
+  final Map<String, double> personBalances;
+  final List<Person> peopleInImage;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      width: 400, // Fixed width for the generated image
-      color: const Color(0xFFF3F4F6), // Background color
+      width: double.infinity,
+      color: const Color(0xFFF3F4F6),
       padding: const EdgeInsets.all(16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -100,17 +158,21 @@ class ShareLedgerImageWidget extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _buildSummaryItem(
-                      '总收入',
-                      totalIncome,
-                      const Color(0xFF10B981),
+                    Expanded(
+                      child: _ShareSummaryItem(
+                        label: '总收入',
+                        amount: totalIncome,
+                        color: const Color(0xFF10B981),
+                      ),
                     ),
-                    _buildSummaryItem(
-                      '总支出',
-                      totalExpense,
-                      const Color(0xFFEF4444),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _ShareSummaryItem(
+                        label: '总支出',
+                        amount: totalExpense,
+                        color: const Color(0xFFEF4444),
+                      ),
                     ),
                   ],
                 ),
@@ -257,6 +319,8 @@ class ShareLedgerImageWidget extends StatelessWidget {
                                       const SizedBox(height: 2),
                                       Text(
                                         t.note,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
                                         style: const TextStyle(
                                           fontSize: 13,
                                           color: Color(0xFF6B7280),
@@ -268,14 +332,24 @@ class ShareLedgerImageWidget extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(width: 12),
-                              Text(
-                                formatTransactionPrimaryAmount(t),
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                  color: t.type == 0
-                                      ? const Color(0xFFEF4444)
-                                      : const Color(0xFF10B981),
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxWidth: 112,
+                                ),
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerRight,
+                                  child: Text(
+                                    formatTransactionPrimaryAmount(t),
+                                    maxLines: 1,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                      color: t.type == 0
+                                          ? const Color(0xFFEF4444)
+                                          : const Color(0xFF10B981),
+                                    ),
+                                  ),
                                 ),
                               ),
                             ],
@@ -285,37 +359,29 @@ class ShareLedgerImageWidget extends StatelessWidget {
                     ),
             ),
           ],
-          const SizedBox(height: 24),
+          const SizedBox(height: 18),
           // Footer
-          const Center(
-            child: Text(
-              'Simon Ledger',
-              style: TextStyle(
-                color: Color(0xFF9CA3AF),
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 2,
-              ),
-            ),
-          ),
-          if ((totalPages ?? 1) > 1)
-            Center(
-              child: Text(
-                '第 ${pageIndex ?? 1}/${totalPages ?? 1} 页',
-                style: const TextStyle(
-                  color: Color(0xFF9CA3AF),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
+          _ShareFooter(pageIndex: pageIndex, totalPages: totalPages),
           const SizedBox(height: 8),
         ],
       ),
     );
   }
+}
 
-  Widget _buildSummaryItem(String label, double amount, Color color) {
+class _ShareSummaryItem extends StatelessWidget {
+  const _ShareSummaryItem({
+    required this.label,
+    required this.amount,
+    required this.color,
+  });
+
+  final String label;
+  final double amount;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       children: [
         Text(
@@ -323,15 +389,47 @@ class ShareLedgerImageWidget extends StatelessWidget {
           style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
         ),
         const SizedBox(height: 4),
-        Text(
-          amount.toStringAsFixed(2),
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: color,
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            amount.toStringAsFixed(2),
+            maxLines: 1,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ShareFooter extends StatelessWidget {
+  const _ShareFooter({required this.pageIndex, required this.totalPages});
+
+  final int? pageIndex;
+  final int? totalPages;
+
+  @override
+  Widget build(BuildContext context) {
+    final pageText = (totalPages ?? 1) > 1
+        ? ' · 第 ${pageIndex ?? 1}/${totalPages ?? 1} 页'
+        : '';
+
+    return Center(
+      child: Text(
+        'Simon Ledger$pageText',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: Color(0xFF9CA3AF),
+          fontSize: 13,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 1.2,
+        ),
+      ),
     );
   }
 }
