@@ -1290,70 +1290,83 @@ class _LedgerPickerItem extends StatelessWidget {
         .where((person) => person.linkedUserUuid == null && !person.isDeleted)
         .toList();
     final hasPeople = ledger.members.isNotEmpty || localManualPeople.isNotEmpty;
+    final backgroundColor = selected
+        ? colorScheme.primaryContainer.withValues(alpha: 0.76)
+        : colorScheme.surfaceContainerHigh.withValues(alpha: 0.88);
+    final borderColor = selected
+        ? colorScheme.primary.withValues(alpha: 0.72)
+        : colorScheme.outlineVariant.withValues(alpha: 0.92);
 
-    return Material(
-      color: selected
-          ? colorScheme.primaryContainer.withValues(alpha: 0.58)
-          : colorScheme.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
+    return AnimatedContainer(
+      duration: AppMotion.fast,
+      curve: AppMotion.standard,
+      decoration: BoxDecoration(
+        color: backgroundColor,
         borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      ledger.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
+        border: Border.all(color: borderColor, width: selected ? 1.3 : 1),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        ledger.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w900),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  _LedgerMetaChip(
-                    icon: Icons.currency_exchange_rounded,
-                    label: ledger.baseCurrencyCode,
-                  ),
-                  if (ledger.isShared) ...[
-                    const SizedBox(width: 6),
-                    _LedgerMetaChip(
-                      icon: Icons.group_outlined,
-                      label: '${ledger.memberCount} 人共享',
-                    ),
-                  ],
-                  if (selected) ...[
                     const SizedBox(width: 8),
-                    Icon(
-                      Icons.check_circle_rounded,
-                      color: colorScheme.primary,
-                      size: 20,
+                    _LedgerMetaChip(
+                      icon: Icons.currency_exchange_rounded,
+                      label: ledger.baseCurrencyCode,
                     ),
+                    if (ledger.isShared) ...[
+                      const SizedBox(width: 6),
+                      _LedgerMetaChip(
+                        icon: Icons.group_outlined,
+                        label: '${ledger.memberCount} 人共享',
+                      ),
+                    ],
+                    if (selected) ...[
+                      const SizedBox(width: 8),
+                      Icon(
+                        Icons.check_circle_rounded,
+                        color: colorScheme.primary,
+                        size: 20,
+                      ),
+                    ],
                   ],
-                ],
-              ),
-              const SizedBox(height: 3),
-              Text(
-                ledger.displayCode,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: metadataStyle,
-              ),
-              if (hasPeople) ...[
-                const SizedBox(height: 8),
-                AppLedgerPeopleChips(
-                  sharedMembers: ledger.members,
-                  localManualPeople: localManualPeople,
-                  singleLine: true,
                 ),
+                const SizedBox(height: 3),
+                Text(
+                  ledger.displayCode,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: metadataStyle,
+                ),
+                if (hasPeople) ...[
+                  const SizedBox(height: 8),
+                  AppLedgerPeopleChips(
+                    sharedMembers: ledger.members,
+                    localManualPeople: localManualPeople,
+                    singleLine: true,
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
