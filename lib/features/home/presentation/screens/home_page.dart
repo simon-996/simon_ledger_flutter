@@ -48,9 +48,8 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
-      appBar: _currentIndex == 0 ? null : AppBar(title: Text(_appBarTitle)),
       body: SafeArea(
-        top: _currentIndex == 0,
+        top: true,
         child: isAccountTab
             ? const AccountTab()
             : ledgersAsyncValue.when(
@@ -163,15 +162,6 @@ class _HomePageState extends ConsumerState<HomePage> {
         ],
       ),
     );
-  }
-
-  String get _appBarTitle {
-    return switch (_currentIndex) {
-      1 => '账本',
-      2 => '统计',
-      3 => '我的',
-      _ => '',
-    };
   }
 
   void _openCreateLedger() async {
