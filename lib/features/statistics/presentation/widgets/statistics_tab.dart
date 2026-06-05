@@ -600,27 +600,60 @@ class _SummaryChartCard extends StatelessWidget {
     final accent = isExpense ? colorScheme.error : colorScheme.primary;
 
     return AppSectionCard(
+      key: const ValueKey('statistics-summary-card'),
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
-      color: accent.withValues(alpha: 0.07),
-      borderColor: accent.withValues(alpha: 0.13),
+      color: colorScheme.surfaceContainerLowest,
+      borderColor: colorScheme.outlineVariant.withValues(alpha: 0.68),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 6),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              amount,
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.w900,
-                color: accent,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        amount,
+                        style: Theme.of(context).textTheme.headlineMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.w900,
+                              color: accent,
+                              height: 1.08,
+                            ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
+              const SizedBox(width: 12),
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  isExpense
+                      ? Icons.trending_down_rounded
+                      : Icons.trending_up_rounded,
+                  color: accent,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 14),
           Row(
@@ -1112,7 +1145,7 @@ class _ResponsiveControls extends StatelessWidget {
         return Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            first,
+            Expanded(child: first),
             const SizedBox(width: 12),
             Expanded(child: second),
           ],
