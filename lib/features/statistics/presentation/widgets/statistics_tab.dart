@@ -16,6 +16,7 @@ import '../../../../core/widgets/app_components.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
 import '../../../transactions/presentation/providers/transaction_provider.dart';
 import '../../../transactions/presentation/widgets/transaction_detail_sheet.dart';
+import '../../../transactions/presentation/widgets/transaction_form_components.dart';
 
 enum TimeFilter { week, month, year, all }
 
@@ -597,7 +598,7 @@ class _SummaryChartCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final accent = isExpense ? colorScheme.error : colorScheme.primary;
+    final accent = transactionAccentColor(colorScheme, isExpense ? 0 : 1);
 
     return AppSectionCard(
       key: const ValueKey('statistics-summary-card'),
