@@ -98,6 +98,44 @@ void main() {
     );
     expect(_saveButtonScheme(tester).primary, incomeAccentColor);
   });
+
+  testWidgets('bookkeeping amount controls use an Apple input panel', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final database = DatabaseService();
+    final ledger = await _saveLedgerFixture(database);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          authTokenProvider.overrideWith((ref) async => null),
+        ],
+        child: MaterialApp(
+          home: Scaffold(body: BookkeepingTab(ledgers: [ledger])),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final context = tester.element(find.byType(BookkeepingTab));
+    final colorScheme = Theme.of(context).colorScheme;
+    final panel = tester.widget<DecoratedBox>(
+      find.byKey(const ValueKey('bookkeeping-amount-panel')),
+    );
+    final decoration = panel.decoration as BoxDecoration;
+    final borderRadius = decoration.borderRadius! as BorderRadius;
+    final border = decoration.border! as Border;
+
+    expect(decoration.color, colorScheme.surfaceContainerLowest);
+    expect(borderRadius.topLeft.x, 28);
+    expect(border.top.color, colorScheme.outlineVariant.withValues(alpha: 0.7));
+    expect(decoration.boxShadow, isNotEmpty);
+  });
 }
 
 Future<Ledger> _saveLedgerFixture(DatabaseService database) async {

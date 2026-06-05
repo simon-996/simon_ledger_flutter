@@ -406,78 +406,24 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                       const SizedBox(height: 14),
                       AppAnimatedEntry(
                         delay: const Duration(milliseconds: 60),
-                        child: AppSectionCard(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              TransactionTypeSelector(
-                                selectedType: _transactionType,
-                                onChanged: (type) {
-                                  _setAndPersist(() {
-                                    _transactionType = type;
-                                    if (_transactionType == 1) {
-                                      _payerPersonUuid = null;
-                                    }
-                                    _selectedCategory =
-                                        _currentCategories.first;
-                                  });
-                                },
-                              ),
-                              const SizedBox(height: 14),
-                              TransactionResponsivePair(
-                                breakpoint: 0,
-                                first: SizedBox(
-                                  height: 56,
-                                  child: TextField(
-                                    controller: _amountController,
-                                    keyboardType:
-                                        const TextInputType.numberWithOptions(
-                                          decimal: true,
-                                        ),
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .headlineSmall
-                                        ?.copyWith(fontWeight: FontWeight.w800),
-                                    decoration: InputDecoration(
-                                      labelText: '金额',
-                                      hintText: '0.00',
-                                      hintStyle: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium
-                                          ?.copyWith(
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .onSurfaceVariant
-                                                .withValues(alpha: 0.62),
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                      prefixText:
-                                          '${_selectedCurrency ?? 'CNY'} ',
-                                      prefixStyle: Theme.of(context)
-                                          .textTheme
-                                          .labelLarge
-                                          ?.copyWith(
-                                            color: Theme.of(
-                                              context,
-                                            ).colorScheme.onSurfaceVariant,
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                    ),
-                                    onChanged: _limitAmountPrecision,
-                                  ),
-                                ),
-                                second: CurrencySelector(
-                                  currencies: currencyOptions,
-                                  selectedCurrency: _selectedCurrency ?? 'CNY',
-                                  onChanged: (currency) {
-                                    _setAndPersist(
-                                      () => _selectedCurrency = currency,
-                                    );
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
+                        child: _BookkeepingAmountPanel(
+                          selectedType: _transactionType,
+                          onTypeChanged: (type) {
+                            _setAndPersist(() {
+                              _transactionType = type;
+                              if (_transactionType == 1) {
+                                _payerPersonUuid = null;
+                              }
+                              _selectedCategory = _currentCategories.first;
+                            });
+                          },
+                          amountController: _amountController,
+                          selectedCurrency: _selectedCurrency ?? 'CNY',
+                          currencies: currencyOptions,
+                          onCurrencyChanged: (currency) {
+                            _setAndPersist(() => _selectedCurrency = currency);
+                          },
+                          onAmountChanged: _limitAmountPrecision,
                         ),
                       ),
                       const SizedBox(height: 14),
@@ -852,6 +798,100 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
         if (mounted) _persistDraft();
       });
     }
+  }
+}
+
+class _BookkeepingAmountPanel extends StatelessWidget {
+  const _BookkeepingAmountPanel({
+    required this.selectedType,
+    required this.onTypeChanged,
+    required this.amountController,
+    required this.selectedCurrency,
+    required this.currencies,
+    required this.onCurrencyChanged,
+    required this.onAmountChanged,
+  });
+
+  final int selectedType;
+  final ValueChanged<int> onTypeChanged;
+  final TextEditingController amountController;
+  final String selectedCurrency;
+  final List<String> currencies;
+  final ValueChanged<String> onCurrencyChanged;
+  final ValueChanged<String> onAmountChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return DecoratedBox(
+      key: const ValueKey('bookkeeping-amount-panel'),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.7),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: colorScheme.shadow.withValues(alpha: 0.06),
+            blurRadius: 26,
+            offset: const Offset(0, 14),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TransactionTypeSelector(
+              selectedType: selectedType,
+              onChanged: onTypeChanged,
+            ),
+            const SizedBox(height: 16),
+            TransactionResponsivePair(
+              breakpoint: 0,
+              first: SizedBox(
+                height: 58,
+                child: TextField(
+                  controller: amountController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: '金额',
+                    hintText: '0.00',
+                    hintStyle: Theme.of(context).textTheme.titleMedium
+                        ?.copyWith(
+                          color: colorScheme.onSurfaceVariant.withValues(
+                            alpha: 0.58,
+                          ),
+                          fontWeight: FontWeight.w700,
+                        ),
+                    prefixText: '$selectedCurrency ',
+                    prefixStyle: Theme.of(context).textTheme.labelLarge
+                        ?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                  onChanged: onAmountChanged,
+                ),
+              ),
+              second: CurrencySelector(
+                currencies: currencies,
+                selectedCurrency: selectedCurrency,
+                onChanged: onCurrencyChanged,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
