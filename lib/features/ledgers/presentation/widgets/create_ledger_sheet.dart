@@ -869,20 +869,15 @@ class _PersonSelectTile extends StatelessWidget {
         onTap: onTap,
         onLongPress: onLongPress,
         child: AnimatedContainer(
+          key: ValueKey('person-select-tile-${person.name}'),
           duration: AppMotion.fast,
           curve: AppMotion.standard,
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
           decoration: BoxDecoration(
             color: selected
-                ? colorScheme.primaryContainer.withValues(alpha: 0.62)
-                : colorScheme.surfaceContainerLow,
+                ? colorScheme.primary.withValues(alpha: 0.12)
+                : colorScheme.surfaceContainerHigh.withValues(alpha: 0.72),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              width: selected ? 1.4 : 1,
-              color: selected
-                  ? colorScheme.primary
-                  : colorScheme.outlineVariant,
-            ),
           ),
           child: Row(
             children: [

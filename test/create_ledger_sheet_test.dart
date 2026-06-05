@@ -116,11 +116,18 @@ void main() {
       (widget) => widget is TextField && widget.decoration?.labelText == '人员名称',
     );
     await tester.enterText(personNameField, '新成员');
-    await tester.tap(find.text('保存'));
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
 
     expect(find.text('新成员'), findsOneWidget);
+    final personTileFinder = find.byKey(
+      const ValueKey('person-select-tile-新成员'),
+    );
+    expect(personTileFinder, findsOneWidget);
+    final personTile = tester.widget<AnimatedContainer>(personTileFinder);
+    final decoration = personTile.decoration! as BoxDecoration;
+    expect(decoration.border, isNull);
   });
 
   testWidgets('creating ledger does not wait for remote account profile', (
