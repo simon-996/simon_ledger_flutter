@@ -21,4 +21,35 @@ void main() {
       Colors.white.withValues(alpha: 0.86),
     );
   });
+
+  test('AppTheme keeps option controls tonal without visible borders', () {
+    final theme = AppTheme.lightTheme;
+    final scheme = theme.colorScheme;
+    final chipTheme = theme.chipTheme;
+    final segmentStyle = theme.segmentedButtonTheme.style!;
+    final outlinedStyle = theme.outlinedButtonTheme.style!;
+
+    expect(chipTheme.side, BorderSide.none);
+    expect(chipTheme.backgroundColor, scheme.surfaceContainerHigh);
+    expect(
+      chipTheme.selectedColor,
+      AppTheme.primaryColor.withValues(alpha: 0.13),
+    );
+    expect(segmentStyle.side!.resolve(<WidgetState>{}), BorderSide.none);
+    expect(
+      segmentStyle.backgroundColor!.resolve(<WidgetState>{}),
+      scheme.surfaceContainerHigh.withValues(alpha: 0.72),
+    );
+    expect(
+      segmentStyle.backgroundColor!.resolve(<WidgetState>{
+        WidgetState.selected,
+      }),
+      AppTheme.primaryColor.withValues(alpha: 0.13),
+    );
+    expect(outlinedStyle.side!.resolve(<WidgetState>{}), BorderSide.none);
+    expect(
+      outlinedStyle.backgroundColor!.resolve(<WidgetState>{}),
+      scheme.surfaceContainerHigh.withValues(alpha: 0.62),
+    );
+  });
 }

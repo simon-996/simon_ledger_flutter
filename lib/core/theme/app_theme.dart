@@ -163,17 +163,12 @@ class AppTheme {
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: ButtonStyle(
           visualDensity: VisualDensity.compact,
-          side: WidgetStateProperty.resolveWith((states) {
-            final selected = states.contains(WidgetState.selected);
-            return BorderSide(
-              color: selected ? primaryColor : colorScheme.outlineVariant,
-            );
-          }),
+          side: WidgetStateProperty.all(BorderSide.none),
           backgroundColor: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.selected)) {
-              return primaryColor.withValues(alpha: 0.12);
+              return primaryColor.withValues(alpha: 0.13);
             }
-            return colorScheme.surfaceContainerLowest;
+            return colorScheme.surfaceContainerHigh.withValues(alpha: 0.72);
           }),
           foregroundColor: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.selected)) return primaryColor;
@@ -215,7 +210,10 @@ class AppTheme {
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: primaryColor,
-          side: const BorderSide(color: primaryColor),
+          backgroundColor: colorScheme.surfaceContainerHigh.withValues(
+            alpha: 0.62,
+          ),
+          side: BorderSide.none,
           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(radiusMedium),
@@ -236,7 +234,7 @@ class AppTheme {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: colorScheme.surfaceContainerLowest,
+        backgroundColor: colorScheme.surfaceContainerHigh,
         disabledColor: colorScheme.surfaceContainerHigh,
         labelStyle: TextStyle(
           color: colorScheme.onSurface,
@@ -250,7 +248,7 @@ class AppTheme {
         selectedColor: primaryColor.withValues(alpha: 0.13),
         checkmarkColor: primaryColor,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        side: BorderSide(color: colorScheme.outlineVariant),
+        side: BorderSide.none,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
       ),
       bottomSheetTheme: BottomSheetThemeData(
