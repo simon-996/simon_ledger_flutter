@@ -2,6 +2,7 @@ import 'dart:async';
 
 import '../config/avatar_config.dart';
 import '../database/database_service.dart';
+import '../models/ledger.dart';
 import '../models/local_profile.dart';
 import '../models/person.dart';
 import '../network/token_store.dart';
@@ -41,6 +42,7 @@ class ProfileSyncService {
     final previous = await _localProfileStore.read();
     final token = await _tokenStore.read();
     final canSync = token != null && token.isValid;
+    final linkedUserUuid = canSync ? await _tokenStore.readAccountUuid() : null;
     final operationId = canSync ? _operationId() : null;
     final localProfile = profile.copyWith(
       pendingSync: canSync,
@@ -50,7 +52,11 @@ class ProfileSyncService {
     );
 
     await _localProfileStore.save(localProfile);
-    await _updateLocalSelfPeople(previous: previous, current: localProfile);
+    await _updateLocalSelfPeople(
+      previous: previous,
+      current: localProfile,
+      linkedUserUuid: linkedUserUuid,
+    );
     await onLocalSaved?.call();
 
     if (!canSync) {
@@ -233,12 +239,61 @@ class ProfileSyncService {
       changed = true;
     }
 
-    if (!changed) {
-      return;
+    if (changed) {
+      for (final person in people) {
+        await _database.savePerson(person);
+      }
     }
 
-    for (final person in people) {
-      await _database.savePerson(person);
+    await _updateCachedSelfLedgerMembers(
+      previous: previous,
+      current: current,
+      linkedUserUuid: linkedUserUuid,
+    );
+  }
+
+  Future<void> _updateCachedSelfLedgerMembers({
+    required LocalProfile previous,
+    required LocalProfile current,
+    String? linkedUserUuid,
+  }) async {
+    final ledgers = await _database.getAllLedgers(includeDeleted: true);
+    final previousName = previous.normalizedNickname;
+    final previousAvatar = previous.personAvatar;
+
+    for (final ledger in ledgers) {
+      if (ledger.members.isEmpty) {
+        continue;
+      }
+
+      var changed = false;
+      final updatedMembers = ledger.members.map((member) {
+        final matchesLinkedUser =
+            linkedUserUuid != null &&
+            linkedUserUuid.isNotEmpty &&
+            member.userUuid == linkedUserUuid;
+        final matchesPreviousProfile =
+            member.nickname?.trim() == previousName &&
+            member.avatar?.trim() == previousAvatar;
+        if (!matchesLinkedUser && !matchesPreviousProfile) {
+          return member;
+        }
+
+        changed = true;
+        return LedgerMemberSummary(
+          uuid: member.uuid,
+          userUuid: linkedUserUuid ?? member.userUuid,
+          nickname: current.normalizedNickname,
+          avatar: current.personAvatar,
+          role: member.role,
+        );
+      }).toList();
+
+      if (!changed) {
+        continue;
+      }
+
+      await _database.saveLedger(ledger..members = updatedMembers);
     }
   }
 

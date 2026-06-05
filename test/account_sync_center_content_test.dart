@@ -207,6 +207,12 @@ void main() {
       nicknameStyle?.fontWeight?.value,
       greaterThan(FontWeight.w700.value),
     );
+    expect(
+      tester.widget<Icon>(find.byIcon(Icons.chevron_right_rounded)).color,
+      Theme.of(
+        tester.element(find.byType(AccountTab)),
+      ).colorScheme.onSurfaceVariant.withValues(alpha: 0.38),
+    );
   });
 
   testWidgets('account logout uses quiet danger action with confirmation', (

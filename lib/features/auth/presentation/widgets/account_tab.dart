@@ -798,7 +798,9 @@ class _UnifiedProfileCardState extends ConsumerState<_UnifiedProfileCard> {
                           ),
                           Icon(
                             Icons.chevron_right_rounded,
-                            color: colorScheme.onSurfaceVariant,
+                            color: colorScheme.onSurfaceVariant.withValues(
+                              alpha: 0.38,
+                            ),
                           ),
                         ],
                       ),
