@@ -63,6 +63,14 @@ void main() {
     expect(find.text('复制全部信息'), findsOneWidget);
     expect(find.text('重新生成'), findsOneWidget);
     expect(find.text('生成邀请码'), findsNothing);
+
+    final copyButtons = tester.widgetList<OutlinedButton>(
+      find.byType(OutlinedButton),
+    );
+    expect(copyButtons, isNotEmpty);
+    for (final button in copyButtons) {
+      expect(button.style?.side?.resolve(<WidgetState>{}), BorderSide.none);
+    }
   });
 
   testWidgets(

@@ -355,7 +355,10 @@ class _InviteCopyActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final buttonStyle = OutlinedButton.styleFrom(
+      backgroundColor: colorScheme.surfaceContainerHigh.withValues(alpha: 0.62),
+      side: BorderSide.none,
       minimumSize: const Size(0, 44),
       padding: const EdgeInsets.symmetric(horizontal: 8),
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
