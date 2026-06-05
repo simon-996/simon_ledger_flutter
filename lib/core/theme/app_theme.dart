@@ -2,32 +2,32 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  static const Color primaryColor = Color(0xFF006B5F);
-  static const Color secondaryColor = Color(0xFF475569);
-  static const Color tertiaryColor = Color(0xFFB7791F);
-  static const Color errorColor = Color(0xFFDC2626);
-  static const Color successColor = Color(0xFF15803D);
-  static const Color infoColor = Color(0xFF2563EB);
+  static const Color primaryColor = Color(0xFF0B6F65);
+  static const Color secondaryColor = Color(0xFF6B7280);
+  static const Color tertiaryColor = Color(0xFFA47A32);
+  static const Color errorColor = Color(0xFFC55245);
+  static const Color successColor = Color(0xFF1F7A5C);
+  static const Color infoColor = Color(0xFF4F6F96);
 
-  static const Color surfaceColor = Color(0xFFFAFBF8);
-  static const Color surfaceContainerColor = Color(0xFFF0F4F1);
-  static const Color onSurfaceColor = Color(0xFF18201D);
+  static const Color surfaceColor = Color(0xFFF5F5F7);
+  static const Color surfaceContainerColor = Color(0xFFEFEFF4);
+  static const Color onSurfaceColor = Color(0xFF1D1D1F);
 
   static const List<Color> chartColors = [
     primaryColor,
+    Color(0xFFB85C4A),
+    infoColor,
     tertiaryColor,
-    errorColor,
-    Color(0xFF2F6FAD),
-    Color(0xFF7C5B8F),
-    Color(0xFF2B8A78),
-    Color(0xFF6B7280),
-    Color(0xFF9A6A2F),
-    Color(0xFFB4535A),
+    Color(0xFF5F8478),
+    Color(0xFF717784),
+    Color(0xFFB06C66),
+    Color(0xFF947A58),
+    Color(0xFF8B8F98),
   ];
 
-  static const double radiusSmall = 10;
-  static const double radiusMedium = 14;
-  static const double radiusLarge = 20;
+  static const double radiusSmall = 12;
+  static const double radiusMedium = 16;
+  static const double radiusLarge = 24;
   static const double pagePadding = 16;
 
   static ThemeData get lightTheme {
@@ -46,13 +46,13 @@ class AppTheme {
     final colorScheme = base.colorScheme.copyWith(
       surface: surfaceColor,
       surfaceContainerLowest: Colors.white,
-      surfaceContainerLow: const Color(0xFFF7F9F6),
+      surfaceContainerLow: const Color(0xFFF9F9FB),
       surfaceContainer: surfaceContainerColor,
-      surfaceContainerHigh: const Color(0xFFE8EFEA),
-      surfaceContainerHighest: const Color(0xFFDDE7E1),
+      surfaceContainerHigh: const Color(0xFFEDEEF2),
+      surfaceContainerHighest: const Color(0xFFE5E7EC),
       onSurface: onSurfaceColor,
-      outline: const Color(0xFF7A8580),
-      outlineVariant: const Color(0xFFD3DDD7),
+      outline: const Color(0xFF8E8E93),
+      outlineVariant: const Color(0xFFE2E3E8),
       error: errorColor,
     );
 
@@ -122,23 +122,23 @@ class AppTheme {
         space: 1,
       ),
       navigationBarTheme: NavigationBarThemeData(
-        height: 72,
+        height: 76,
         elevation: 0,
-        backgroundColor: colorScheme.surfaceContainerLow,
-        indicatorColor: primaryColor.withValues(alpha: 0.14),
+        backgroundColor: Colors.white.withValues(alpha: 0.86),
+        indicatorColor: primaryColor.withValues(alpha: 0.1),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return TextStyle(
             color: selected ? primaryColor : secondaryColor,
             fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-            fontSize: 12,
+            fontSize: 11,
           );
         }),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return IconThemeData(
             color: selected ? primaryColor : secondaryColor,
-            size: selected ? 25 : 24,
+            size: selected ? 24 : 23,
           );
         }),
       ),

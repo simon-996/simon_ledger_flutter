@@ -12,27 +12,31 @@ Simon Ledger 是高频使用的多人账本工具。设计目标是：
 - 精致：卡片边界、文字层级、触摸反馈和动效要稳定一致。
 - 轻快：高频操作路径少停顿，动画丝滑但不抢操作节奏。
 
-关键词：**低干扰、清晰层级、轻量动效、离线可信、多人协作可见**。
+关键词：**Apple Calm、低干扰、清晰层级、轻量动效、离线可信、多人协作可见**。
 
 ## 颜色规则
 
 颜色必须优先来自 `AppTheme` 和 `Theme.of(context).colorScheme`。
 
+整体视觉走 Apple 式冷白灰底色，不使用重渐变、霓虹高光和大面积彩色背景。页面应该像一套安静的系统工具：背景轻、边界细、主操作清楚。
+
 固定语义：
 
-- 主色 `AppTheme.primaryColor`：收入、确认、同步成功、主要操作。
-- 支出/危险 `AppTheme.errorColor`：支出、删除、错误。
+- 主色 `AppTheme.primaryColor`：确认、同步成功、主要操作、支出记账强调色。
+- 收入强调色：使用交易表单里的柔和暖红 `transactionIncomeAccentColor`，不要使用高饱和红色。
+- 危险/错误 `AppTheme.errorColor`：删除、失败、错误。不要再把普通支出当成错误红展示。
 - 成功/共享 `AppTheme.successColor`：共享成员、成功状态。
 - 警告 `AppTheme.tertiaryColor`：待同步、弱网、需注意状态。
 - 信息 `AppTheme.infoColor`：普通提示、说明性状态。
-- 图表颜色使用 `AppTheme.chartColors`，不要在统计页直接使用彩虹色或随机色。
+- 图表颜色使用 `AppTheme.chartColors`，这是少数允许多色的场景，但必须保持低饱和、同一灰度气质，不要在统计页直接使用彩虹色或随机色。
 
 页面背景层级：
 
 - 页面底色：`colorScheme.surface`。
-- 普通内容卡片：`surfaceContainerLowest`。
-- 可点击列表项：`surfaceContainerHigh` + `outlineVariant` 边框。
-- 选中项：`primaryContainer` 背景 + `primary` 边框。
+- 普通内容卡片：`surfaceContainerLowest`，白色或接近白色。
+- 浮层、底部导航和顶部提醒：可使用半透明白色 + 极细边界，体现轻玻璃质感。
+- 可点击列表项：优先用留白、细边界和轻微按压反馈，不要每个项目都做厚重卡片。
+- 选中项：`primaryContainer` 背景 + `primary` 细边框，透明度要低。
 
 不要新增裸 `Colors.green/orange/purple/cyan` 等业务色。确实需要新增颜色时，先放进 `AppTheme` 并命名为语义用途。
 
@@ -40,10 +44,10 @@ Simon Ledger 是高频使用的多人账本工具。设计目标是：
 
 推荐圆角：
 
-- 10-12：紧凑提示、状态条、内部小容器。
-- 14-16：输入框、选择项、分类、币种、人员卡片。
-- 18-20：主要内容卡片。
-- 24-28：弹窗、大型容器。
+- 12：紧凑提示、状态条、内部小容器。
+- 16：输入框、选择项、分类、币种、人员卡片。
+- 24：主要内容卡片，符合 Apple 式柔和大圆角。
+- 28-32：弹窗、大型容器。
 - 999：胶囊标签、人员 chip。
 
 推荐间距：
@@ -86,6 +90,13 @@ Simon Ledger 是高频使用的多人账本工具。设计目标是：
 - `AppMotion.emphasized`：进入、弹出、成功反馈。
 
 高频操作不要使用过强弹跳。成功记账、生成邀请、同步完成可以有更强反馈，但持续时间要短。
+
+Apple Calm 动效原则：
+
+- 只动画 `opacity` 和 `transform`，不要动画高度、宽度、top、left。
+- 点击态必须有轻微物理反馈，例如 `scale 0.98` 或阴影收缩。
+- 页面切换保持轻微位移和淡入，不做大幅滑动。
+- 同步、保存、分享使用整块区域的轻量状态过渡，不堆多个小 spinner。
 
 列表动效：
 
