@@ -93,7 +93,7 @@ class _AccountActionsSection extends ConsumerWidget {
         onPressed: () => _confirmLogout(context, ref),
         style: OutlinedButton.styleFrom(
           foregroundColor: colorScheme.error,
-          side: BorderSide(color: colorScheme.error.withValues(alpha: 0.42)),
+          side: BorderSide.none,
           backgroundColor: colorScheme.errorContainer.withValues(alpha: 0.08),
           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
           shape: RoundedRectangleBorder(

@@ -383,6 +383,8 @@ void main() {
       find.ancestor(of: logoutButton, matching: find.byType(AppSectionCard)),
       findsNothing,
     );
+    final logoutStyle = tester.widget<OutlinedButton>(logoutButton).style!;
+    expect(logoutStyle.side?.resolve(<WidgetState>{}), BorderSide.none);
 
     await tester.tap(logoutButton);
     await tester.pumpAndSettle();
