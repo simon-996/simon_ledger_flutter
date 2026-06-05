@@ -266,6 +266,56 @@ void main() {
     expect(find.text('家庭账本'), findsOneWidget);
   });
 
+  testWidgets('ledger card uses an Apple floating surface', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final database = DatabaseService();
+    final ledger = Ledger()
+      ..uuid = 'apple-ledger'
+      ..name = '旅行账本'
+      ..baseCurrencyCode = 'CNY';
+    await database.saveLedger(ledger);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(database)],
+        child: MaterialApp(
+          home: Scaffold(
+            body: LedgerListTab(
+              ledgers: [ledger],
+              ledgerStats: const {},
+              onTap: (_) {},
+              onEdit: (_) {},
+              onShare: (_) async {},
+              onDelete: (_) async {},
+              onCreate: () {},
+              onSync: (_) async {},
+              autoSyncEnabled: false,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    final context = tester.element(find.byType(LedgerListTab));
+    final colorScheme = Theme.of(context).colorScheme;
+    final card = tester.widget<AnimatedContainer>(
+      find.byKey(const ValueKey('ledger-card-surface-apple-ledger')),
+    );
+    final decoration = card.decoration! as BoxDecoration;
+    final borderRadius = decoration.borderRadius! as BorderRadius;
+    final border = decoration.border! as Border;
+
+    expect(decoration.color, colorScheme.surfaceContainerLowest);
+    expect(borderRadius.topLeft.x, 28);
+    expect(
+      border.top.color,
+      colorScheme.outlineVariant.withValues(alpha: 0.68),
+    );
+    expect(decoration.boxShadow, isNotEmpty);
+  });
+
   testWidgets(
     'ledger card shows one compact people list without group labels',
     (tester) async {

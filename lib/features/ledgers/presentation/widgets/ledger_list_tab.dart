@@ -164,7 +164,7 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
             return Material(
               color: Colors.transparent,
               elevation: elevation,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(28),
               child: child,
             );
           },
@@ -690,30 +690,45 @@ class _LedgerCard extends StatelessWidget {
         .map((uuid) => personOrFallback(peopleById, uuid, name: '人员'))
         .where((person) => person.linkedUserUuid == null && !person.isDeleted)
         .toList();
+    final cardRadius = BorderRadius.circular(28);
+    final cardColor = isBusy
+        ? Color.alphaBlend(
+            colorScheme.primary.withValues(alpha: 0.08),
+            colorScheme.surfaceContainerLowest,
+          )
+        : colorScheme.surfaceContainerLowest;
+    final borderColor = isBusy
+        ? colorScheme.primary.withValues(alpha: 0.32)
+        : colorScheme.outlineVariant.withValues(alpha: 0.68);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: AnimatedContainer(
+        key: ValueKey('ledger-card-surface-${ledger.uuid}'),
         duration: AppMotion.normal,
         curve: AppMotion.standard,
         decoration: BoxDecoration(
-          color: isBusy
-              ? colorScheme.primaryContainer.withValues(alpha: 0.2)
-              : colorScheme.surfaceContainerLowest,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isBusy
-                ? colorScheme.primary.withValues(alpha: 0.42)
-                : colorScheme.outlineVariant,
-          ),
+          color: cardColor,
+          borderRadius: cardRadius,
+          border: Border.all(color: borderColor),
+          boxShadow: [
+            BoxShadow(
+              color: colorScheme.shadow.withValues(
+                alpha: isBusy ? 0.08 : 0.045,
+              ),
+              blurRadius: isBusy ? 28 : 22,
+              spreadRadius: -6,
+              offset: Offset(0, isBusy ? 14 : 10),
+            ),
+          ],
         ),
         child: Material(
           color: Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: cardRadius,
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: isBusy ? null : onTap,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: cardRadius,
             child: Stack(
               children: [
                 AnimatedOpacity(
@@ -723,7 +738,7 @@ class _LedgerCard extends StatelessWidget {
                   child: IgnorePointer(
                     ignoring: isBusy,
                     child: Padding(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -1138,7 +1153,7 @@ class _DeleteBackground extends StatelessWidget {
         padding: const EdgeInsets.only(right: 24),
         decoration: BoxDecoration(
           color: error,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(28),
         ),
         child: const Icon(Icons.delete_rounded, color: Colors.white),
       ),
