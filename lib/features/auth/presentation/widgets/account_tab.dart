@@ -290,6 +290,16 @@ class AccountSyncCenterContent extends StatelessWidget {
             color: colorScheme.onSurfaceVariant.withValues(alpha: 0.56),
             fontWeight: FontWeight.w500,
           );
+    final statusColor = hasFailures
+        ? colorScheme.error
+        : hasPending
+        ? colorScheme.tertiary
+        : colorScheme.primary;
+    final statusIcon = hasFailures
+        ? Icons.error_outline_rounded
+        : hasPending
+        ? Icons.sync_problem_rounded
+        : Icons.cloud_done_outlined;
     return _AccountLoadingOverlay(
       loading: syncing,
       message: '正在同步数据',
@@ -298,62 +308,104 @@ class AccountSyncCenterContent extends StatelessWidget {
         children: [
           AppSectionHeader(
             title: '同步中心',
-            trailing: Icon(
-              hasPending
-                  ? Icons.sync_problem_rounded
-                  : Icons.cloud_done_outlined,
-              color: hasPending ? colorScheme.tertiary : colorScheme.primary,
-            ),
+            trailing: Icon(statusIcon, color: statusColor),
           ),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _SyncCountChip(label: '账本', count: overview.ledgerPendingCount),
-              _SyncCountChip(label: '人员', count: overview.personPendingCount),
-              _SyncCountChip(
-                label: '流水',
-                count: overview.transactionPendingCount,
+          Container(
+            key: const ValueKey('sync-center-status-panel'),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerLow.withValues(alpha: 0.58),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: colorScheme.outlineVariant.withValues(alpha: 0.52),
               ),
-              _SyncCountChip(
-                label: '仅本地账本',
-                count: overview.localOnlyLedgerCount,
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(statusText, style: statusStyle),
-          const SizedBox(height: 4),
-          Text(
-            _lastSyncText(overview.lastSuccessfulSyncAt),
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: hasPending || hasFailures
-                  ? colorScheme.onSurfaceVariant
-                  : colorScheme.onSurfaceVariant.withValues(alpha: 0.52),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(statusIcon, color: statusColor, size: 22),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(statusText, style: statusStyle),
+                          const SizedBox(height: 5),
+                          Text(
+                            _lastSyncText(overview.lastSuccessfulSyncAt),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: hasPending || hasFailures
+                                      ? colorScheme.onSurfaceVariant
+                                      : colorScheme.onSurfaceVariant.withValues(
+                                          alpha: 0.52,
+                                        ),
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _SyncCountChip(
+                      label: '账本',
+                      count: overview.ledgerPendingCount,
+                    ),
+                    _SyncCountChip(
+                      label: '人员',
+                      count: overview.personPendingCount,
+                    ),
+                    _SyncCountChip(
+                      label: '流水',
+                      count: overview.transactionPendingCount,
+                    ),
+                    _SyncCountChip(
+                      label: '仅本地账本',
+                      count: overview.localOnlyLedgerCount,
+                    ),
+                  ],
+                ),
+                if (overview.failures.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: syncing
+                          ? null
+                          : () => _showSyncFailures(context, overview.failures),
+                      icon: const Icon(Icons.error_outline_rounded),
+                      label: const Text('查看失败详情'),
+                    ),
+                  ),
+                ],
+                if (hasPending) ...[
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: syncing ? null : onSync,
+                    icon: const Icon(Icons.sync_rounded),
+                    label: Text(syncing ? '同步中' : '立即同步'),
+                  ),
+                ],
+              ],
             ),
           ),
-          if (overview.failures.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: syncing
-                    ? null
-                    : () => _showSyncFailures(context, overview.failures),
-                icon: const Icon(Icons.error_outline_rounded),
-                label: const Text('查看失败详情'),
-              ),
-            ),
-          ],
-          if (hasPending) ...[
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: syncing ? null : onSync,
-              icon: const Icon(Icons.sync_rounded),
-              label: Text(syncing ? '同步中' : '立即同步'),
-            ),
-          ],
         ],
       ),
     );
@@ -426,8 +478,11 @@ class _SyncCountChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHigh,
+        color: colorScheme.surfaceContainerLowest.withValues(alpha: 0.82),
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.58),
+        ),
       ),
       child: Text(
         '$label $count',

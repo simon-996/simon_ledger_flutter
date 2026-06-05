@@ -91,6 +91,40 @@ void main() {
     expect(syncCalls, 1);
   });
 
+  testWidgets('sync center groups status in an Apple panel', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AccountSyncCenterContent(
+            overview: overview,
+            syncing: false,
+            onRefresh: () {},
+            onSync: () {},
+          ),
+        ),
+      ),
+    );
+
+    final context = tester.element(find.byType(AccountSyncCenterContent));
+    final colorScheme = Theme.of(context).colorScheme;
+    final panel = tester.widget<Container>(
+      find.byKey(const ValueKey('sync-center-status-panel')),
+    );
+    final decoration = panel.decoration! as BoxDecoration;
+    final borderRadius = decoration.borderRadius! as BorderRadius;
+    final border = decoration.border! as Border;
+
+    expect(
+      decoration.color,
+      colorScheme.surfaceContainerLow.withValues(alpha: 0.58),
+    );
+    expect(borderRadius.topLeft.x, 18);
+    expect(
+      border.top.color,
+      colorScheme.outlineVariant.withValues(alpha: 0.52),
+    );
+  });
+
   testWidgets('sync center keeps empty state visually quiet', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
