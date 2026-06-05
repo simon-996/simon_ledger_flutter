@@ -114,7 +114,7 @@ Apple Calm 动效原则：
 
 优先使用现有公共组件：
 
-- `AppSectionCard`：内容卡片。
+- `AppSectionCard`：内容卡片，默认使用 Apple Calm 白色浮层、24 圆角、细边界和轻阴影。
 - `AppSectionHeader`：模块标题。
 - `AppEmptyState`：空状态。
 - `AppLoadingState` / `AppInlineLoadingCard`：加载态。
