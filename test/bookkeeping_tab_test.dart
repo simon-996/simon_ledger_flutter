@@ -10,6 +10,8 @@ import 'package:simon_ledger_flutter/core/widgets/app_components.dart';
 import 'package:simon_ledger_flutter/features/transactions/presentation/widgets/bookkeeping_tab.dart';
 
 void main() {
+  const incomeAccentColor = Color(0xFFB85C4A);
+
   testWidgets('bookkeeping header keeps ledger selector visually quiet', (
     tester,
   ) async {
@@ -83,18 +85,18 @@ void main() {
     ).colorScheme;
     expect(
       tester.widget<Icon>(find.byIcon(Icons.receipt_long_outlined)).color,
-      rootScheme.error,
+      rootScheme.primary,
     );
-    expect(_saveButtonScheme(tester).primary, rootScheme.error);
+    expect(_saveButtonScheme(tester).primary, rootScheme.primary);
 
     await tester.tap(find.text('收入'));
     await tester.pumpAndSettle();
 
     expect(
       tester.widget<Icon>(find.byIcon(Icons.savings_outlined)).color,
-      rootScheme.primary,
+      incomeAccentColor,
     );
-    expect(_saveButtonScheme(tester).primary, rootScheme.primary);
+    expect(_saveButtonScheme(tester).primary, incomeAccentColor);
   });
 }
 

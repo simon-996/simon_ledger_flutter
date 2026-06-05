@@ -497,9 +497,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                                     _transactionType == 0
                                         ? Icons.trending_down_rounded
                                         : Icons.trending_up_rounded,
-                                    color: _transactionType == 0
-                                        ? colorScheme.error
-                                        : colorScheme.primary,
+                                    color: colorScheme.primary,
                                   ),
                                 ),
                               ),
@@ -762,12 +760,8 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
   ThemeData _bookkeepingAccentTheme(BuildContext context) {
     final baseTheme = Theme.of(context);
     final baseScheme = baseTheme.colorScheme;
-    final accent = _transactionType == 0
-        ? baseScheme.error
-        : baseScheme.primary;
-    final onAccent = _transactionType == 0
-        ? baseScheme.onError
-        : baseScheme.onPrimary;
+    final accent = transactionAccentColor(baseScheme, _transactionType);
+    final onAccent = transactionOnAccentColor(baseScheme, _transactionType);
     final colorScheme = baseScheme.copyWith(
       primary: accent,
       onPrimary: onAccent,
@@ -882,7 +876,7 @@ class _BookkeepingSuccessCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isIncome = transactionType == 1;
-    final toneColor = isIncome ? colorScheme.primary : colorScheme.error;
+    final toneColor = transactionAccentColor(colorScheme, transactionType);
     final amountPrefix = isIncome ? '+' : '-';
     final visiblePeople = people.take(3).toList();
     final hiddenPeopleCount = people.length - visiblePeople.length;
@@ -1117,7 +1111,7 @@ class _QuickEntryHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final accent = isIncome ? colorScheme.primary : colorScheme.error;
+    final accent = colorScheme.primary;
     final mutedColor = colorScheme.onSurfaceVariant.withValues(alpha: 0.68);
 
     return Material(

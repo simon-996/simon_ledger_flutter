@@ -2,6 +2,18 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/widgets/app_components.dart';
 
+const transactionIncomeAccentColor = Color(0xFFB85C4A);
+
+Color transactionAccentColor(ColorScheme colorScheme, int transactionType) {
+  return transactionType == 1
+      ? transactionIncomeAccentColor
+      : colorScheme.primary;
+}
+
+Color transactionOnAccentColor(ColorScheme colorScheme, int transactionType) {
+  return transactionType == 1 ? Colors.white : colorScheme.onPrimary;
+}
+
 class TransactionTypeSelector extends StatelessWidget {
   const TransactionTypeSelector({
     super.key,
@@ -58,7 +70,7 @@ class _TransactionTypeButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final accent = value == 0 ? colorScheme.error : colorScheme.primary;
+    final accent = transactionAccentColor(colorScheme, value);
     final mutedColor = colorScheme.onSurfaceVariant.withValues(alpha: 0.48);
 
     return AnimatedContainer(
@@ -535,7 +547,7 @@ class _CategoryQuickItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final accent = isIncome ? colorScheme.primary : colorScheme.error;
+    final accent = transactionAccentColor(colorScheme, isIncome ? 1 : 0);
     final mutedColor = colorScheme.onSurfaceVariant.withValues(alpha: 0.5);
 
     return AnimatedContainer(

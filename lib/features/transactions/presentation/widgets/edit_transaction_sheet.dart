@@ -287,9 +287,10 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                                     _transactionType == 0
                                         ? Icons.trending_down_rounded
                                         : Icons.trending_up_rounded,
-                                    color: _transactionType == 0
-                                        ? colorScheme.error
-                                        : colorScheme.primary,
+                                    color: transactionAccentColor(
+                                      colorScheme,
+                                      _transactionType,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -568,7 +569,7 @@ class _EditSheetHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isIncome = transactionType == 1;
-    final accent = isIncome ? colorScheme.primary : colorScheme.error;
+    final accent = transactionAccentColor(colorScheme, transactionType);
 
     return Row(
       children: [
