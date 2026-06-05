@@ -1219,16 +1219,11 @@ class _PersonChoiceTile extends StatelessWidget {
     final mutedColor = colorScheme.onSurfaceVariant.withValues(alpha: 0.52);
 
     return _AnimatedTapSurface(
+      key: ValueKey('person-choice-tile-${item.id}'),
       color: selected
-          ? colorScheme.primaryContainer.withValues(alpha: 0.72)
-          : colorScheme.surfaceContainerLow.withValues(alpha: 0.42),
+          ? colorScheme.primary.withValues(alpha: 0.12)
+          : colorScheme.surfaceContainerHigh.withValues(alpha: 0.52),
       borderRadius: 16,
-      borderSide: BorderSide(
-        width: selected ? 1.5 : 1,
-        color: selected
-            ? colorScheme.primary
-            : colorScheme.outlineVariant.withValues(alpha: 0.42),
-      ),
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
@@ -1552,10 +1547,11 @@ class _TransactionSyncChip extends StatelessWidget {
 
 class _AnimatedTapSurface extends StatefulWidget {
   const _AnimatedTapSurface({
+    super.key,
     required this.child,
     required this.color,
     required this.borderRadius,
-    required this.borderSide,
+    this.borderSide,
     this.onTap,
     this.onLongPress,
   });
@@ -1563,7 +1559,7 @@ class _AnimatedTapSurface extends StatefulWidget {
   final Widget child;
   final Color color;
   final double borderRadius;
-  final BorderSide borderSide;
+  final BorderSide? borderSide;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
@@ -1588,10 +1584,12 @@ class _AnimatedTapSurfaceState extends State<_AnimatedTapSurface> {
         decoration: BoxDecoration(
           color: widget.color,
           borderRadius: radius,
-          border: Border.all(
-            color: widget.borderSide.color,
-            width: widget.borderSide.width,
-          ),
+          border: widget.borderSide == null
+              ? null
+              : Border.all(
+                  color: widget.borderSide!.color,
+                  width: widget.borderSide!.width,
+                ),
         ),
         child: Material(
           color: Colors.transparent,

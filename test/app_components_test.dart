@@ -61,4 +61,38 @@ void main() {
       2.4,
     );
   });
+
+  testWidgets('AppPersonChoiceGrid uses tonal person options without borders', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.lightTheme,
+        home: Scaffold(
+          body: AppPersonChoiceGrid(
+            items: const [
+              AppPersonChoiceItem(id: 'p1', name: 'Simon', avatar: '😎'),
+              AppPersonChoiceItem(id: 'p2', name: '朋友', avatar: '🙂'),
+            ],
+            selectedIds: const {'p1'},
+            onToggle: (_, _) {},
+          ),
+        ),
+      ),
+    );
+
+    for (final key in const [
+      ValueKey('person-choice-tile-p1'),
+      ValueKey('person-choice-tile-p2'),
+    ]) {
+      final tile = tester.widget<AnimatedContainer>(
+        find.descendant(
+          of: find.byKey(key),
+          matching: find.byType(AnimatedContainer),
+        ).first,
+      );
+      final decoration = tile.decoration! as BoxDecoration;
+      expect(decoration.border, isNull);
+    }
+  });
 }

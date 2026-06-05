@@ -130,6 +130,7 @@ Apple Calm 动效原则：
 - `TransactionTypeSelector`、`CurrencySelector`、`CategorySelector`：记账表单选择。
 
 新增组件时要先判断是否能扩展现有组件，避免重复造局部样式。
+人员选择、分类、币种、交易类型这类“选项控件”默认无边框，通过浅底色、语义色文字、check/radio 图标表达选中状态；不要回到“背景 + 明显描边”的混用模式。
 
 ## 页面方向
 
