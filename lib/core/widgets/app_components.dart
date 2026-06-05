@@ -441,65 +441,80 @@ class AppLoadingState extends StatelessWidget {
         minimum: const EdgeInsets.all(24),
         child: AppAnimatedEntry(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 320),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TweenAnimationBuilder<double>(
-                  tween: Tween(begin: 0, end: 1),
-                  duration: AppMotion.slow,
-                  curve: AppMotion.emphasized,
-                  builder: (context, value, child) {
-                    return Transform.scale(
-                      scale: 0.94 + value * 0.06,
-                      child: child,
-                    );
-                  },
-                  child: Container(
-                    width: 76,
-                    height: 76,
-                    decoration: BoxDecoration(
-                      color: colorScheme.primaryContainer.withValues(
-                        alpha: 0.7,
+            constraints: const BoxConstraints(maxWidth: 360),
+            child: AppSectionCard(
+              padding: const EdgeInsets.fromLTRB(16, 16, 18, 16),
+              child: Row(
+                children: [
+                  TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: 1),
+                    duration: AppMotion.slow,
+                    curve: AppMotion.emphasized,
+                    builder: (context, value, child) {
+                      return Transform.scale(
+                        scale: 0.96 + value * 0.04,
+                        child: child,
+                      );
+                    },
+                    child: Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: colorScheme.primaryContainer.withValues(
+                          alpha: 0.42,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: colorScheme.primary.withValues(alpha: 0.14),
+                        ),
                       ),
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        SizedBox(
-                          width: 48,
-                          height: 48,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 3,
-                            color: colorScheme.primary,
-                            backgroundColor: colorScheme.primary.withValues(
-                              alpha: 0.12,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          SizedBox(
+                            width: 34,
+                            height: 34,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.4,
+                              color: colorScheme.primary,
+                              backgroundColor: colorScheme.primary.withValues(
+                                alpha: 0.1,
+                              ),
                             ),
                           ),
+                          Icon(icon, size: 18, color: colorScheme.primary),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w800),
                         ),
-                        Icon(icon, size: 22, color: colorScheme.primary),
+                        if (message != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            message!,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: colorScheme.onSurfaceVariant),
+                          ),
+                        ],
                       ],
                     ),
                   ),
-                ),
-                const SizedBox(height: 18),
-                Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                if (message != null) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    message!,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
                 ],
-              ],
+              ),
             ),
           ),
         ),

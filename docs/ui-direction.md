@@ -117,7 +117,7 @@ Apple Calm 动效原则：
 - `AppSectionCard`：内容卡片，默认使用 Apple Calm 白色浮层、24 圆角、细边界和轻阴影。
 - `AppSectionHeader`：模块标题。
 - `AppEmptyState`：空状态。
-- `AppLoadingState` / `AppInlineLoadingCard`：加载态。
+- `AppLoadingState` / `AppInlineLoadingCard`：加载态，使用小型白色状态浮层和紧凑 spinner，避免整页大图标压迫感。
 - `AppNotice`：顶部提醒。
 - `AppAnimatedEntry` / `AppAnimatedSwitcher`：进入和切换。
 - `AppLedgerPeopleChips`：账本成员展示。

@@ -33,4 +33,32 @@ void main() {
     );
     expect(decoration.boxShadow, isNotEmpty);
   });
+
+  testWidgets('AppLoadingState uses a compact Apple status panel', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: AppLoadingState(title: '正在加载', message: '请稍候'),
+        ),
+      ),
+    );
+
+    expect(
+      find.descendant(
+        of: find.byType(AppLoadingState),
+        matching: find.byType(AppSectionCard),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<CircularProgressIndicator>(
+            find.byType(CircularProgressIndicator),
+          )
+          .strokeWidth,
+      2.4,
+    );
+  });
 }
