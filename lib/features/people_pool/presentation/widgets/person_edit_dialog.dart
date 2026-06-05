@@ -35,45 +35,28 @@ class _PersonEditDialogState extends State<PersonEditDialog> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return AlertDialog(
-      icon: Icon(
-        widget.person == null
-            ? Icons.person_add_alt_1_rounded
-            : Icons.manage_accounts_rounded,
-        color: colorScheme.primary,
-      ),
       title: Text(widget.person == null ? '新增人员' : '编辑人员'),
+      contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('选择头像', style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: AvatarConfig.avatars.map((avatar) {
-                final isSelected = avatar == _selectedAvatar;
-                return GestureDetector(
-                  onTap: () => setState(() => _selectedAvatar = avatar),
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? colorScheme.primaryContainer
-                          : colorScheme.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: isSelected
-                            ? colorScheme.primary
-                            : colorScheme.outlineVariant,
-                        width: isSelected ? 1.5 : 1,
-                      ),
-                    ),
-                    child: Text(avatar, style: const TextStyle(fontSize: 24)),
-                  ),
-                );
-              }).toList(),
+            Center(
+              child: Container(
+                key: const ValueKey('person-dialog-avatar-preview'),
+                width: 82,
+                height: 82,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  _selectedAvatar,
+                  style: const TextStyle(fontSize: 38),
+                ),
+              ),
             ),
             const SizedBox(height: 18),
             TextField(
@@ -85,32 +68,69 @@ class _PersonEditDialogState extends State<PersonEditDialog> {
               ),
               onChanged: (_) => setState(() {}),
             ),
+            const SizedBox(height: 18),
+            Text(
+              '选择头像',
+              style: Theme.of(
+                context,
+              ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: AvatarConfig.avatars.map((avatar) {
+                return ChoiceChip(
+                  label: SizedBox(
+                    width: 30,
+                    height: 30,
+                    child: Center(
+                      child: Text(avatar, style: const TextStyle(fontSize: 22)),
+                    ),
+                  ),
+                  showCheckmark: false,
+                  side: BorderSide.none,
+                  selected: avatar == _selectedAvatar,
+                  onSelected: (_) => setState(() => _selectedAvatar = avatar),
+                );
+              }).toList(),
+            ),
           ],
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('取消'),
-        ),
-        FilledButton(
-          onPressed: canSubmit
-              ? () {
-                  final name = _nameController.text.trim();
-                  if (name.isNotEmpty) {
-                    Navigator.of(context).pop(
-                      Person()
-                        ..uuid =
-                            widget.person?.uuid ??
-                            DateTime.now().microsecondsSinceEpoch.toString()
-                        ..name = name
-                        ..avatar = _selectedAvatar
-                        ..linkedUserUuid = widget.person?.linkedUserUuid,
-                    );
-                  }
-                }
-              : null,
-          child: const Text('确定'),
+        Row(
+          children: [
+            Expanded(
+              child: TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('取消'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: FilledButton(
+                onPressed: canSubmit
+                    ? () {
+                        final name = _nameController.text.trim();
+                        if (name.isNotEmpty) {
+                          Navigator.of(context).pop(
+                            Person()
+                              ..uuid =
+                                  widget.person?.uuid ??
+                                  DateTime.now().microsecondsSinceEpoch
+                                      .toString()
+                              ..name = name
+                              ..avatar = _selectedAvatar
+                              ..linkedUserUuid = widget.person?.linkedUserUuid,
+                          );
+                        }
+                      }
+                    : null,
+                child: const Text('保存'),
+              ),
+            ),
+          ],
         ),
       ],
     );

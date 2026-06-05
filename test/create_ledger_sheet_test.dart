@@ -116,7 +116,7 @@ void main() {
       (widget) => widget is TextField && widget.decoration?.labelText == '人员名称',
     );
     await tester.enterText(personNameField, '新成员');
-    await tester.tap(find.text('确定'));
+    await tester.tap(find.text('保存'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
