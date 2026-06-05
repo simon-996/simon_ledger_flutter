@@ -74,19 +74,15 @@ class _TransactionTypeButton extends StatelessWidget {
     final mutedColor = colorScheme.onSurfaceVariant.withValues(alpha: 0.48);
 
     return AnimatedContainer(
+      key: ValueKey('transaction-type-option-$value'),
       duration: AppMotion.fast,
       curve: AppMotion.standard,
       height: 48,
       decoration: BoxDecoration(
         color: selected
             ? accent.withValues(alpha: 0.12)
-            : colorScheme.surfaceContainerLow.withValues(alpha: 0.42),
+            : colorScheme.surfaceContainerHigh.withValues(alpha: 0.52),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: selected
-              ? accent.withValues(alpha: 0.52)
-              : colorScheme.outlineVariant.withValues(alpha: 0.42),
-        ),
       ),
       child: Material(
         color: Colors.transparent,
@@ -192,19 +188,15 @@ class _PaymentModeOption extends StatelessWidget {
     final mutedColor = colorScheme.onSurfaceVariant.withValues(alpha: 0.5);
 
     return AnimatedContainer(
+      key: ValueKey('payment-mode-option-$label'),
       duration: AppMotion.fast,
       curve: AppMotion.standard,
       height: 44,
       decoration: BoxDecoration(
         color: selected
-            ? colorScheme.primaryContainer.withValues(alpha: 0.58)
-            : colorScheme.surfaceContainerLow.withValues(alpha: 0.42),
+            ? colorScheme.primary.withValues(alpha: 0.12)
+            : colorScheme.surfaceContainerHigh.withValues(alpha: 0.52),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: selected
-              ? colorScheme.primary.withValues(alpha: 0.52)
-              : colorScheme.outlineVariant.withValues(alpha: 0.42),
-        ),
       ),
       child: Material(
         color: Colors.transparent,
@@ -377,19 +369,15 @@ class _CurrencyQuickItem extends StatelessWidget {
     final mutedColor = colorScheme.onSurfaceVariant.withValues(alpha: 0.52);
 
     return AnimatedContainer(
+      key: ValueKey('currency-option-$label'),
       width: fillWidth ? double.infinity : null,
       duration: AppMotion.fast,
       curve: AppMotion.standard,
       decoration: BoxDecoration(
         color: selected
-            ? colorScheme.primaryContainer.withValues(alpha: 0.58)
-            : colorScheme.surfaceContainerLow.withValues(alpha: 0.42),
+            ? colorScheme.primary.withValues(alpha: 0.12)
+            : colorScheme.surfaceContainerHigh.withValues(alpha: 0.52),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: selected
-              ? colorScheme.primary.withValues(alpha: 0.52)
-              : colorScheme.outlineVariant.withValues(alpha: 0.42),
-        ),
       ),
       child: Material(
         color: Colors.transparent,
@@ -551,18 +539,14 @@ class _CategoryQuickItem extends StatelessWidget {
     final mutedColor = colorScheme.onSurfaceVariant.withValues(alpha: 0.5);
 
     return AnimatedContainer(
+      key: ValueKey('category-option-$category'),
       duration: AppMotion.fast,
       curve: AppMotion.standard,
       decoration: BoxDecoration(
         color: selected
             ? accent.withValues(alpha: 0.12)
-            : colorScheme.surfaceContainerLow.withValues(alpha: 0.42),
+            : colorScheme.surfaceContainerHigh.withValues(alpha: 0.52),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: selected
-              ? accent.withValues(alpha: 0.52)
-              : colorScheme.outlineVariant.withValues(alpha: 0.42),
-        ),
       ),
       child: Material(
         color: Colors.transparent,
