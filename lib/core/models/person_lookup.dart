@@ -12,6 +12,13 @@ Map<String, Person> peopleByUuid(Iterable<Person> people) {
     }
     lookup.putIfAbsent(syncedRemoteUuid, () => person);
   }
+  for (final person in people) {
+    final linkedUserUuid = person.linkedUserUuid;
+    if (linkedUserUuid == null || linkedUserUuid.isEmpty) {
+      continue;
+    }
+    lookup.putIfAbsent(linkedUserUuid, () => person);
+  }
   return lookup;
 }
 

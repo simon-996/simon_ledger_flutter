@@ -837,6 +837,7 @@ class _LedgerCard extends StatelessWidget {
                             AppLedgerPeopleChips(
                               sharedMembers: ledger.members,
                               localManualPeople: localManualPeople,
+                              peopleById: peopleById,
                             ),
                             const SizedBox(height: 14),
                           ],

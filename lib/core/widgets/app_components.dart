@@ -871,21 +871,26 @@ class AppLedgerPeopleChips extends StatelessWidget {
     super.key,
     required this.sharedMembers,
     required this.localManualPeople,
+    this.peopleById = const {},
     this.singleLine = false,
   });
 
   final List<LedgerMemberSummary> sharedMembers;
   final List<Person> localManualPeople;
+  final Map<String, Person> peopleById;
   final bool singleLine;
 
   @override
   Widget build(BuildContext context) {
     final chips = [
       ...sharedMembers.map((member) {
+        final localPerson = _localPersonForMember(member);
+        final name = _displayNameForMember(member, localPerson);
+        final avatar = _displayAvatarForMember(member, localPerson);
         return _LedgerPersonChip(
-          avatar: member.displayAvatar,
-          name: member.displayName,
-          tooltip: '${member.displayName}${_roleLabel(member.role)} · 共享成员',
+          avatar: avatar,
+          name: name,
+          tooltip: '$name${_roleLabel(member.role)} · 共享成员',
           isShared: true,
         );
       }),
@@ -931,6 +936,38 @@ class AppLedgerPeopleChips extends StatelessWidget {
       'viewer' => ' · 查看',
       _ => '',
     };
+  }
+
+  Person? _localPersonForMember(LedgerMemberSummary member) {
+    final userUuid = member.userUuid;
+    if (userUuid != null && userUuid.isNotEmpty) {
+      final person = peopleById[userUuid];
+      if (person != null && !person.isDeleted) {
+        return person;
+      }
+    }
+
+    final person = peopleById[member.uuid];
+    if (person == null || person.isDeleted) {
+      return null;
+    }
+    return person;
+  }
+
+  String _displayNameForMember(LedgerMemberSummary member, Person? person) {
+    final localName = person?.name.trim();
+    if (localName != null && localName.isNotEmpty) {
+      return localName;
+    }
+    return member.displayName;
+  }
+
+  String _displayAvatarForMember(LedgerMemberSummary member, Person? person) {
+    final localAvatar = person?.avatar.trim();
+    if (localAvatar != null && localAvatar.isNotEmpty) {
+      return localAvatar;
+    }
+    return member.displayAvatar;
   }
 }
 

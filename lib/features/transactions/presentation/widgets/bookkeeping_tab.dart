@@ -1469,6 +1469,7 @@ class _LedgerPickerItem extends StatelessWidget {
                   AppLedgerPeopleChips(
                     sharedMembers: ledger.members,
                     localManualPeople: localManualPeople,
+                    peopleById: peopleById,
                     singleLine: true,
                   ),
                 ],

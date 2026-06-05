@@ -887,6 +887,7 @@ class _UnifiedProfileCardState extends ConsumerState<_UnifiedProfileCard> {
   void _refreshProfileDependents() {
     ref.invalidate(localProfileProvider);
     ref.invalidate(currentUserProvider);
+    ref.invalidate(cachedPeopleProvider);
     ref.invalidate(personNotifierProvider);
     ref.invalidate(ledgerNotifierProvider);
     ref.invalidate(ledgerStatsProvider);

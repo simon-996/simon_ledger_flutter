@@ -24,6 +24,15 @@ void main() {
       expect(lookup['remote-alice'], same(alice));
     });
 
+    test('indexes linked user uuid as an alias', () {
+      final self = _person('self', 'Simon', 'S')..linkedUserUuid = 'user-simon';
+
+      final lookup = peopleByUuid([self]);
+
+      expect(lookup['self'], same(self));
+      expect(lookup['user-simon'], same(self));
+    });
+
     test('keeps direct uuid mapping before synced alias', () {
       final localAlice = _person('local-alice', 'Local Alice', 'L')
         ..syncedRemoteUuid = 'remote-alice';

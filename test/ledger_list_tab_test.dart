@@ -330,6 +330,61 @@ void main() {
     },
   );
 
+  testWidgets('ledger card prefers local linked user profile display', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final database = DatabaseService();
+    final selfPerson = Person()
+      ..uuid = 'self'
+      ..name = '新昵称'
+      ..avatar = '⭐'
+      ..linkedUserUuid = 'user-1';
+    final ledger = Ledger()
+      ..uuid = 'remote-ledger'
+      ..name = '共享账本'
+      ..baseCurrencyCode = 'CNY'
+      ..members = [
+        LedgerMemberSummary(
+          uuid: 'member-self',
+          userUuid: 'user-1',
+          nickname: '旧昵称',
+          avatar: '🙂',
+          role: 'owner',
+        ),
+      ]
+      ..memberCount = 1;
+    await database.savePerson(selfPerson);
+    await database.saveLedger(ledger);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(database)],
+        child: MaterialApp(
+          home: Scaffold(
+            body: LedgerListTab(
+              ledgers: [ledger],
+              ledgerStats: const {},
+              onTap: (_) {},
+              onEdit: (_) {},
+              onShare: (_) async {},
+              onDelete: (_) async {},
+              onCreate: () {},
+              onSync: (_) async {},
+              autoSyncEnabled: false,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('新昵称'), findsOneWidget);
+    expect(find.text('旧昵称'), findsNothing);
+    expect(find.byTooltip('新昵称 · 所有者 · 共享成员'), findsOneWidget);
+  });
+
   testWidgets(
     'ledger delete sheet shows details and waits for local deletion',
     (tester) async {
