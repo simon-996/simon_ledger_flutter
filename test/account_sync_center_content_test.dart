@@ -215,6 +215,51 @@ void main() {
     );
   });
 
+  testWidgets('account profile card uses an iOS style account entry', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final database = DatabaseService();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          authTokenProvider.overrideWith(
+            (ref) async => const AuthToken(name: 'satoken', value: 'token'),
+          ),
+          currentUserProvider.overrideWith(
+            (ref) async => const AuthUser(
+              uuid: 'user-1',
+              nickname: 'Simon',
+              email: 'simon@example.com',
+            ),
+          ),
+          localProfileProvider.overrideWith(
+            (ref) async =>
+                const LocalProfile(nickname: 'Simon', avatarIcon: 'person'),
+          ),
+          syncOverviewProvider.overrideWith((ref) async => emptyOverview),
+        ],
+        child: const MaterialApp(home: Scaffold(body: AccountTab())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final profileCard = tester.widget<AppSectionCard>(
+      find
+          .ancestor(
+            of: find.text('Simon'),
+            matching: find.byType(AppSectionCard),
+          )
+          .first,
+    );
+    final avatar = tester.widget<CircleAvatar>(find.byType(CircleAvatar).first);
+
+    expect(profileCard.padding, EdgeInsets.zero);
+    expect(avatar.radius, 34);
+    expect(find.byTooltip('编辑账户资料'), findsOneWidget);
+  });
+
   testWidgets('account logout uses quiet danger action with confirmation', (
     tester,
   ) async {

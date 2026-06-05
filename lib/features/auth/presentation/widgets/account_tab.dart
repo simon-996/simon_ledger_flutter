@@ -10,6 +10,7 @@ import '../../../../core/services/cloud_import_service.dart';
 import '../../../../core/services/profile_sync_service.dart';
 import '../../../../core/services/sync_overview_service.dart';
 import '../../../../core/services/invite_link_service.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../ledgers/presentation/providers/ledger_provider.dart';
 import '../../../ledgers/presentation/providers/ledger_stats_provider.dart';
@@ -743,6 +744,7 @@ class _UnifiedProfileCardState extends ConsumerState<_UnifiedProfileCard> {
             _syncing || (widget.syncingProfile && profile.pendingSync);
 
         return AppSectionCard(
+          padding: EdgeInsets.zero,
           child: AppAnimatedSwitcher(
             child: _AccountLoadingOverlay(
               key: ValueKey(
@@ -750,68 +752,82 @@ class _UnifiedProfileCardState extends ConsumerState<_UnifiedProfileCard> {
               ),
               loading: syncing,
               message: '正在同步账户资料',
-              child: InkWell(
-                borderRadius: BorderRadius.circular(18),
-                onTap: () => _editProfile(profile),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 30,
-                            backgroundColor: colorScheme.primaryContainer,
-                            child: Text(
-                              profile.personAvatar,
-                              style: Theme.of(context).textTheme.headlineSmall,
+              child: Tooltip(
+                message: '编辑账户资料',
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+                  onTap: () => _editProfile(profile),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 34,
+                              backgroundColor: colorScheme.primaryContainer
+                                  .withValues(alpha: 0.72),
+                              child: Text(
+                                profile.personAvatar,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineMedium
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  profile.normalizedNickname,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.titleLarge
-                                      ?.copyWith(fontWeight: FontWeight.w900),
-                                ),
-                                const SizedBox(height: 3),
-                                Text(
-                                  widget.account ??
-                                      (widget.isSignedIn ? '已登录' : '未登录本地使用'),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(
-                                        color: colorScheme.onSurfaceVariant
-                                            .withValues(alpha: 0.66),
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                ),
-                              ],
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    profile.normalizedNickname,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .headlineSmall
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.w900,
+                                          height: 1.06,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 5),
+                                  Text(
+                                    widget.account ??
+                                        (widget.isSignedIn ? '已登录' : '未登录本地使用'),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: colorScheme.onSurfaceVariant
+                                              .withValues(alpha: 0.58),
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                          Icon(
-                            Icons.chevron_right_rounded,
-                            color: colorScheme.onSurfaceVariant.withValues(
-                              alpha: 0.38,
+                            Icon(
+                              Icons.chevron_right_rounded,
+                              color: colorScheme.onSurfaceVariant.withValues(
+                                alpha: 0.38,
+                              ),
                             ),
+                          ],
+                        ),
+                        if (profile.pendingSync && !syncing) ...[
+                          const SizedBox(height: 14),
+                          _ProfileSyncBanner(
+                            errorText: profile.syncError,
+                            onRetry: widget.isSignedIn
+                                ? _retrySyncProfile
+                                : null,
                           ),
                         ],
-                      ),
-                      if (profile.pendingSync && !syncing) ...[
-                        const SizedBox(height: 12),
-                        _ProfileSyncBanner(
-                          errorText: profile.syncError,
-                          onRetry: widget.isSignedIn ? _retrySyncProfile : null,
-                        ),
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -922,14 +938,16 @@ class _ProfileSyncBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: colorScheme.tertiaryContainer,
-        borderRadius: BorderRadius.circular(12),
+        color: colorScheme.tertiaryContainer.withValues(alpha: 0.46),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colorScheme.tertiary.withValues(alpha: 0.18)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
             Icons.cloud_off_outlined,
+            size: 20,
             color: colorScheme.onTertiaryContainer,
           ),
           const SizedBox(width: 10),
