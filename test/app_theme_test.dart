@@ -52,4 +52,33 @@ void main() {
       scheme.surfaceContainerHigh.withValues(alpha: 0.62),
     );
   });
+
+  test('AppTheme uses calm floating surfaces for modals', () {
+    final theme = AppTheme.lightTheme;
+    final scheme = theme.colorScheme;
+
+    expect(
+      theme.bottomSheetTheme.backgroundColor,
+      scheme.surfaceContainerLowest,
+    );
+    expect(
+      theme.bottomSheetTheme.modalBackgroundColor,
+      scheme.surfaceContainerLowest,
+    );
+    expect(
+      theme.bottomSheetTheme.dragHandleColor,
+      scheme.outlineVariant.withValues(alpha: 0.72),
+    );
+    final bottomSheetShape =
+        theme.bottomSheetTheme.shape! as RoundedRectangleBorder;
+    final bottomSheetRadius = bottomSheetShape.borderRadius as BorderRadius;
+    expect(bottomSheetRadius.topLeft.x, 32);
+    expect(bottomSheetRadius.topRight.x, 32);
+
+    expect(theme.dialogTheme.backgroundColor, scheme.surfaceContainerLowest);
+    final dialogShape = theme.dialogTheme.shape! as RoundedRectangleBorder;
+    final dialogRadius = dialogShape.borderRadius as BorderRadius;
+    expect(dialogRadius.topLeft.x, 28);
+    expect(dialogRadius.bottomRight.x, 28);
+  });
 }

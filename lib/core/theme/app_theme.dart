@@ -252,17 +252,17 @@ class AppTheme {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
       ),
       bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: surfaceColor,
-        modalBackgroundColor: surfaceColor,
+        backgroundColor: colorScheme.surfaceContainerLowest,
+        modalBackgroundColor: colorScheme.surfaceContainerLowest,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
         ),
-        dragHandleColor: colorScheme.outline,
+        dragHandleColor: colorScheme.outlineVariant.withValues(alpha: 0.72),
         showDragHandle: true,
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: surfaceColor,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        backgroundColor: colorScheme.surfaceContainerLowest,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
         titleTextStyle: textTheme.titleLarge,
         contentTextStyle: textTheme.bodyMedium?.copyWith(
           color: colorScheme.onSurfaceVariant,
