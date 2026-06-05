@@ -8,6 +8,7 @@ import 'package:simon_ledger_flutter/core/models/local_profile.dart';
 import 'package:simon_ledger_flutter/core/network/token_store.dart';
 import 'package:simon_ledger_flutter/core/repositories/auth_repository.dart';
 import 'package:simon_ledger_flutter/core/services/sync_overview_service.dart';
+import 'package:simon_ledger_flutter/core/theme/app_theme.dart';
 import 'package:simon_ledger_flutter/core/widgets/app_components.dart';
 import 'package:simon_ledger_flutter/features/auth/presentation/providers/auth_provider.dart';
 import 'package:simon_ledger_flutter/features/auth/presentation/widgets/account_tab.dart';
@@ -292,6 +293,52 @@ void main() {
     expect(profileCard.padding, EdgeInsets.zero);
     expect(avatar.radius, 34);
     expect(find.byTooltip('编辑账户资料'), findsOneWidget);
+  });
+
+  testWidgets('account profile dialog uses preview first layout', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final database = DatabaseService();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          authTokenProvider.overrideWith(
+            (ref) async => const AuthToken(name: 'satoken', value: 'token'),
+          ),
+          currentUserProvider.overrideWith(
+            (ref) async => const AuthUser(
+              uuid: 'user-1',
+              nickname: 'Simon',
+              email: 'simon@example.com',
+            ),
+          ),
+          localProfileProvider.overrideWith(
+            (ref) async =>
+                const LocalProfile(nickname: 'Simon', avatarIcon: 'person'),
+          ),
+          syncOverviewProvider.overrideWith((ref) async => emptyOverview),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.lightTheme,
+          home: const Scaffold(body: AccountTab()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('编辑账户资料'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('编辑资料'), findsOneWidget);
+    expect(find.text('账户资料'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('profile-dialog-avatar-preview')),
+      findsOneWidget,
+    );
+    expect(find.text('选择头像'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, '保存'), findsOneWidget);
   });
 
   testWidgets('account logout uses quiet danger action with confirmation', (

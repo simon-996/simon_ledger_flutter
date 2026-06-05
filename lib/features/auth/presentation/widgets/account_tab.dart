@@ -1056,13 +1056,31 @@ class _ProfileDialogState extends State<_ProfileDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final avatar = AvatarConfig.avatarForKey(_avatarIcon);
+
     return AlertDialog(
-      title: const Text('账户资料'),
+      title: const Text('编辑资料'),
+      contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            Center(
+              child: Container(
+                key: const ValueKey('profile-dialog-avatar-preview'),
+                width: 86,
+                height: 86,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Text(avatar, style: const TextStyle(fontSize: 40)),
+              ),
+            ),
+            const SizedBox(height: 18),
             TextField(
               controller: _nicknameController,
               autofocus: true,
@@ -1073,7 +1091,14 @@ class _ProfileDialogState extends State<_ProfileDialog> {
               ),
               onSubmitted: (_) => _submit(),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
+            Text(
+              '选择头像',
+              style: Theme.of(
+                context,
+              ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 10),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -1093,11 +1118,20 @@ class _ProfileDialogState extends State<_ProfileDialog> {
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('取消'),
+        Row(
+          children: [
+            Expanded(
+              child: TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('取消'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: FilledButton(onPressed: _submit, child: const Text('保存')),
+            ),
+          ],
         ),
-        FilledButton(onPressed: _submit, child: const Text('保存')),
       ],
     );
   }
