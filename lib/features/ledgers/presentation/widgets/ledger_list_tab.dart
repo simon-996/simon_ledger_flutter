@@ -356,10 +356,21 @@ class _LedgerSearchField extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final keyword = controller.text.trim();
     return DecoratedBox(
+      key: const ValueKey('ledger-search-surface'),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: colorScheme.outlineVariant),
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.62),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: colorScheme.shadow.withValues(alpha: 0.025),
+            blurRadius: 14,
+            spreadRadius: -8,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: TextField(
         controller: controller,
