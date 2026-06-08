@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/models/transaction_record.dart';
 import '../../../../core/models/person_lookup.dart';
 import '../../../../core/models/ledger.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
 import '../providers/transaction_provider.dart';
@@ -128,8 +129,8 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
         top: 16,
         bottom: bottomInset + 16,
       ),
-      duration: const Duration(milliseconds: 150),
-      curve: Curves.easeOut,
+      duration: AppMotion.fast,
+      curve: AppMotion.standard,
       child: SafeArea(
         top: false,
         child: ConstrainedBox(
@@ -141,11 +142,13 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
               Row(
                 children: [
                   Container(
-                    width: 44,
-                    height: 44,
+                    width: 48,
+                    height: 48,
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(16),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(18),
                     ),
                     child: Icon(
                       Icons.receipt_long_rounded,
@@ -168,6 +171,9 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       AppSectionCard(
+                        padding: const EdgeInsets.all(18),
+                        color: Colors.white,
+                        borderColor: Colors.white.withValues(alpha: 0.72),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
@@ -206,7 +212,11 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                                     decimal: true,
                                   ),
                               style: Theme.of(context).textTheme.headlineSmall
-                                  ?.copyWith(fontWeight: FontWeight.w800),
+                                  ?.copyWith(
+                                    color: _transactionType == 0
+                                        ? Theme.of(context).colorScheme.error
+                                        : AppTheme.successColor,
+                                  ),
                               decoration: InputDecoration(
                                 labelText: '金额',
                                 prefixText:
@@ -218,6 +228,9 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                       ),
                       const SizedBox(height: 14),
                       AppSectionCard(
+                        padding: const EdgeInsets.all(18),
+                        color: Colors.white,
+                        borderColor: Colors.white.withValues(alpha: 0.72),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
@@ -263,6 +276,9 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                           }
                           final personMap = peopleByUuid(peoplePool);
                           return AppSectionCard(
+                            padding: const EdgeInsets.all(18),
+                            color: Colors.white,
+                            borderColor: Colors.white.withValues(alpha: 0.72),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
@@ -321,7 +337,13 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                 ),
               ),
               const SizedBox(height: 14),
-              FilledButton(onPressed: _saveChanges, child: const Text('保存修改')),
+              FilledButton(
+                onPressed: _saveChanges,
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                ),
+                child: const Text('保存修改'),
+              ),
             ],
           ),
         ),

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/di/providers.dart';
 import '../../../../core/models/ledger.dart';
 import '../../../../core/models/person.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../people_pool/presentation/widgets/person_edit_dialog.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
@@ -203,8 +204,8 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
         : null;
 
     return AnimatedPadding(
-      duration: const Duration(milliseconds: 150),
-      curve: Curves.easeOut,
+      duration: AppMotion.fast,
+      curve: AppMotion.standard,
       padding: EdgeInsets.only(
         left: 16,
         right: 16,
@@ -222,11 +223,13 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
               Row(
                 children: [
                   Container(
-                    width: 44,
-                    height: 44,
+                    width: 48,
+                    height: 48,
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(16),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(18),
                     ),
                     child: Icon(
                       Icons.menu_book_rounded,
@@ -249,6 +252,9 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       AppSectionCard(
+                        padding: const EdgeInsets.all(18),
+                        color: Colors.white,
+                        borderColor: Colors.white.withValues(alpha: 0.72),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
@@ -279,6 +285,9 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
                       ),
                       const SizedBox(height: 14),
                       AppSectionCard(
+                        padding: const EdgeInsets.all(18),
+                        color: Colors.white,
+                        borderColor: Colors.white.withValues(alpha: 0.72),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
@@ -370,6 +379,10 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
               const SizedBox(height: 14),
               FilledButton(
                 onPressed: canSubmit ? _submit : null,
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                  backgroundColor: AppTheme.primaryColor,
+                ),
                 child: Text(widget.existingLedger == null ? '创建' : '保存修改'),
               ),
             ],

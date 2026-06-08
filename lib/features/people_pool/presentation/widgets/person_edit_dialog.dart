@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/models/person.dart';
+import '../../../../core/theme/app_theme.dart';
 
 class PersonEditDialog extends StatefulWidget {
   const PersonEditDialog({super.key, this.person});
@@ -76,21 +77,30 @@ class _PersonEditDialogState extends State<PersonEditDialog> {
                 final isSelected = avatar == _selectedAvatar;
                 return GestureDetector(
                   onTap: () => setState(() => _selectedAvatar = avatar),
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? colorScheme.primaryContainer
-                          : colorScheme.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
+                  child: AnimatedScale(
+                    scale: isSelected ? 1.06 : 1,
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOutCubic,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOutCubic,
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
                         color: isSelected
-                            ? colorScheme.primary
-                            : colorScheme.outlineVariant,
-                        width: isSelected ? 1.5 : 1,
+                            ? colorScheme.primary.withValues(alpha: 0.12)
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isSelected
+                              ? colorScheme.primary.withValues(alpha: 0.5)
+                              : colorScheme.outlineVariant.withValues(
+                                  alpha: 0.8,
+                                ),
+                          width: isSelected ? 1.5 : 1,
+                        ),
                       ),
+                      child: Text(avatar, style: const TextStyle(fontSize: 24)),
                     ),
-                    child: Text(avatar, style: const TextStyle(fontSize: 24)),
                   ),
                 );
               }).toList(),
@@ -129,6 +139,7 @@ class _PersonEditDialogState extends State<PersonEditDialog> {
                   }
                 }
               : null,
+          style: FilledButton.styleFrom(backgroundColor: AppTheme.primaryColor),
           child: const Text('确定'),
         ),
       ],

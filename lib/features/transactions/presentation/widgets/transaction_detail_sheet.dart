@@ -4,6 +4,7 @@ import '../../../../core/models/person.dart';
 import '../../../../core/models/person_lookup.dart';
 import '../../../../core/models/ledger.dart';
 import '../../../../core/models/transaction_record.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../providers/transaction_provider.dart';
 import 'edit_transaction_sheet.dart';
@@ -27,7 +28,7 @@ class TransactionDetailSheet extends ConsumerWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final accent = transaction.type == 0
         ? colorScheme.error
-        : colorScheme.primary;
+        : AppTheme.successColor;
     final maxHeight = MediaQuery.sizeOf(context).height * 0.82;
 
     final splitAmount = transaction.personUuids.isNotEmpty
@@ -162,6 +163,9 @@ class TransactionDetailSheet extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       AppSectionCard(
+                        padding: const EdgeInsets.all(18),
+                        color: Colors.white,
+                        borderColor: Colors.white.withValues(alpha: 0.72),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -207,6 +211,8 @@ class TransactionDetailSheet extends ConsumerWidget {
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 8),
                           child: AppSectionCard(
+                            color: Colors.white,
+                            borderColor: Colors.white.withValues(alpha: 0.72),
                             padding: const EdgeInsets.symmetric(
                               horizontal: 14,
                               vertical: 12,
