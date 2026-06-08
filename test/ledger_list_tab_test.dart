@@ -136,6 +136,51 @@ void main() {
     expect(find.text('已同步'), findsOneWidget);
   });
 
+  testWidgets('viewer ledger hides management actions', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final database = DatabaseService();
+    final ledger = Ledger()
+      ..uuid = '0123456789abcdef0123456789abcdef'
+      ..name = '只读共享账本'
+      ..baseCurrencyCode = 'CNY'
+      ..cloudPolicy = LedgerCloudPolicy.cloudManaged
+      ..role = 'viewer'
+      ..memberCount = 2;
+    await database.saveLedger(ledger);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          authTokenProvider.overrideWith(
+            (ref) async => const AuthToken(name: 'satoken', value: 'token'),
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: LedgerListTab(
+              ledgers: [ledger],
+              ledgerStats: const {},
+              onTap: (_) {},
+              onEdit: (_) {},
+              onShare: (_) async {},
+              onDelete: (_) async {},
+              onCreate: () {},
+              onSync: (_) async {},
+              autoSyncEnabled: false,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('只读共享账本'), findsOneWidget);
+    expect(find.byTooltip('编辑'), findsNothing);
+    expect(find.byTooltip('分享邀请'), findsNothing);
+  });
+
   testWidgets('ledger share action animates card and blocks repeated taps', (
     tester,
   ) async {

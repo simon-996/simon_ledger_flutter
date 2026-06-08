@@ -35,6 +35,7 @@ class TransactionDetailSheet extends ConsumerWidget {
       transaction,
       ledger,
     );
+    final canEditTransaction = ledger.canRecordTransactions;
 
     final splitAmount = transaction.personUuids.isNotEmpty
         ? transaction.amount / transaction.personUuids.length
@@ -110,75 +111,80 @@ class TransactionDetailSheet extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  IconButton(
-                    tooltip: '编辑',
-                    icon: const Icon(Icons.edit_outlined),
-                    onPressed: () async {
-                      final updated = await showModalBottomSheet<bool>(
-                        context: context,
-                        isScrollControlled: true,
-                        useSafeArea: true,
-                        showDragHandle: true,
-                        builder: (context) => EditTransactionSheet(
-                          transaction: transaction,
-                          ledger: ledger,
-                        ),
-                      );
-                      if (updated == true && context.mounted) {
-                        Navigator.pop(context);
-                      }
-                    },
-                  ),
-                  IconButton(
-                    tooltip: '删除',
-                    icon: Icon(
-                      Icons.delete_outline_rounded,
-                      color: colorScheme.error,
+                  if (canEditTransaction) ...[
+                    IconButton(
+                      tooltip: '编辑',
+                      icon: const Icon(Icons.edit_outlined),
+                      onPressed: () async {
+                        final updated = await showModalBottomSheet<bool>(
+                          context: context,
+                          isScrollControlled: true,
+                          useSafeArea: true,
+                          showDragHandle: true,
+                          builder: (context) => EditTransactionSheet(
+                            transaction: transaction,
+                            ledger: ledger,
+                          ),
+                        );
+                        if (updated == true && context.mounted) {
+                          Navigator.pop(context);
+                        }
+                      },
                     ),
-                    onPressed: () async {
-                      final noticeContext = context;
-                      final confirm = await showDialog<bool>(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('删除明细'),
-                          content: const Text('确定要删除这条记账明细吗？'),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context, false),
-                              child: const Text('取消'),
-                            ),
-                            FilledButton(
-                              style: FilledButton.styleFrom(
-                                backgroundColor: colorScheme.error,
+                    IconButton(
+                      tooltip: '删除',
+                      icon: Icon(
+                        Icons.delete_outline_rounded,
+                        color: colorScheme.error,
+                      ),
+                      onPressed: () async {
+                        final noticeContext = context;
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('删除明细'),
+                            content: const Text('确定要删除这条记账明细吗？'),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: const Text('取消'),
                               ),
-                              onPressed: () => Navigator.pop(context, true),
-                              child: const Text('删除'),
-                            ),
-                          ],
-                        ),
-                      );
+                              FilledButton(
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: colorScheme.error,
+                                ),
+                                onPressed: () => Navigator.pop(context, true),
+                                child: const Text('删除'),
+                              ),
+                            ],
+                          ),
+                        );
 
-                      if (confirm == true && context.mounted) {
-                        Navigator.pop(context);
-                        try {
-                          await ref
-                              .read(
-                                transactionNotifierProvider(
-                                  ledger.uuid,
-                                ).notifier,
-                              )
-                              .deleteTransaction(transaction.uuid);
-                        } catch (e) {
-                          if (noticeContext.mounted) {
-                            AppNotice.error(
-                              noticeContext,
-                              FriendlyError.message(e, fallback: '删除失败，请稍后重试。'),
-                            );
+                        if (confirm == true && context.mounted) {
+                          Navigator.pop(context);
+                          try {
+                            await ref
+                                .read(
+                                  transactionNotifierProvider(
+                                    ledger.uuid,
+                                  ).notifier,
+                                )
+                                .deleteTransaction(transaction.uuid);
+                          } catch (e) {
+                            if (noticeContext.mounted) {
+                              AppNotice.error(
+                                noticeContext,
+                                FriendlyError.message(
+                                  e,
+                                  fallback: '删除失败，请稍后重试。',
+                                ),
+                              );
+                            }
                           }
                         }
-                      }
-                    },
-                  ),
+                      },
+                    ),
+                  ],
                 ],
               ),
               const SizedBox(height: 16),

@@ -83,21 +83,28 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
   Ledger? get _selectedLedger {
     final uuid = _selectedLedgerUuid;
     if (uuid == null) return null;
-    for (final ledger in widget.ledgers) {
+    for (final ledger in _recordableLedgers) {
       if (ledger.uuid == uuid) return ledger;
     }
     return null;
   }
 
+  List<Ledger> get _recordableLedgers {
+    return widget.ledgers
+        .where((ledger) => ledger.canRecordTransactions)
+        .toList();
+  }
+
   Future<void> _initDefaults() async {
     final draft = await BookkeepingDraftPreference.read();
     final lastUuid = await LastSelectedLedgerPreference.getUuid();
+    final ledgers = _recordableLedgers;
 
-    if (!mounted || widget.ledgers.isEmpty) return;
+    if (!mounted || ledgers.isEmpty) return;
 
     setState(() {
       if (draft != null &&
-          widget.ledgers.any((ledger) => ledger.uuid == draft.ledgerUuid)) {
+          ledgers.any((ledger) => ledger.uuid == draft.ledgerUuid)) {
         _transactionType = draft.transactionType == 1 ? 1 : 0;
         _selectedCategory = _categoryOrDefault(draft.category);
         _selectedCurrency = draft.currencyCode;
@@ -107,12 +114,12 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
         _payerPersonUuid = draft.payerPersonUuid;
         _updateSelectedLedger(draft.ledgerUuid, persist: false);
       } else if (lastUuid != null &&
-          widget.ledgers.any((l) => l.uuid == lastUuid)) {
+          ledgers.any((ledger) => ledger.uuid == lastUuid)) {
         _selectedCategory ??= _currentCategories.first;
         _updateSelectedLedger(lastUuid, persist: false);
-      } else if (widget.ledgers.length == 1) {
+      } else if (ledgers.length == 1) {
         _selectedCategory ??= _currentCategories.first;
-        _updateSelectedLedger(widget.ledgers.first.uuid, persist: false);
+        _updateSelectedLedger(ledgers.first.uuid, persist: false);
       } else {
         _selectedCategory ??= _currentCategories.first;
         _selectedLedgerUuid = null;
@@ -123,7 +130,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
 
   void _updateSelectedLedger(String ledgerUuid, {bool persist = true}) {
     _selectedLedgerUuid = ledgerUuid;
-    final ledger = widget.ledgers.firstWhere((l) => l.uuid == ledgerUuid);
+    final ledger = _recordableLedgers.firstWhere((l) => l.uuid == ledgerUuid);
     _sanitizeCurrentSelection(ledger);
 
     LastSelectedLedgerPreference.setUuid(ledgerUuid);
@@ -333,11 +340,14 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.ledgers.isEmpty) {
-      return const AppEmptyState(
+    final recordableLedgers = _recordableLedgers;
+    if (recordableLedgers.isEmpty) {
+      return AppEmptyState(
         icon: Icons.edit_note_rounded,
-        title: '还没有可记账的账本',
-        message: '先到“账本”页面创建账本，再回来记录收支。',
+        title: widget.ledgers.isEmpty ? '还没有可记账的账本' : '当前没有可记账的账本',
+        message: widget.ledgers.isEmpty
+            ? '先到“账本”页面创建账本，再回来记录收支。'
+            : '你对现有共享账本只有查看权限，可以联系管理员调整权限，或创建自己的账本。',
       );
     }
 
@@ -387,7 +397,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                           key: ValueKey(
                             'quick-header-${selectedLedger?.uuid}-$_transactionType',
                           ),
-                          ledgers: widget.ledgers,
+                          ledgers: recordableLedgers,
                           ledger: selectedLedger,
                           peopleById: ledgerPeopleById,
                           currencyCode: _selectedCurrency,

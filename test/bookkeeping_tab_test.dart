@@ -6,6 +6,7 @@ import 'package:simon_ledger_flutter/core/database/database_service.dart';
 import 'package:simon_ledger_flutter/core/di/providers.dart';
 import 'package:simon_ledger_flutter/core/models/ledger.dart';
 import 'package:simon_ledger_flutter/core/models/person.dart';
+import 'package:simon_ledger_flutter/core/network/token_store.dart';
 import 'package:simon_ledger_flutter/core/widgets/app_components.dart';
 import 'package:simon_ledger_flutter/features/transactions/presentation/widgets/bookkeeping_tab.dart';
 
@@ -135,6 +136,43 @@ void main() {
     expect(borderRadius.topLeft.x, 28);
     expect(border.top.color, colorScheme.outlineVariant.withValues(alpha: 0.7));
     expect(decoration.boxShadow, isNotEmpty);
+  });
+
+  testWidgets('viewer ledgers are hidden from bookkeeping flow', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final database = DatabaseService();
+    final ledger = Ledger()
+      ..uuid = '0123456789abcdef0123456789abcdef'
+      ..name = '只读共享账本'
+      ..baseCurrencyCode = 'CNY'
+      ..cloudPolicy = LedgerCloudPolicy.cloudManaged
+      ..role = 'viewer'
+      ..memberCount = 2;
+    await database.saveLedger(ledger);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          authTokenProvider.overrideWith(
+            (ref) async => const AuthToken(name: 'satoken', value: 'token'),
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(body: BookkeepingTab(ledgers: [ledger])),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('当前没有可记账的账本'), findsOneWidget);
+    expect(find.text('只读共享账本'), findsNothing);
+    expect(find.text('保存记账'), findsNothing);
   });
 }
 

@@ -182,7 +182,7 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
         final delayMs = (index < 6 ? index : 6) * 45;
         return Dismissible(
           key: ValueKey(ledger.uuid),
-          direction: isBusy
+          direction: isBusy || !ledger.canRemoveFromList
               ? DismissDirection.none
               : DismissDirection.endToStart,
           confirmDismiss: (direction) => _confirmDelete(ledger),
@@ -204,20 +204,14 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
               onShare: () => _shareLedger(ledger),
               onSync: () => _syncLedger(ledger),
               canReorder: !searching,
-              canShare:
-                  isCloudMode &&
-                  ledger.isCloudManaged &&
-                  _canShare(ledger.role),
+              canEdit: ledger.canManageSettings,
+              canShare: isCloudMode && ledger.canInviteMembers,
               canSync: isCloudMode,
             ),
           ),
         );
       },
     );
-  }
-
-  bool _canShare(String? role) {
-    return role == 'owner' || role == 'admin';
   }
 
   Future<void> _shareLedger(Ledger ledger) async {
@@ -670,6 +664,7 @@ class _LedgerCard extends StatelessWidget {
     required this.onShare,
     required this.onSync,
     required this.canReorder,
+    required this.canEdit,
     required this.canShare,
     required this.canSync,
   });
@@ -688,6 +683,7 @@ class _LedgerCard extends StatelessWidget {
   final VoidCallback onShare;
   final VoidCallback onSync;
   final bool canReorder;
+  final bool canEdit;
   final bool canShare;
   final bool canSync;
 
@@ -834,11 +830,12 @@ class _LedgerCard extends StatelessWidget {
                                   icon: const Icon(Icons.sync_rounded),
                                   onPressed: isBusy ? null : onSync,
                                 ),
-                              IconButton(
-                                tooltip: '编辑',
-                                icon: const Icon(Icons.edit_outlined),
-                                onPressed: isBusy ? null : onEdit,
-                              ),
+                              if (canEdit)
+                                IconButton(
+                                  tooltip: '编辑',
+                                  icon: const Icon(Icons.edit_outlined),
+                                  onPressed: isBusy ? null : onEdit,
+                                ),
                               if (canShare)
                                 IconButton(
                                   tooltip: '分享邀请',

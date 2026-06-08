@@ -55,6 +55,32 @@ class Ledger {
 
   String get remoteSyncUuid => hasSyncedRemoteCopy ? syncedRemoteUuid! : uuid;
 
+  String? get normalizedRole {
+    final value = role?.trim().toLowerCase();
+    return value == null || value.isEmpty ? null : value;
+  }
+
+  bool get canManageSettings {
+    if (!isCloudManaged) return true;
+    return normalizedRole == 'owner' || normalizedRole == 'admin';
+  }
+
+  bool get canInviteMembers => canManageSettings && isCloudManaged;
+
+  bool get canRecordTransactions {
+    if (!isCloudManaged) return true;
+    return switch (normalizedRole) {
+      'owner' || 'admin' || 'editor' => true,
+      _ => false,
+    };
+  }
+
+  bool get canRemoveFromList {
+    if (!isCloudManaged) return true;
+    if (normalizedRole == 'owner') return true;
+    return normalizedRole != null || isShared;
+  }
+
   String get displayCode {
     final normalizedUuid = uuid.trim();
     final suffix = normalizedUuid.length <= 8
