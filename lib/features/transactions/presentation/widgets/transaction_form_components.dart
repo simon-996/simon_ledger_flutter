@@ -465,23 +465,32 @@ class CategorySelector extends StatelessWidget {
     required this.selectedCategory,
     required this.isIncome,
     required this.onChanged,
+    this.onAddCategory,
   });
 
   final List<String> categories;
   final String selectedCategory;
   final bool isIncome;
   final ValueChanged<String> onChanged;
+  final VoidCallback? onAddCategory;
 
   @override
   Widget build(BuildContext context) {
+    final showAddAction = onAddCategory != null;
     return SizedBox(
       height: 46,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         clipBehavior: Clip.hardEdge,
-        itemCount: categories.length,
+        itemCount: categories.length + (showAddAction ? 1 : 0),
         separatorBuilder: (context, index) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
+          if (showAddAction && index == categories.length) {
+            return _AddCategoryQuickItem(
+              isIncome: isIncome,
+              onTap: onAddCategory!,
+            );
+          }
           final category = categories[index];
           return _CategoryQuickItem(
             category: category,
@@ -514,6 +523,168 @@ class CategorySelector extends StatelessWidget {
       '其他' => Icons.more_horiz_rounded,
       _ => Icons.category_outlined,
     };
+  }
+}
+
+Future<String?> showTransactionCategoryCreateSheet({
+  required BuildContext context,
+  required List<String> categories,
+  required bool isIncome,
+}) {
+  return showModalBottomSheet<String>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    useSafeArea: true,
+    builder: (context) =>
+        _CategoryCreateSheet(categories: categories, isIncome: isIncome),
+  );
+}
+
+class _AddCategoryQuickItem extends StatelessWidget {
+  const _AddCategoryQuickItem({required this.isIncome, required this.onTap});
+
+  final bool isIncome;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final accent = transactionAccentColor(colorScheme, isIncome ? 1 : 0);
+
+    return Tooltip(
+      message: '添加自定义分类',
+      child: AnimatedContainer(
+        key: const ValueKey('category-option-add'),
+        duration: AppMotion.fast,
+        curve: AppMotion.standard,
+        decoration: BoxDecoration(
+          color: accent.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.add_rounded, size: 18, color: accent),
+                  const SizedBox(width: 6),
+                  Text(
+                    '自定义',
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: accent,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CategoryCreateSheet extends StatefulWidget {
+  const _CategoryCreateSheet({
+    required this.categories,
+    required this.isIncome,
+  });
+
+  final List<String> categories;
+  final bool isIncome;
+
+  @override
+  State<_CategoryCreateSheet> createState() => _CategoryCreateSheetState();
+}
+
+class _CategoryCreateSheetState extends State<_CategoryCreateSheet> {
+  final _controller = TextEditingController();
+  String _value = '';
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final colorScheme = Theme.of(context).colorScheme;
+    final accent = transactionAccentColor(colorScheme, widget.isIncome ? 1 : 0);
+    final normalized = _value.trim();
+    final duplicated = widget.categories.contains(normalized);
+    final canSubmit = normalized.isNotEmpty && !duplicated;
+
+    return AnimatedPadding(
+      duration: AppMotion.fast,
+      curve: AppMotion.standard,
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '添加${widget.isIncome ? '收入' : '支出'}分类',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '关闭',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                key: const ValueKey('category-create-input'),
+                controller: _controller,
+                autofocus: true,
+                maxLength: 8,
+                textInputAction: TextInputAction.done,
+                onChanged: (value) => setState(() => _value = value),
+                onSubmitted: (_) => _submit(canSubmit, normalized),
+                decoration: InputDecoration(
+                  labelText: '分类名称',
+                  hintText: widget.isIncome ? '例如 奖金' : '例如 咖啡',
+                  prefixIcon: Icon(Icons.category_outlined, color: accent),
+                  errorText: duplicated ? '这个分类已经存在' : null,
+                ),
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                key: const ValueKey('category-create-submit'),
+                onPressed: canSubmit ? () => _submit(true, normalized) : null,
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('添加分类'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _submit(bool canSubmit, String normalized) {
+    if (!canSubmit) return;
+    Navigator.of(context).pop(normalized);
   }
 }
 

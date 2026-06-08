@@ -53,4 +53,29 @@ void main() {
       expect(decoration.border, isNull);
     }
   });
+
+  testWidgets('category selector exposes a custom category action', (
+    tester,
+  ) async {
+    var tapped = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.lightTheme,
+        home: Scaffold(
+          body: CategorySelector(
+            categories: const ['餐饮', '交通'],
+            selectedCategory: '餐饮',
+            isIncome: false,
+            onChanged: (_) {},
+            onAddCategory: () => tapped = true,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('category-option-add')));
+
+    expect(tapped, isTrue);
+  });
 }

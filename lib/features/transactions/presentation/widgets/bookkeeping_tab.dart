@@ -10,6 +10,7 @@ import '../../../../core/di/providers.dart';
 import '../../../../core/network/friendly_error.dart';
 import '../../../../core/preferences/bookkeeping_preference.dart';
 import '../../../../core/preferences/last_selected_ledger_preference.dart';
+import '../../../../core/preferences/transaction_category_preference.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
@@ -39,16 +40,10 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
   final _amountController = TextEditingController();
   final _noteController = TextEditingController();
 
-  final List<String> _expenseCategories = [
-    '默认',
-    '交通',
-    '购物',
-    '餐饮',
-    '杂费',
-    '娱乐',
-    '居住',
-  ];
-  final List<String> _incomeCategories = ['默认', '工资', '兼职', '理财', '红包', '其他'];
+  List<String> _expenseCategories =
+      TransactionCategoryPreference.defaultExpenseCategories;
+  List<String> _incomeCategories =
+      TransactionCategoryPreference.defaultIncomeCategories;
 
   @override
   void initState() {
@@ -96,13 +91,18 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
   }
 
   Future<void> _initDefaults() async {
+    final categories = await TransactionCategoryPreference.read();
     final draft = await BookkeepingDraftPreference.read();
     final lastUuid = await LastSelectedLedgerPreference.getUuid();
     final ledgers = _recordableLedgers;
 
-    if (!mounted || ledgers.isEmpty) return;
+    if (!mounted) return;
 
     setState(() {
+      _expenseCategories = categories.expense;
+      _incomeCategories = categories.income;
+      if (ledgers.isEmpty) return;
+
       if (draft != null &&
           ledgers.any((ledger) => ledger.uuid == draft.ledgerUuid)) {
         _transactionType = draft.transactionType == 1 ? 1 : 0;
@@ -125,6 +125,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
         _selectedLedgerUuid = null;
       }
     });
+    if (ledgers.isEmpty) return;
     _persistDraft();
   }
 
@@ -141,6 +142,31 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
 
   List<String> get _currentCategories {
     return _transactionType == 0 ? _expenseCategories : _incomeCategories;
+  }
+
+  Future<void> _addCurrentCategory() async {
+    final transactionType = _transactionType;
+    final category = await showTransactionCategoryCreateSheet(
+      context: context,
+      categories: _currentCategories,
+      isIncome: transactionType == 1,
+    );
+    if (category == null) return;
+
+    final categories = await TransactionCategoryPreference.addCategory(
+      transactionType: transactionType,
+      category: category,
+    );
+    if (!mounted) return;
+    setState(() {
+      _expenseCategories = categories.expense;
+      _incomeCategories = categories.income;
+      if (_transactionType == transactionType) {
+        _selectedCategory = category;
+      }
+    });
+    _persistDraft();
+    AppNotice.success(context, '已添加分类');
   }
 
   String _categoryOrDefault(String? category) {
@@ -469,6 +495,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                                     () => _selectedCategory = category,
                                   );
                                 },
+                                onAddCategory: _addCurrentCategory,
                               ),
                             ],
                           ),

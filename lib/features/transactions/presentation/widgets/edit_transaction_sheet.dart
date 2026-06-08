@@ -6,6 +6,7 @@ import '../../../../core/models/money.dart';
 import '../../../../core/models/person_lookup.dart';
 import '../../../../core/models/transaction_record.dart';
 import '../../../../core/network/friendly_error.dart';
+import '../../../../core/preferences/transaction_category_preference.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
 import '../providers/transaction_provider.dart';
@@ -37,16 +38,10 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
   final Set<String> _selectedPersonIds = {};
   bool _saving = false;
 
-  final List<String> _expenseCategories = [
-    '默认',
-    '交通',
-    '购物',
-    '餐饮',
-    '杂费',
-    '娱乐',
-    '居住',
-  ];
-  final List<String> _incomeCategories = ['默认', '工资', '兼职', '理财', '红包', '其他'];
+  List<String> _expenseCategories =
+      TransactionCategoryPreference.defaultExpenseCategories;
+  List<String> _incomeCategories =
+      TransactionCategoryPreference.defaultIncomeCategories;
 
   @override
   void initState() {
@@ -60,6 +55,7 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
     _payerPersonUuid = widget.transaction.payerPersonUuid;
     _selectedCategory = _categoryOrDefault(widget.transaction.category);
     _selectedPersonIds.addAll(widget.transaction.personUuids);
+    _loadCategories();
   }
 
   @override
@@ -75,10 +71,44 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
 
   String _categoryOrDefault(String? category) {
     final value = category?.trim();
-    if (value != null && _currentCategories.contains(value)) {
+    if (value != null && value.isNotEmpty) {
       return value;
     }
     return _currentCategories.first;
+  }
+
+  Future<void> _loadCategories() async {
+    final categories = await TransactionCategoryPreference.read();
+    if (!mounted) return;
+    setState(() {
+      _expenseCategories = categories.expense;
+      _incomeCategories = categories.income;
+      _selectedCategory = _categoryOrDefault(_selectedCategory);
+    });
+  }
+
+  Future<void> _addCurrentCategory() async {
+    final transactionType = _transactionType;
+    final category = await showTransactionCategoryCreateSheet(
+      context: context,
+      categories: _currentCategories,
+      isIncome: transactionType == 1,
+    );
+    if (category == null) return;
+
+    final categories = await TransactionCategoryPreference.addCategory(
+      transactionType: transactionType,
+      category: category,
+    );
+    if (!mounted) return;
+    setState(() {
+      _expenseCategories = categories.expense;
+      _incomeCategories = categories.income;
+      if (_transactionType == transactionType) {
+        _selectedCategory = category;
+      }
+    });
+    AppNotice.success(context, '已添加分类');
   }
 
   void _setTransactionType(int type) {
@@ -304,6 +334,7 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                                     _selectedCategory = category;
                                   });
                                 },
+                                onAddCategory: _addCurrentCategory,
                               ),
                             ],
                           ),
