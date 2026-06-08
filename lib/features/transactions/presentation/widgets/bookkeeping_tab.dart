@@ -162,11 +162,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                         color: accent.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(26),
                       ),
-                      child: Icon(
-                        Icons.check_rounded,
-                        size: 42,
-                        color: accent,
-                      ),
+                      child: Icon(Icons.check_rounded, size: 42, color: accent),
                     ),
                     const SizedBox(height: 16),
                     Text('记录成功', style: Theme.of(context).textTheme.titleLarge),
@@ -175,8 +171,9 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                       fit: BoxFit.scaleDown,
                       child: Text(
                         '$currency ${amount.toStringAsFixed(2)}',
-                        style: Theme.of(context).textTheme.headlineMedium
-                            ?.copyWith(color: accent),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.headlineMedium?.copyWith(color: accent),
                       ),
                     ),
                     const SizedBox(height: 14),

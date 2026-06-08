@@ -231,8 +231,7 @@ class AppSectionCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(radius),
         border: Border.all(
           color:
-              borderColor ??
-              colorScheme.outlineVariant.withValues(alpha: 0.58),
+              borderColor ?? colorScheme.outlineVariant.withValues(alpha: 0.58),
         ),
         boxShadow: shadow ? _softShadow : null,
       ),
@@ -629,10 +628,6 @@ class _TypeBadge extends StatelessWidget {
 }
 
 const List<BoxShadow> _softShadow = [
-  BoxShadow(
-    color: Color(0x12000000),
-    blurRadius: 24,
-    offset: Offset(0, 10),
-  ),
+  BoxShadow(color: Color(0x12000000), blurRadius: 24, offset: Offset(0, 10)),
   BoxShadow(color: Color(0x08FFFFFF), blurRadius: 1),
 ];

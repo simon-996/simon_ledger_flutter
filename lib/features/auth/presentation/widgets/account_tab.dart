@@ -84,8 +84,9 @@ class _SignedInPanel extends ConsumerWidget {
                       const SizedBox(height: 4),
                       Text(
                         account,
-                        style: Theme.of(context).textTheme.bodyMedium
-                            ?.copyWith(color: colorScheme.onSurfaceVariant),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ],
                   ),
@@ -426,32 +427,32 @@ class _AuthPanelState extends ConsumerState<_AuthPanel> {
                 if (_isRegister) ...[
                   TextField(
                     controller: _nicknameController,
-                  textInputAction: TextInputAction.next,
-                  decoration: const InputDecoration(
-                    labelText: '昵称',
-                    prefixIcon: Icon(Icons.badge_outlined),
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: '昵称',
+                      prefixIcon: Icon(Icons.badge_outlined),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  textInputAction: TextInputAction.next,
-                  decoration: const InputDecoration(
-                    labelText: '邮箱',
-                    prefixIcon: Icon(Icons.mail_outline_rounded),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: '邮箱',
+                      prefixIcon: Icon(Icons.mail_outline_rounded),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _phoneController,
-                  keyboardType: TextInputType.phone,
-                  textInputAction: TextInputAction.next,
-                  decoration: const InputDecoration(
-                    labelText: '手机号',
-                    prefixIcon: Icon(Icons.phone_outlined),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: '手机号',
+                      prefixIcon: Icon(Icons.phone_outlined),
+                    ),
                   ),
-                ),
                 ] else
                   TextField(
                     controller: _accountController,

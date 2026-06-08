@@ -147,14 +147,14 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
             AppTheme.pagePadding,
             12,
           ),
-            child: AppAnimatedEntry(
-              child: AppSectionCard(
-                padding: const EdgeInsets.all(18),
-                color: Colors.white,
-                borderColor: Colors.white.withValues(alpha: 0.72),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
+          child: AppAnimatedEntry(
+            child: AppSectionCard(
+              padding: const EdgeInsets.all(18),
+              color: Colors.white,
+              borderColor: Colors.white.withValues(alpha: 0.72),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
                   _ResponsiveControls(
                     first: DropdownButtonFormField<String>(
                       key: ValueKey('stats-ledger-$_selectedLedgerUuid'),
