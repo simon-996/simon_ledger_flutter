@@ -35,12 +35,12 @@ class LedgerListTab extends ConsumerWidget {
         icon: Icons.account_balance_wallet_outlined,
         title: '还没有账本',
         message: isCloudMode
-            ? '先创建一个云端账本，并设置默认币种。'
-            : '先创建一个账本，并设置默认币种。数据仅保存在本机。',
+            ? '创建一个云端账本，设置默认币种后就可以开始记录。'
+            : '创建一个本地账本，设置默认币种后就可以开始记录。',
         action: FilledButton.icon(
           onPressed: onCreate,
           icon: const Icon(Icons.add_rounded),
-          label: const Text('添加账本'),
+          label: const Text('新建账本'),
         ),
       );
     }
@@ -66,16 +66,10 @@ class LedgerListTab extends ConsumerWidget {
         return AnimatedBuilder(
           animation: animation,
           builder: (context, child) {
-            final elevation = Tween<double>(
-              begin: 0,
-              end: 8,
-            ).evaluate(animation);
-            return Material(
-              color: Colors.transparent,
-              elevation: elevation,
-              borderRadius: BorderRadius.circular(20),
-              child: child,
+            final scale = Tween<double>(begin: 1, end: 1.025).evaluate(
+              CurvedAnimation(parent: animation, curve: AppMotion.standard),
             );
+            return Transform.scale(scale: scale, child: child);
           },
           child: child,
         );
@@ -116,7 +110,7 @@ class LedgerListTab extends ConsumerWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('删除账本'),
-        content: Text('确定要删除账本“${ledger.name}”吗？\n删除后无法恢复。'),
+        content: Text('确定要删除“${ledger.name}”吗？\n删除后无法恢复。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -160,18 +154,21 @@ class _LedgerCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final hasRate = ledger.exchangeRateToCNY != 1.0;
+    final balanceColor = AppTheme.semanticAmountColor(context, balance >= 0);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Material(
-        color: colorScheme.surfaceContainerLowest,
+        color: Colors.white,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: colorScheme.outlineVariant),
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.62),
+          ),
         ),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(24),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -181,13 +178,11 @@ class _LedgerCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
-                      width: 48,
-                      height: 48,
+                      width: 52,
+                      height: 52,
                       decoration: BoxDecoration(
-                        color: colorScheme.primaryContainer.withValues(
-                          alpha: 0.65,
-                        ),
-                        borderRadius: BorderRadius.circular(16),
+                        color: colorScheme.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(20),
                       ),
                       child: Icon(
                         Icons.menu_book_rounded,
@@ -234,9 +229,7 @@ class _LedgerCard extends StatelessWidget {
                             padding: const EdgeInsets.all(12),
                             child: Icon(
                               Icons.drag_handle_rounded,
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurfaceVariant,
+                              color: colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ),
@@ -250,7 +243,7 @@ class _LedgerCard extends StatelessWidget {
                       child: _StatPill(
                         label: '收入',
                         value: income.toStringAsFixed(2),
-                        color: colorScheme.primary,
+                        color: AppTheme.successColor,
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -266,7 +259,7 @@ class _LedgerCard extends StatelessWidget {
                       child: _StatPill(
                         label: '结余',
                         value: balance.toStringAsFixed(2),
-                        color: colorScheme.onSurface,
+                        color: balanceColor,
                       ),
                     ),
                   ],
@@ -323,7 +316,7 @@ class _StatPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -364,7 +357,7 @@ class _DeleteBackground extends StatelessWidget {
         padding: const EdgeInsets.only(right: 24),
         decoration: BoxDecoration(
           color: error,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(24),
         ),
         child: const Icon(Icons.delete_rounded, color: Colors.white),
       ),

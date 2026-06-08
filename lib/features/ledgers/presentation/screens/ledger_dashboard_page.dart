@@ -298,6 +298,10 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
           }
 
           final colorScheme = Theme.of(context).colorScheme;
+          final balanceColor = AppTheme.semanticAmountColor(
+            context,
+            balance >= 0,
+          );
 
           return Column(
             children: [
@@ -310,9 +314,9 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                 ),
                 child: AppAnimatedEntry(
                   child: AppSectionCard(
-                    padding: const EdgeInsets.all(20),
-                    color: colorScheme.primaryContainer.withValues(alpha: 0.42),
-                    borderColor: colorScheme.primary.withValues(alpha: 0.12),
+                    padding: const EdgeInsets.all(22),
+                    color: Colors.white,
+                    borderColor: Colors.white.withValues(alpha: 0.72),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -328,7 +332,7 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                           child: Text(
                             balance.toStringAsFixed(2),
                             style: Theme.of(context).textTheme.displayMedium
-                                ?.copyWith(fontWeight: FontWeight.w900),
+                                ?.copyWith(color: balanceColor),
                           ),
                         ),
                         const SizedBox(height: 20),
@@ -339,7 +343,7 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                                 icon: Icons.arrow_downward_rounded,
                                 label: '总收入',
                                 value: totalIncome.toStringAsFixed(2),
-                                color: colorScheme.primary,
+                                color: AppTheme.successColor,
                               ),
                             ),
                             const SizedBox(width: 10),
