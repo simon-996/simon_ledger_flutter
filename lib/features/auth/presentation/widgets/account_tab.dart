@@ -6,6 +6,7 @@ import '../../../../core/config/avatar_config.dart';
 import '../../../../core/di/providers.dart';
 import '../../../../core/models/local_profile.dart';
 import '../../../../core/network/friendly_error.dart';
+import '../../../../core/preferences/auth_welcome_preference.dart';
 import '../../../../core/services/cloud_import_service.dart';
 import '../../../../core/services/profile_sync_service.dart';
 import '../../../../core/services/sync_overview_service.dart';
@@ -1576,6 +1577,10 @@ class _AuthPanelState extends ConsumerState<_AuthPanel> {
         await authRepository.login(account: account, password: password);
       }
 
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      await _showFirstAuthWelcomePrompt(isRegister: _isRegister);
+
       ref.invalidate(authTokenProvider);
       ref.invalidate(currentUserProvider);
       ref.invalidate(ledgerNotifierProvider);
@@ -1602,5 +1607,169 @@ class _AuthPanelState extends ConsumerState<_AuthPanel> {
     if (!mounted || !_isRegister) return;
     _appliedLocalProfile = true;
     _nicknameController.text = profile.normalizedNickname;
+  }
+
+  Future<void> _showFirstAuthWelcomePrompt({required bool isRegister}) async {
+    final accountUuid = await ref.read(tokenStoreProvider).readAccountUuid();
+    final shown = await AuthWelcomePreference.hasShown(accountUuid);
+    if (shown || !mounted) return;
+
+    await AuthWelcomePreference.markShown(accountUuid);
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (context) => _AuthWelcomeSheet(isRegister: isRegister),
+    );
+  }
+}
+
+class _AuthWelcomeSheet extends StatelessWidget {
+  const _AuthWelcomeSheet({required this.isRegister});
+
+  final bool isRegister;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 4),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: colorScheme.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 24,
+                      backgroundColor: colorScheme.primary,
+                      foregroundColor: colorScheme.onPrimary,
+                      child: Icon(
+                        isRegister
+                            ? Icons.person_add_alt_rounded
+                            : Icons.login_rounded,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            isRegister ? '账户创建完成' : '登录成功',
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.w900),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '本地数据会继续保留，需要同步时从这里开始。',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            const _AuthWelcomeItem(
+              icon: Icons.cloud_upload_outlined,
+              title: '导入本地账本',
+              message: '把本机账本加入云端，已有记录不会丢失。',
+            ),
+            const _AuthWelcomeItem(
+              icon: Icons.group_add_outlined,
+              title: '加入共享账本',
+              message: '收到邀请后可以直接加入协作账本。',
+            ),
+            const _AuthWelcomeItem(
+              icon: Icons.sync_rounded,
+              title: '离线继续使用',
+              message: '网络失败时先保存在本地，恢复后再同步。',
+            ),
+            const SizedBox(height: 14),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('知道了'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AuthWelcomeItem extends StatelessWidget {
+  const _AuthWelcomeItem({
+    required this.icon,
+    required this.title,
+    required this.message,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.62),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, size: 20, color: colorScheme.primary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  message,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

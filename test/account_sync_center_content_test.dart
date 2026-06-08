@@ -6,6 +6,7 @@ import 'package:simon_ledger_flutter/core/database/database_service.dart';
 import 'package:simon_ledger_flutter/core/di/providers.dart';
 import 'package:simon_ledger_flutter/core/models/local_profile.dart';
 import 'package:simon_ledger_flutter/core/network/token_store.dart';
+import 'package:simon_ledger_flutter/core/preferences/auth_welcome_preference.dart';
 import 'package:simon_ledger_flutter/core/repositories/auth_repository.dart';
 import 'package:simon_ledger_flutter/core/services/sync_overview_service.dart';
 import 'package:simon_ledger_flutter/core/theme/app_theme.dart';
@@ -341,6 +342,45 @@ void main() {
     expect(find.widgetWithText(FilledButton, '保存'), findsOneWidget);
   });
 
+  testWidgets('first login shows account welcome bottom sheet', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.binding.setSurfaceSize(const Size(390, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final database = DatabaseService();
+    final authRepository = _FakeAuthRepository();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          authRepositoryProvider.overrideWithValue(authRepository),
+          authTokenProvider.overrideWith((ref) async => null),
+          localProfileProvider.overrideWith(
+            (ref) async =>
+                const LocalProfile(nickname: 'Simon', avatarIcon: 'person'),
+          ),
+          syncOverviewProvider.overrideWith((ref) async => emptyOverview),
+        ],
+        child: const MaterialApp(home: Scaffold(body: AccountTab())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).first, 'simon@example.com');
+    await tester.enterText(find.byType(TextField).last, 'password');
+    await tester.tap(find.widgetWithText(FilledButton, '登录'));
+    await tester.pumpAndSettle();
+
+    expect(authRepository.loginCalls, 1);
+    expect(find.text('登录成功'), findsOneWidget);
+    expect(find.text('导入本地账本'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, '知道了'));
+    await tester.pumpAndSettle();
+
+    expect(await AuthWelcomePreference.hasShown(null), isTrue);
+  });
+
   testWidgets('account logout uses quiet danger action with confirmation', (
     tester,
   ) async {
@@ -402,6 +442,7 @@ void main() {
 
 class _FakeAuthRepository implements AuthRepository {
   int logoutCalls = 0;
+  int loginCalls = 0;
 
   @override
   Future<AuthUser> register({
@@ -418,8 +459,16 @@ class _FakeAuthRepository implements AuthRepository {
   Future<AuthLoginResult> login({
     required String account,
     required String password,
-  }) {
-    throw UnimplementedError();
+  }) async {
+    loginCalls += 1;
+    return const AuthLoginResult(
+      token: AuthToken(name: 'satoken', value: 'token'),
+      user: AuthUser(
+        uuid: 'user-1',
+        nickname: 'Simon',
+        email: 'simon@example.com',
+      ),
+    );
   }
 
   @override
