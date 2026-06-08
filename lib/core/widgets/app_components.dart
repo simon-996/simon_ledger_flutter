@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
+
 class AppMotion {
-  static const Duration fast = Duration(milliseconds: 160);
-  static const Duration normal = Duration(milliseconds: 260);
-  static const Duration slow = Duration(milliseconds: 420);
+  static const Duration micro = Duration(milliseconds: 110);
+  static const Duration fast = Duration(milliseconds: 180);
+  static const Duration normal = Duration(milliseconds: 280);
+  static const Duration slow = Duration(milliseconds: 460);
 
   static const Curve standard = Curves.easeOutCubic;
   static const Curve emphasized = Curves.easeOutQuart;
+  static const Curve spring = Curves.easeOutBack;
 }
 
 class AppAnimatedEntry extends StatefulWidget {
@@ -15,7 +19,7 @@ class AppAnimatedEntry extends StatefulWidget {
     required this.child,
     this.delay = Duration.zero,
     this.duration = AppMotion.slow,
-    this.offset = const Offset(0, 0.035),
+    this.offset = const Offset(0, 0.025),
     this.curve = AppMotion.emphasized,
   });
 
@@ -34,6 +38,7 @@ class _AppAnimatedEntryState extends State<AppAnimatedEntry>
   late final AnimationController _controller;
   late final Animation<double> _opacity;
   late final Animation<Offset> _slide;
+  late final Animation<double> _scale;
 
   @override
   void initState() {
@@ -45,6 +50,7 @@ class _AppAnimatedEntryState extends State<AppAnimatedEntry>
       begin: widget.offset,
       end: Offset.zero,
     ).animate(curved);
+    _scale = Tween<double>(begin: 0.985, end: 1).animate(curved);
 
     if (widget.delay == Duration.zero) {
       _controller.forward();
@@ -65,7 +71,10 @@ class _AppAnimatedEntryState extends State<AppAnimatedEntry>
   Widget build(BuildContext context) {
     return FadeTransition(
       opacity: _opacity,
-      child: SlideTransition(position: _slide, child: widget.child),
+      child: SlideTransition(
+        position: _slide,
+        child: ScaleTransition(scale: _scale, child: widget.child),
+      ),
     );
   }
 }
@@ -100,12 +109,17 @@ class AppAnimatedIndexedStack extends StatelessWidget {
                   child: AnimatedSlide(
                     offset: i == index
                         ? Offset.zero
-                        : Offset(i < index ? -0.025 : 0.025, 0),
+                        : Offset(i < index ? -0.018 : 0.018, 0),
                     duration: duration,
                     curve: AppMotion.emphasized,
-                    child: TickerMode(
-                      enabled: i == index,
-                      child: RepaintBoundary(child: children[i]),
+                    child: AnimatedScale(
+                      scale: i == index ? 1 : 0.992,
+                      duration: duration,
+                      curve: AppMotion.emphasized,
+                      child: TickerMode(
+                        enabled: i == index,
+                        child: RepaintBoundary(child: children[i]),
+                      ),
                     ),
                   ),
                 ),
@@ -140,18 +154,22 @@ class AppEmptyState extends StatelessWidget {
         minimum: const EdgeInsets.all(24),
         child: AppAnimatedEntry(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 360),
+            constraints: const BoxConstraints(maxWidth: 380),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 88,
-                  height: 88,
+                  width: 82,
+                  height: 82,
                   decoration: BoxDecoration(
-                    color: colorScheme.primaryContainer.withValues(alpha: 0.72),
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(28),
+                    boxShadow: _softShadow,
+                    border: Border.all(
+                      color: colorScheme.outlineVariant.withValues(alpha: 0.7),
+                    ),
                   ),
-                  child: Icon(icon, size: 44, color: colorScheme.primary),
+                  child: Icon(icon, size: 38, color: colorScheme.primary),
                 ),
                 const SizedBox(height: 20),
                 Text(
@@ -187,6 +205,8 @@ class AppSectionCard extends StatelessWidget {
     this.margin = EdgeInsets.zero,
     this.color,
     this.borderColor,
+    this.radius = AppTheme.radiusLarge,
+    this.shadow = true,
   });
 
   final Widget child;
@@ -194,6 +214,8 @@ class AppSectionCard extends StatelessWidget {
   final EdgeInsetsGeometry margin;
   final Color? color;
   final Color? borderColor;
+  final double radius;
+  final bool shadow;
 
   @override
   Widget build(BuildContext context) {
@@ -206,11 +228,13 @@ class AppSectionCard extends StatelessWidget {
       padding: padding,
       decoration: BoxDecoration(
         color: color ?? colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(radius),
         border: Border.all(
           color:
-              borderColor ?? colorScheme.outlineVariant.withValues(alpha: 0.86),
+              borderColor ??
+              colorScheme.outlineVariant.withValues(alpha: 0.58),
         ),
+        boxShadow: shadow ? _softShadow : null,
       ),
       child: child,
     );
@@ -257,8 +281,10 @@ class AppMetricTile extends StatelessWidget {
 
     return AppSectionCard(
       padding: const EdgeInsets.all(14),
-      color: colorScheme.surfaceContainerLowest.withValues(alpha: 0.82),
-      borderColor: Colors.white.withValues(alpha: 0.34),
+      radius: 20,
+      shadow: false,
+      color: Colors.white.withValues(alpha: 0.82),
+      borderColor: Colors.white.withValues(alpha: 0.58),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -317,34 +343,47 @@ class AppPersonBalanceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final amountColor = isPositive ? colorScheme.primary : colorScheme.error;
+    final amountColor = AppTheme.semanticAmountColor(context, isPositive);
 
     return _AnimatedTapSurface(
-      color: isSelected
-          ? colorScheme.primaryContainer.withValues(alpha: 0.76)
-          : colorScheme.surfaceContainerLowest,
-      borderRadius: 18,
+      color: isSelected ? colorScheme.primaryContainer : Colors.white,
+      borderRadius: 22,
       borderSide: BorderSide(
-        width: isSelected ? 1.5 : 1,
-        color: isSelected ? colorScheme.primary : colorScheme.outlineVariant,
+        width: isSelected ? 1.4 : 1,
+        color: isSelected
+            ? colorScheme.primary.withValues(alpha: 0.5)
+            : colorScheme.outlineVariant.withValues(alpha: 0.66),
       ),
+      shadow: !isSelected,
       onTap: onTap,
       child: SizedBox(
-        width: 92,
+        width: 96,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(avatar, style: const TextStyle(fontSize: 24)),
-              const SizedBox(height: 6),
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerHigh.withValues(
+                    alpha: 0.62,
+                  ),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Center(
+                  child: Text(avatar, style: const TextStyle(fontSize: 22)),
+                ),
+              ),
+              const SizedBox(height: 7),
               Text(
                 name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelMedium,
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 5),
               FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Text(
@@ -392,20 +431,18 @@ class AppTransactionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final amountColor = isExpense ? colorScheme.error : colorScheme.primary;
+    final amountColor = isExpense ? colorScheme.error : AppTheme.successColor;
     final hasNote = note != null && note!.isNotEmpty;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
       child: _AnimatedTapSurface(
-        color: selected
-            ? colorScheme.primaryContainer.withValues(alpha: 0.58)
-            : colorScheme.surfaceContainerLowest,
-        borderRadius: 18,
+        color: selected ? colorScheme.primaryContainer : Colors.white,
+        borderRadius: 22,
         borderSide: BorderSide(
           color: selected
-              ? colorScheme.primary.withValues(alpha: 0.45)
-              : colorScheme.outlineVariant.withValues(alpha: 0.72),
+              ? colorScheme.primary.withValues(alpha: 0.42)
+              : colorScheme.outlineVariant.withValues(alpha: 0.54),
         ),
         onTap: onTap,
         onLongPress: onLongPress,
@@ -457,7 +494,6 @@ class AppTransactionTile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: colorScheme.onSurfaceVariant,
-                          fontStyle: FontStyle.italic,
                         ),
                       ),
                     ],
@@ -493,6 +529,7 @@ class _AnimatedTapSurface extends StatefulWidget {
     required this.color,
     required this.borderRadius,
     required this.borderSide,
+    this.shadow = true,
     this.onTap,
     this.onLongPress,
   });
@@ -501,6 +538,7 @@ class _AnimatedTapSurface extends StatefulWidget {
   final Color color;
   final double borderRadius;
   final BorderSide borderSide;
+  final bool shadow;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
@@ -510,36 +548,53 @@ class _AnimatedTapSurface extends StatefulWidget {
 
 class _AnimatedTapSurfaceState extends State<_AnimatedTapSurface> {
   bool _pressed = false;
+  bool _hovered = false;
 
   @override
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(widget.borderRadius);
+    final interactive = widget.onTap != null || widget.onLongPress != null;
+    final scale = _pressed ? 0.982 : (_hovered && interactive ? 1.006 : 1.0);
 
-    return AnimatedScale(
-      scale: _pressed ? 0.985 : 1,
-      duration: AppMotion.fast,
-      curve: AppMotion.standard,
-      child: AnimatedContainer(
-        duration: AppMotion.normal,
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() {
+        _hovered = false;
+        _pressed = false;
+      }),
+      child: AnimatedScale(
+        scale: scale,
+        duration: AppMotion.fast,
         curve: AppMotion.standard,
-        decoration: BoxDecoration(
-          color: widget.color,
-          borderRadius: radius,
-          border: Border.all(
-            color: widget.borderSide.color,
-            width: widget.borderSide.width,
-          ),
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: widget.onTap,
-            onLongPress: widget.onLongPress,
-            onHighlightChanged: (pressed) {
-              if (_pressed != pressed) setState(() => _pressed = pressed);
-            },
+        child: AnimatedContainer(
+          duration: AppMotion.normal,
+          curve: AppMotion.standard,
+          decoration: BoxDecoration(
+            color: widget.color,
             borderRadius: radius,
-            child: widget.child,
+            border: Border.all(
+              color: widget.borderSide.color,
+              width: widget.borderSide.width,
+            ),
+            boxShadow: widget.shadow ? _softShadow : null,
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: widget.onTap,
+              onLongPress: widget.onLongPress,
+              onHighlightChanged: (pressed) {
+                if (_pressed != pressed) setState(() => _pressed = pressed);
+              },
+              splashColor: Theme.of(
+                context,
+              ).colorScheme.primary.withValues(alpha: 0.06),
+              highlightColor: Theme.of(
+                context,
+              ).colorScheme.primary.withValues(alpha: 0.04),
+              borderRadius: radius,
+              child: widget.child,
+            ),
           ),
         ),
       ),
@@ -558,11 +613,11 @@ class _TypeBadge extends StatelessWidget {
     return AnimatedContainer(
       duration: AppMotion.normal,
       curve: AppMotion.standard,
-      width: 40,
-      height: 40,
+      width: 42,
+      height: 42,
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(17),
       ),
       child: Icon(
         isExpense ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
@@ -572,3 +627,12 @@ class _TypeBadge extends StatelessWidget {
     );
   }
 }
+
+const List<BoxShadow> _softShadow = [
+  BoxShadow(
+    color: Color(0x12000000),
+    blurRadius: 24,
+    offset: Offset(0, 10),
+  ),
+  BoxShadow(color: Color(0x08FFFFFF), blurRadius: 1),
+];
