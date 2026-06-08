@@ -512,6 +512,17 @@ void main() {
           ..role = 'editor'
           ..memberCount = 2,
       );
+      await database.saveTransaction(
+        TransactionRecord()
+          ..uuid = 'shared-tx'
+          ..ledgerUuid = _remoteLedgerUuid
+          ..type = 0
+          ..amount = 20
+          ..currencyCode = 'CNY'
+          ..category = 'food'
+          ..note = ''
+          ..createdAt = DateTime(2026, 6, 8),
+      );
       final repository = RemoteLedgerRepository(
         apiClient: apiClient,
         database: database,
@@ -531,6 +542,74 @@ void main() {
       expect(ledger.isDeleted, isTrue);
       expect(ledger.pendingSync, isFalse);
       expect(ledger.syncError, isNull);
+      expect(
+        (await database.getTransactionsForLedger(
+          _remoteLedgerUuid,
+        )).single.uuid,
+        'shared-tx',
+      );
+    },
+  );
+
+  test(
+    'RemoteLedgerRepository keeps left shared ledger hidden when leave sync fails',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final database = DatabaseService();
+      final apiClient = _LeaveFailsButLedgerStillRemoteApiClient();
+      await database.saveLedger(
+        Ledger()
+          ..uuid = _remoteLedgerUuid
+          ..name = 'shared ledger'
+          ..baseCurrencyCode = 'CNY'
+          ..exchangeRateToCNY = 1
+          ..role = 'editor'
+          ..memberCount = 2,
+      );
+      await database.saveTransaction(
+        TransactionRecord()
+          ..uuid = 'shared-tx'
+          ..ledgerUuid = _remoteLedgerUuid
+          ..type = 0
+          ..amount = 20
+          ..currencyCode = 'CNY'
+          ..category = 'food'
+          ..note = ''
+          ..createdAt = DateTime(2026, 6, 8),
+      );
+      final repository = RemoteLedgerRepository(
+        apiClient: apiClient,
+        database: database,
+      );
+
+      await repository.deleteLedger(_remoteLedgerUuid);
+      await _flushBackgroundTasks();
+
+      expect(await database.getAllLedgers(), isEmpty);
+      expect(
+        (await database.getTransactionsForLedger(
+          _remoteLedgerUuid,
+        )).single.uuid,
+        'shared-tx',
+      );
+
+      final ledgers = await repository.getAllLedgers();
+
+      expect(ledgers, isEmpty);
+      expect(apiClient.getPaths, ['/api/ledgers']);
+      expect(await database.getAllLedgers(), isEmpty);
+      final hiddenLedger = (await database.getAllLedgers(
+        includeDeleted: true,
+      )).single;
+      expect(hiddenLedger.isDeleted, isTrue);
+      expect(hiddenLedger.pendingSync, isTrue);
+      expect(hiddenLedger.syncError, isNotEmpty);
+      expect(
+        (await database.getTransactionsForLedger(
+          _remoteLedgerUuid,
+        )).single.uuid,
+        'shared-tx',
+      );
     },
   );
 
@@ -983,6 +1062,43 @@ class _LedgerLeaveApiClient extends ApiClient {
     String? idempotencyKey,
   }) async {
     deleteVoidPaths.add(path);
+  }
+}
+
+class _LeaveFailsButLedgerStillRemoteApiClient extends ApiClient {
+  _LeaveFailsButLedgerStillRemoteApiClient() : super(tokenStore: TokenStore());
+
+  final List<String> getPaths = [];
+
+  @override
+  Future<T> get<T>(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+    T Function(Object? json)? fromJson,
+  }) async {
+    getPaths.add(path);
+    if (path == '/api/ledgers') {
+      return fromJson!([
+        {
+          'uuid': _remoteLedgerUuid,
+          'name': 'shared ledger',
+          'baseCurrencyCode': 'CNY',
+          'exchangeRateToCny': 1,
+          'role': 'editor',
+          'memberCount': 2,
+          'members': const [],
+        },
+      ]);
+    }
+    if (path == '/api/ledgers/people') {
+      return fromJson!({_remoteLedgerUuid: const []});
+    }
+    throw UnimplementedError(path);
+  }
+
+  @override
+  Future<void> postVoid(String path, {Object? data, String? idempotencyKey}) {
+    throw Exception('offline');
   }
 }
 

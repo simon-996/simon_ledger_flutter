@@ -1,4 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:simon_ledger_flutter/core/database/database_service.dart';
+import 'package:simon_ledger_flutter/core/models/ledger.dart';
 import 'package:simon_ledger_flutter/core/network/api_client.dart';
 import 'package:simon_ledger_flutter/core/network/token_store.dart';
 import 'package:simon_ledger_flutter/core/repositories/invite_repository.dart';
@@ -68,6 +71,29 @@ void main() {
 
     expect(invite.isUsable, isFalse);
     expect(invite.unavailableReason, '该邀请码的使用次数已达上限');
+  });
+
+  test('join restores a locally hidden ledger', () async {
+    SharedPreferences.setMockInitialValues({});
+    final database = DatabaseService();
+    await database.saveLedger(
+      Ledger()
+        ..uuid = _inviteJson['ledgerUuid'].toString()
+        ..name = 'hidden'
+        ..baseCurrencyCode = 'CNY'
+        ..isDeleted = true
+        ..pendingSync = true
+        ..syncError = 'offline',
+    );
+    final repository = InviteRepository(_InviteApiClient(), database: database);
+
+    await repository.join('abcd1234');
+
+    final ledger = (await database.getAllLedgers()).single;
+    expect(ledger.uuid, _inviteJson['ledgerUuid']);
+    expect(ledger.isDeleted, isFalse);
+    expect(ledger.pendingSync, isFalse);
+    expect(ledger.syncError, isNull);
   });
 }
 

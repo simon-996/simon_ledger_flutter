@@ -100,6 +100,35 @@ void main() {
       );
     });
 
+    test('hides a ledger without deleting its transactions', () async {
+      await database.saveLedger(
+        Ledger()
+          ..uuid = 'ledger-1'
+          ..name = 'shared'
+          ..baseCurrencyCode = 'CNY',
+      );
+      await database.saveTransaction(
+        TransactionRecord()
+          ..uuid = 'tx-1'
+          ..ledgerUuid = 'ledger-1'
+          ..type = 0
+          ..amount = 12
+          ..currencyCode = 'CNY'
+          ..category = 'food'
+          ..note = ''
+          ..createdAt = DateTime(2026, 6, 8),
+      );
+
+      await database.hideLedger('ledger-1');
+
+      expect(await database.getAllLedgers(), isEmpty);
+      expect(await database.getTransactionsForLedger('ledger-1'), hasLength(1));
+      final hiddenLedger = (await database.getAllLedgers(
+        includeDeleted: true,
+      )).single;
+      expect(hiddenLedger.isDeleted, isTrue);
+    });
+
     test('returns ledgers with the newest sort order first', () async {
       await database.saveLedger(
         Ledger()

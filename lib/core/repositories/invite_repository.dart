@@ -1,3 +1,4 @@
+import '../database/database_service.dart';
 import '../network/api_client.dart';
 
 class LedgerInvite {
@@ -116,9 +117,11 @@ class LedgerInviteMember {
 }
 
 class InviteRepository {
-  const InviteRepository(this._apiClient);
+  const InviteRepository(this._apiClient, {DatabaseService? database})
+    : _database = database;
 
   final ApiClient _apiClient;
+  final DatabaseService? _database;
 
   Future<LedgerInvite?> getCurrentInvite(String ledgerUuid) {
     return _apiClient.get<LedgerInvite?>(
@@ -156,13 +159,15 @@ class InviteRepository {
     );
   }
 
-  Future<LedgerInvite> join(String code) {
+  Future<LedgerInvite> join(String code) async {
     final normalizedCode = code.trim().toUpperCase();
-    return _apiClient.post<LedgerInvite>(
+    final invite = await _apiClient.post<LedgerInvite>(
       '/api/invites/$normalizedCode/join',
       idempotencyKey: 'join-invite-$normalizedCode',
       fromJson: LedgerInvite.fromJson,
     );
+    await _database?.restoreLedgerAccess(invite.ledgerUuid);
+    return invite;
   }
 
   Future<LedgerInvite> preview(String code) {

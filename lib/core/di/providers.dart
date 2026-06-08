@@ -70,7 +70,10 @@ final ledgerRepositoryProvider = Provider<LedgerRepository>((ref) {
 });
 
 final inviteRepositoryProvider = Provider<InviteRepository>((ref) {
-  return InviteRepository(ref.watch(apiClientProvider));
+  return InviteRepository(
+    ref.watch(apiClientProvider),
+    database: ref.watch(databaseProvider),
+  );
 });
 
 final personRepositoryProvider = Provider<PersonRepository>((ref) {

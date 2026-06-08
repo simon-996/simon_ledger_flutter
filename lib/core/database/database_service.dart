@@ -157,6 +157,33 @@ class DatabaseService {
     }
   }
 
+  Future<void> hideLedger(String uuid) async {
+    final ledgers = await _readLedgers();
+    final ledger = ledgers.where((item) {
+      return item.uuid == uuid || item.syncedRemoteUuid == uuid;
+    }).firstOrNull;
+    if (ledger == null) {
+      return;
+    }
+    ledger.isDeleted = true;
+    await _writeLedgers(ledgers);
+  }
+
+  Future<void> restoreLedgerAccess(String uuid) async {
+    final ledgers = await _readLedgers();
+    final ledger = ledgers.where((item) {
+      return item.uuid == uuid || item.syncedRemoteUuid == uuid;
+    }).firstOrNull;
+    if (ledger == null) {
+      return;
+    }
+    ledger
+      ..isDeleted = false
+      ..pendingSync = false
+      ..syncError = null;
+    await _writeLedgers(ledgers);
+  }
+
   // Transaction operations
   Future<List<TransactionRecord>> getTransactionsForLedger(
     String ledgerUuid, {

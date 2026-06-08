@@ -111,16 +111,23 @@ class RemoteLedgerRepository implements LedgerRepository {
   Future<List<Ledger>> getAllLedgers({bool includeDeleted = false}) async {
     try {
       await syncPendingWrites();
-      final ledgers = await _apiClient.get<List<Ledger>>(
+      var ledgers = await _apiClient.get<List<Ledger>>(
         '/api/ledgers',
         fromJson: (json) =>
             (json! as List<dynamic>).map(_ledgerFromJson).toList(),
       );
       final accountUuid = await _tokenStore?.readAccountUuid();
+      final cachedLedgers = await _db.getAllLedgers(includeDeleted: true);
+      final hiddenRemoteLedgerIdentities = _hiddenRemoteLedgerIdentities(
+        cachedLedgers,
+        accountUuid,
+      );
+      ledgers = ledgers.where((ledger) {
+        return !hiddenRemoteLedgerIdentities.contains(ledger.remoteSyncUuid);
+      }).toList();
       for (final ledger in ledgers) {
         ledger.cacheOwnerUserUuid = accountUuid;
       }
-      final cachedLedgers = await _db.getAllLedgers(includeDeleted: true);
       final cachedPeopleByLedgerUuid = {
         for (final ledger in cachedLedgers) ledger.uuid: ledger.personUuids,
       };
@@ -457,6 +464,29 @@ class RemoteLedgerRepository implements LedgerRepository {
     );
   }
 
+  Set<String> _hiddenRemoteLedgerIdentities(
+    List<Ledger> cachedLedgers,
+    String? accountUuid,
+  ) {
+    return {
+      for (final ledger in cachedLedgers)
+        if (ledger.isDeleted &&
+            ledger.isCloudManaged &&
+            _isCurrentAccountCache(ledger, accountUuid)) ...[
+          ledger.uuid,
+          ledger.remoteSyncUuid,
+        ],
+    };
+  }
+
+  bool _isCurrentAccountCache(Ledger ledger, String? accountUuid) {
+    if (accountUuid == null) {
+      return true;
+    }
+    final owner = ledger.cacheOwnerUserUuid;
+    return owner == null || owner == accountUuid;
+  }
+
   bool _looksLikeRemoteUuid(String uuid) {
     return RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(uuid);
   }
@@ -467,15 +497,30 @@ class RemoteLedgerRepository implements LedgerRepository {
 
   @override
   Future<void> deleteLedger(String uuid) async {
-    await _db.deleteLedger(uuid);
+    final currentLedgers = await _db.getAllLedgers(includeDeleted: true);
+    final currentLedger = currentLedgers
+        .where((item) => item.uuid == uuid || item.syncedRemoteUuid == uuid)
+        .firstOrNull;
+    final isLeaveAction =
+        currentLedger != null && _shouldLeaveRemoteLedger(currentLedger);
+
+    if (isLeaveAction) {
+      await _db.hideLedger(uuid);
+    } else {
+      await _db.deleteLedger(uuid);
+    }
+
     final ledgers = await _db.getAllLedgers(includeDeleted: true);
-    final ledger = ledgers.where((item) => item.uuid == uuid).firstOrNull;
+    final ledger = ledgers
+        .where((item) => item.uuid == uuid || item.syncedRemoteUuid == uuid)
+        .firstOrNull;
     if (ledger == null) {
       return;
     }
     if (ledger.isLocalOnly) {
       return;
     }
+    ledger.cacheOwnerUserUuid ??= await _tokenStore?.readAccountUuid();
     await _db.saveLedger(
       ledger
         ..pendingSync = true
@@ -516,8 +561,14 @@ class RemoteLedgerRepository implements LedgerRepository {
   }
 
   bool _shouldLeaveRemoteLedger(Ledger ledger) {
+    if (ledger.isLocalOnly) {
+      return false;
+    }
     final role = ledger.role?.trim().toLowerCase();
-    return role != null && role != 'owner';
+    if (role == 'owner') {
+      return false;
+    }
+    return role != null || ledger.isShared;
   }
 
   static Ledger _ledgerFromJson(Object? json) {

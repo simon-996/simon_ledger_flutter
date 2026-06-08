@@ -332,8 +332,14 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
 enum _LedgerCardOperation { share, sync, delete }
 
 bool _isLeaveLedgerAction(Ledger ledger) {
+  if (ledger.isLocalOnly) {
+    return false;
+  }
   final role = ledger.role?.trim().toLowerCase();
-  return !ledger.isLocalOnly && role != null && role != 'owner';
+  if (role == 'owner') {
+    return false;
+  }
+  return role != null || ledger.isShared;
 }
 
 class _LedgerSearchField extends StatelessWidget {
