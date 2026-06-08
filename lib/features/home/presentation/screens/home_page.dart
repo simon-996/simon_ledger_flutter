@@ -5,6 +5,7 @@ import '../../../../core/models/ledger.dart';
 import '../../../../core/models/person.dart';
 import '../../../../core/network/friendly_error.dart';
 import '../../../../core/preferences/last_selected_ledger_preference.dart';
+import '../../../../core/preferences/onboarding_preference.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../auth/presentation/widgets/account_tab.dart';
@@ -15,6 +16,7 @@ import '../../../ledgers/presentation/widgets/ledger_invite_widgets.dart';
 import '../../../ledgers/presentation/screens/ledger_dashboard_page.dart';
 import '../../../ledgers/presentation/providers/ledger_provider.dart';
 import '../../../ledgers/presentation/providers/ledger_stats_provider.dart';
+import '../../../onboarding/presentation/widgets/onboarding_flow.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
 import '../../../statistics/presentation/widgets/statistics_tab.dart';
 import '../../../transactions/presentation/providers/transaction_provider.dart';
@@ -30,6 +32,8 @@ class HomePage extends ConsumerStatefulWidget {
 
 class _HomePageState extends ConsumerState<HomePage> {
   late int _currentIndex;
+  bool _checkingOnboarding = false;
+  bool _onboardingShown = false;
 
   @override
   void initState() {
@@ -67,6 +71,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   ),
                 ),
                 data: (ledgers) {
+                  _maybeShowOnboarding(ledgers);
                   return AppAnimatedIndexedStack(
                     index: _currentIndex,
                     children: [
@@ -162,6 +167,42 @@ class _HomePageState extends ConsumerState<HomePage> {
         ],
       ),
     );
+  }
+
+  void _maybeShowOnboarding(List<Ledger> ledgers) {
+    if (_currentIndex != 0 ||
+        ledgers.isNotEmpty ||
+        _checkingOnboarding ||
+        _onboardingShown) {
+      return;
+    }
+
+    _checkingOnboarding = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        if (!mounted) return;
+        final completed = await OnboardingPreference.isCompleted();
+        if (!mounted || completed) return;
+
+        _onboardingShown = true;
+        final action = await showOnboardingFlow(context);
+        await OnboardingPreference.markCompleted();
+        if (!mounted) return;
+
+        switch (action) {
+          case OnboardingAction.createLedger:
+            setState(() => _currentIndex = 1);
+            _openCreateLedger();
+          case OnboardingAction.account:
+            setState(() => _currentIndex = 3);
+          case OnboardingAction.done:
+          case null:
+            break;
+        }
+      } finally {
+        _checkingOnboarding = false;
+      }
+    });
   }
 
   void _openCreateLedger() async {
