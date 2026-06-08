@@ -135,64 +135,56 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     showGeneralDialog(
       context: context,
       barrierDismissible: false,
-      barrierColor: Colors.black45,
+      barrierColor: Colors.black.withValues(alpha: 0.28),
       transitionDuration: const Duration(milliseconds: 360),
       pageBuilder: (context, animation, secondaryAnimation) {
         final colorScheme = Theme.of(context).colorScheme;
+        final accent = _transactionType == 0
+            ? colorScheme.error
+            : AppTheme.successColor;
 
         return Center(
           child: ScaleTransition(
-            scale: CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOutBack,
-            ),
+            scale: CurvedAnimation(parent: animation, curve: AppMotion.spring),
             child: FadeTransition(
               opacity: animation,
-              child: Card(
+              child: AppSectionCard(
                 margin: const EdgeInsets.symmetric(horizontal: 32),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 28,
-                    vertical: 24,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 72,
-                        height: 72,
-                        decoration: BoxDecoration(
-                          color: colorScheme.primaryContainer,
-                          borderRadius: BorderRadius.circular(24),
-                        ),
-                        child: Icon(
-                          Icons.check_rounded,
-                          size: 42,
-                          color: colorScheme.primary,
-                        ),
+                padding: const EdgeInsets.fromLTRB(28, 26, 28, 24),
+                radius: 30,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 70,
+                      height: 70,
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(26),
                       ),
-                      const SizedBox(height: 16),
-                      Text(
-                        '记账成功',
-                        style: Theme.of(context).textTheme.titleLarge,
+                      child: Icon(
+                        Icons.check_rounded,
+                        size: 42,
+                        color: accent,
                       ),
-                      const SizedBox(height: 8),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          '$currency ${amount.toStringAsFixed(2)}',
-                          style: Theme.of(context).textTheme.headlineMedium
-                              ?.copyWith(
-                                color: colorScheme.primary,
-                                fontWeight: FontWeight.w900,
-                              ),
-                        ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text('记录成功', style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: 8),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        '$currency ${amount.toStringAsFixed(2)}',
+                        style: Theme.of(context).textTheme.headlineMedium
+                            ?.copyWith(color: accent),
                       ),
-                      const SizedBox(height: 14),
-                      Chip(
-                        avatar: const Icon(Icons.category_outlined, size: 16),
-                        label: Text(category),
-                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Chip(
+                      avatar: const Icon(Icons.category_outlined, size: 16),
+                      label: Text(category),
+                    ),
+                    if (people.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 8,
@@ -203,7 +195,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                             .toList(),
                       ),
                     ],
-                  ),
+                  ],
                 ),
               ),
             ),
@@ -212,7 +204,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
       },
     );
 
-    Future.delayed(const Duration(milliseconds: 1400), () {
+    Future.delayed(const Duration(milliseconds: 1250), () {
       if (mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
@@ -231,7 +223,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     if (_selectedPersonIds.isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('请至少选择一个参与人员')));
+      ).showSnackBar(const SnackBar(content: Text('请至少选择一位参与人')));
       return;
     }
 
@@ -242,7 +234,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     if (ledgerId == null) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('请先选择一个所属账本')));
+      ).showSnackBar(const SnackBar(content: Text('请先选择所属账本')));
       return;
     }
 
@@ -288,7 +280,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
       return const AppEmptyState(
         icon: Icons.edit_note_rounded,
         title: '还没有可记账的账本',
-        message: '先到“账本”页面创建账本，再回来记录收支。',
+        message: '先到账本页创建一个账本，再回来记录收支。',
       );
     }
 
@@ -326,6 +318,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                 AppAnimatedEntry(
                   delay: const Duration(milliseconds: 60),
                   child: AppSectionCard(
+                    padding: const EdgeInsets.all(18),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -418,8 +411,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                             keyboardType: const TextInputType.numberWithOptions(
                               decimal: true,
                             ),
-                            style: Theme.of(context).textTheme.headlineSmall
-                                ?.copyWith(fontWeight: FontWeight.w800),
+                            style: Theme.of(context).textTheme.headlineSmall,
                             decoration: InputDecoration(
                               labelText: '金额',
                               hintText: '0.00',
@@ -436,6 +428,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                 AppAnimatedEntry(
                   delay: const Duration(milliseconds: 120),
                   child: AppSectionCard(
+                    padding: const EdgeInsets.all(18),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -447,7 +440,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                                 : Icons.trending_up_rounded,
                             color: _transactionType == 0
                                 ? colorScheme.error
-                                : colorScheme.primary,
+                                : AppTheme.successColor,
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -480,7 +473,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                         child: Center(child: CircularProgressIndicator()),
                       ),
                       error: (e, st) =>
-                          AppSectionCard(child: Text('加载人员失败: $e')),
+                          AppSectionCard(child: Text('加载人员失败：$e')),
                       data: (peoplePool) {
                         if (selectedLedger.personUuids.isEmpty) {
                           return const SizedBox.shrink();
@@ -488,11 +481,12 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
 
                         final personMap = peopleByUuid(peoplePool);
                         return AppSectionCard(
+                          padding: const EdgeInsets.all(18),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               AppSectionHeader(
-                                title: '参与人员',
+                                title: '参与人',
                                 trailing: TextButton(
                                   onPressed: () {
                                     setState(() {
@@ -553,7 +547,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                   child: TextField(
                     controller: _noteController,
                     decoration: const InputDecoration(
-                      labelText: '备注（选填）',
+                      labelText: '备注（可选）',
                       prefixIcon: Icon(Icons.notes_outlined),
                     ),
                     maxLines: 2,
@@ -625,20 +619,20 @@ class _QuickEntryHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final accent = isIncome ? colorScheme.primary : colorScheme.error;
+    final accent = isIncome ? AppTheme.successColor : colorScheme.error;
 
     return AppSectionCard(
-      padding: const EdgeInsets.all(18),
-      color: colorScheme.primaryContainer.withValues(alpha: 0.38),
-      borderColor: colorScheme.primary.withValues(alpha: 0.12),
+      padding: const EdgeInsets.all(20),
+      color: Colors.white,
+      borderColor: Colors.white.withValues(alpha: 0.7),
       child: Row(
         children: [
           Container(
-            width: 48,
-            height: 48,
+            width: 54,
+            height: 54,
             decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(16),
+              color: accent.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(20),
             ),
             child: Icon(
               isIncome ? Icons.savings_outlined : Icons.receipt_long_outlined,
@@ -654,7 +648,7 @@ class _QuickEntryHeader extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   ledgerName == null
-                      ? '请选择账本'
+                      ? '选择账本后开始记录'
                       : '$ledgerName · ${currencyCode ?? 'CNY'}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
