@@ -19,6 +19,12 @@ import '../../../people_pool/presentation/providers/person_provider.dart';
 import '../providers/ledger_stats_provider.dart';
 import '../widgets/share_ledger_image_widget.dart';
 
+enum _DetailTransactionTypeFilter { all, expense, income }
+
+enum _DetailTimeFilter { all, week, month, year }
+
+enum _DetailSyncFilter { all, pending, failed }
+
 class LedgerDashboardPage extends ConsumerStatefulWidget {
   const LedgerDashboardPage({super.key, required this.ledger});
 
@@ -31,7 +37,12 @@ class LedgerDashboardPage extends ConsumerStatefulWidget {
 
 class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
   final Set<String> _selectedFilterPersonUuids = {};
+  final TextEditingController _searchController = TextEditingController();
   final ScreenshotController _screenshotController = ScreenshotController();
+  _DetailTransactionTypeFilter _typeFilter = _DetailTransactionTypeFilter.all;
+  _DetailTimeFilter _timeFilter = _DetailTimeFilter.all;
+  _DetailSyncFilter _syncFilter = _DetailSyncFilter.all;
+  String? _categoryFilter;
   bool _isGeneratingImage = false;
   String _displayCurrency = 'CNY';
 
@@ -57,6 +68,12 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
     } catch (_) {
       // Silent retry: local content stays available while offline.
     }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   void _toggleFilterSelection(String uuid) {
@@ -615,6 +632,18 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                             ),
                           ),
                         SliverToBoxAdapter(
+                          child: _TransactionFilterToolbar(
+                            searchController: _searchController,
+                            activeCount: _activeFilterCount,
+                            onSearchChanged: (_) => setState(() {}),
+                            onClear: _hasActiveFilters
+                                ? _clearTransactionFilters
+                                : null,
+                            onFilterTap: () =>
+                                _showTransactionFilterSheet(transactions),
+                          ),
+                        ),
+                        SliverToBoxAdapter(
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                             child: AppSectionHeader(
@@ -719,16 +748,128 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
   List<TransactionRecord> _visibleTransactions(
     List<TransactionRecord> transactions,
   ) {
+    final keyword = _searchController.text.trim().toLowerCase();
+    final now = DateTime.now();
     return List<TransactionRecord>.from(
-      _selectedFilterPersonUuids.isEmpty
-          ? transactions
-          : transactions.where(
-              (t) =>
-                  t.personUuids.any(_selectedFilterPersonUuids.contains) ||
-                  (t.payerPersonUuid != null &&
-                      _selectedFilterPersonUuids.contains(t.payerPersonUuid)),
-            ),
+      transactions.where((transaction) {
+        if (!_matchesPersonFilter(transaction)) return false;
+        if (!_matchesTypeFilter(transaction)) return false;
+        if (!_matchesTimeFilter(transaction, now)) return false;
+        if (!_matchesCategoryFilter(transaction)) return false;
+        if (!_matchesSyncFilter(transaction)) return false;
+        if (!_matchesKeyword(transaction, keyword)) return false;
+        return true;
+      }),
     )..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
+
+  bool _matchesPersonFilter(TransactionRecord transaction) {
+    if (_selectedFilterPersonUuids.isEmpty) return true;
+    return transaction.personUuids.any(_selectedFilterPersonUuids.contains) ||
+        (transaction.payerPersonUuid != null &&
+            _selectedFilterPersonUuids.contains(transaction.payerPersonUuid));
+  }
+
+  bool _matchesTypeFilter(TransactionRecord transaction) {
+    return switch (_typeFilter) {
+      _DetailTransactionTypeFilter.all => true,
+      _DetailTransactionTypeFilter.expense => transaction.type == 0,
+      _DetailTransactionTypeFilter.income => transaction.type == 1,
+    };
+  }
+
+  bool _matchesTimeFilter(TransactionRecord transaction, DateTime now) {
+    return switch (_timeFilter) {
+      _DetailTimeFilter.all => true,
+      _DetailTimeFilter.week =>
+        now.difference(transaction.createdAt).inDays <= 7,
+      _DetailTimeFilter.month =>
+        transaction.createdAt.year == now.year &&
+            transaction.createdAt.month == now.month,
+      _DetailTimeFilter.year => transaction.createdAt.year == now.year,
+    };
+  }
+
+  bool _matchesCategoryFilter(TransactionRecord transaction) {
+    final category = _categoryFilter;
+    if (category == null || category.isEmpty) return true;
+    return transaction.category == category;
+  }
+
+  bool _matchesSyncFilter(TransactionRecord transaction) {
+    return switch (_syncFilter) {
+      _DetailSyncFilter.all => true,
+      _DetailSyncFilter.pending => transaction.pendingSync,
+      _DetailSyncFilter.failed =>
+        transaction.pendingSync &&
+            transaction.syncError != null &&
+            transaction.syncError!.isNotEmpty,
+    };
+  }
+
+  bool _matchesKeyword(TransactionRecord transaction, String keyword) {
+    if (keyword.isEmpty) return true;
+    return transaction.category.toLowerCase().contains(keyword) ||
+        transaction.note.toLowerCase().contains(keyword) ||
+        (transaction.createdByNickname ?? '').toLowerCase().contains(keyword);
+  }
+
+  int get _activeFilterCount {
+    var count = 0;
+    if (_selectedFilterPersonUuids.isNotEmpty) count += 1;
+    if (_searchController.text.trim().isNotEmpty) count += 1;
+    if (_typeFilter != _DetailTransactionTypeFilter.all) count += 1;
+    if (_timeFilter != _DetailTimeFilter.all) count += 1;
+    if (_categoryFilter != null) count += 1;
+    if (_syncFilter != _DetailSyncFilter.all) count += 1;
+    return count;
+  }
+
+  bool get _hasActiveFilters => _activeFilterCount > 0;
+
+  void _clearTransactionFilters() {
+    setState(() {
+      _selectedFilterPersonUuids.clear();
+      _searchController.clear();
+      _typeFilter = _DetailTransactionTypeFilter.all;
+      _timeFilter = _DetailTimeFilter.all;
+      _categoryFilter = null;
+      _syncFilter = _DetailSyncFilter.all;
+    });
+  }
+
+  Future<void> _showTransactionFilterSheet(
+    List<TransactionRecord> transactions,
+  ) async {
+    final selection = await showModalBottomSheet<_TransactionFilterSelection>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (context) => _TransactionFilterSheet(
+        typeFilter: _typeFilter,
+        timeFilter: _timeFilter,
+        categoryFilter: _categoryFilter,
+        syncFilter: _syncFilter,
+        categories: _availableCategories(transactions),
+      ),
+    );
+    if (selection == null || !mounted) return;
+    setState(() {
+      _typeFilter = selection.typeFilter;
+      _timeFilter = selection.timeFilter;
+      _categoryFilter = selection.categoryFilter;
+      _syncFilter = selection.syncFilter;
+    });
+  }
+
+  List<String> _availableCategories(List<TransactionRecord> transactions) {
+    return transactions
+        .map((transaction) => transaction.category.trim())
+        .where((category) => category.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
   }
 
   List<String> _dashboardPersonIds(List<TransactionRecord> transactions) {
@@ -741,6 +882,356 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
           transaction.payerPersonUuid!,
     };
     return ids.toList();
+  }
+}
+
+class _TransactionFilterToolbar extends StatelessWidget {
+  const _TransactionFilterToolbar({
+    required this.searchController,
+    required this.activeCount,
+    required this.onSearchChanged,
+    required this.onFilterTap,
+    required this.onClear,
+  });
+
+  final TextEditingController searchController;
+  final int activeCount;
+  final ValueChanged<String> onSearchChanged;
+  final VoidCallback onFilterTap;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: SizedBox(
+              height: 46,
+              child: TextField(
+                controller: searchController,
+                onChanged: onSearchChanged,
+                textInputAction: TextInputAction.search,
+                decoration: InputDecoration(
+                  hintText: '搜索分类、备注或添加人',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: searchController.text.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: '清除搜索',
+                          icon: const Icon(Icons.close_rounded),
+                          onPressed: () {
+                            searchController.clear();
+                            onSearchChanged('');
+                          },
+                        ),
+                  filled: true,
+                  fillColor: colorScheme.surfaceContainerLow,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(color: colorScheme.outlineVariant),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(color: colorScheme.outlineVariant),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              IconButton.filledTonal(
+                tooltip: '筛选流水',
+                onPressed: onFilterTap,
+                icon: const Icon(Icons.tune_rounded),
+              ),
+              if (activeCount > 0)
+                Positioned(
+                  right: -2,
+                  top: -2,
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: 18),
+                    height: 18,
+                    padding: const EdgeInsets.symmetric(horizontal: 5),
+                    decoration: BoxDecoration(
+                      color: colorScheme.primary,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: colorScheme.surface,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Text(
+                      activeCount.toString(),
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onPrimary,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          if (onClear != null) ...[
+            const SizedBox(width: 4),
+            IconButton(
+              tooltip: '清除筛选',
+              onPressed: onClear,
+              icon: const Icon(Icons.filter_alt_off_rounded),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _TransactionFilterSelection {
+  const _TransactionFilterSelection({
+    required this.typeFilter,
+    required this.timeFilter,
+    required this.categoryFilter,
+    required this.syncFilter,
+  });
+
+  final _DetailTransactionTypeFilter typeFilter;
+  final _DetailTimeFilter timeFilter;
+  final String? categoryFilter;
+  final _DetailSyncFilter syncFilter;
+}
+
+class _TransactionFilterSheet extends StatefulWidget {
+  const _TransactionFilterSheet({
+    required this.typeFilter,
+    required this.timeFilter,
+    required this.categoryFilter,
+    required this.syncFilter,
+    required this.categories,
+  });
+
+  final _DetailTransactionTypeFilter typeFilter;
+  final _DetailTimeFilter timeFilter;
+  final String? categoryFilter;
+  final _DetailSyncFilter syncFilter;
+  final List<String> categories;
+
+  @override
+  State<_TransactionFilterSheet> createState() =>
+      _TransactionFilterSheetState();
+}
+
+class _TransactionFilterSheetState extends State<_TransactionFilterSheet> {
+  late _DetailTransactionTypeFilter _typeFilter;
+  late _DetailTimeFilter _timeFilter;
+  late String? _categoryFilter;
+  late _DetailSyncFilter _syncFilter;
+
+  @override
+  void initState() {
+    super.initState();
+    _typeFilter = widget.typeFilter;
+    _timeFilter = widget.timeFilter;
+    _categoryFilter = widget.categoryFilter;
+    _syncFilter = widget.syncFilter;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '筛选流水',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 14),
+            _FilterGroup(
+              title: '收支类型',
+              child: SegmentedButton<_DetailTransactionTypeFilter>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(
+                    value: _DetailTransactionTypeFilter.all,
+                    label: Text('全部'),
+                  ),
+                  ButtonSegment(
+                    value: _DetailTransactionTypeFilter.expense,
+                    label: Text('支出'),
+                  ),
+                  ButtonSegment(
+                    value: _DetailTransactionTypeFilter.income,
+                    label: Text('收入'),
+                  ),
+                ],
+                selected: {_typeFilter},
+                onSelectionChanged: (values) {
+                  setState(() => _typeFilter = values.single);
+                },
+              ),
+            ),
+            const SizedBox(height: 14),
+            _FilterGroup(
+              title: '时间范围',
+              child: SegmentedButton<_DetailTimeFilter>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(
+                    value: _DetailTimeFilter.all,
+                    label: Text('全部'),
+                  ),
+                  ButtonSegment(
+                    value: _DetailTimeFilter.week,
+                    label: Text('7 天'),
+                  ),
+                  ButtonSegment(
+                    value: _DetailTimeFilter.month,
+                    label: Text('本月'),
+                  ),
+                  ButtonSegment(
+                    value: _DetailTimeFilter.year,
+                    label: Text('本年'),
+                  ),
+                ],
+                selected: {_timeFilter},
+                onSelectionChanged: (values) {
+                  setState(() => _timeFilter = values.single);
+                },
+              ),
+            ),
+            const SizedBox(height: 14),
+            _FilterGroup(
+              title: '同步状态',
+              child: SegmentedButton<_DetailSyncFilter>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(
+                    value: _DetailSyncFilter.all,
+                    label: Text('全部'),
+                  ),
+                  ButtonSegment(
+                    value: _DetailSyncFilter.pending,
+                    label: Text('待同步'),
+                  ),
+                  ButtonSegment(
+                    value: _DetailSyncFilter.failed,
+                    label: Text('失败'),
+                  ),
+                ],
+                selected: {_syncFilter},
+                onSelectionChanged: (values) {
+                  setState(() => _syncFilter = values.single);
+                },
+              ),
+            ),
+            if (widget.categories.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              _FilterGroup(
+                title: '分类',
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilterChip(
+                      label: const Text('全部'),
+                      selected: _categoryFilter == null,
+                      onSelected: (_) => setState(() => _categoryFilter = null),
+                    ),
+                    for (final category in widget.categories)
+                      FilterChip(
+                        label: Text(category),
+                        selected: _categoryFilter == category,
+                        onSelected: (_) {
+                          setState(() => _categoryFilter = category);
+                        },
+                      ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _reset,
+                    child: const Text('重置'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 2,
+                  child: FilledButton.icon(
+                    onPressed: _apply,
+                    icon: const Icon(Icons.check_rounded),
+                    label: const Text('应用筛选'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _reset() {
+    setState(() {
+      _typeFilter = _DetailTransactionTypeFilter.all;
+      _timeFilter = _DetailTimeFilter.all;
+      _categoryFilter = null;
+      _syncFilter = _DetailSyncFilter.all;
+    });
+  }
+
+  void _apply() {
+    Navigator.of(context).pop(
+      _TransactionFilterSelection(
+        typeFilter: _typeFilter,
+        timeFilter: _timeFilter,
+        categoryFilter: _categoryFilter,
+        syncFilter: _syncFilter,
+      ),
+    );
+  }
+}
+
+class _FilterGroup extends StatelessWidget {
+  const _FilterGroup({required this.title, required this.child});
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          title,
+          style: Theme.of(
+            context,
+          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 8),
+        child,
+      ],
+    );
   }
 }
 
