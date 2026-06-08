@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+
 import '../../../../core/models/ledger.dart';
 import '../../../../core/models/person.dart';
 import '../../../../core/models/person_lookup.dart';
 import '../../../../core/models/transaction_record.dart';
+import '../../../../core/theme/app_theme.dart';
 
 class ShareLedgerImageWidget extends StatelessWidget {
   const ShareLedgerImageWidget({
@@ -33,78 +35,85 @@ class ShareLedgerImageWidget extends StatelessWidget {
         .where((t) => t.type == 1)
         .fold(0.0, (sum, t) => sum + t.amount);
     final balance = totalIncome - totalExpense;
-    final Map<String, double> personBalances = {};
+    final balanceColor = balance >= 0
+        ? AppTheme.successColor
+        : AppTheme.errorColor;
+
+    final personBalances = <String, double>{};
     for (final t in summary) {
       if (t.personUuids.isEmpty) continue;
       final splitAmount = t.amount / t.personUuids.length;
       for (final pid in t.personUuids) {
         personBalances[pid] ??= 0.0;
-        if (t.type == 0) {
-          personBalances[pid] = personBalances[pid]! - splitAmount;
-        } else {
-          personBalances[pid] = personBalances[pid]! + splitAmount;
-        }
+        personBalances[pid] = t.type == 0
+            ? personBalances[pid]! - splitAmount
+            : personBalances[pid]! + splitAmount;
       }
     }
+
     final peopleInImage = personBalances.keys.map((pid) {
       return personOrFallback(personMap, pid);
     }).toList();
 
     return Container(
-      width: 400, // Fixed width for the generated image
-      color: const Color(0xFFF3F4F6), // Background color
-      padding: const EdgeInsets.all(16),
+      width: 400,
+      color: AppTheme.surfaceColor,
+      padding: const EdgeInsets.all(18),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-            ),
+          _ShareCard(
+            padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
             child: Column(
               children: [
                 Text(
                   ledger.name,
+                  textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1F2937),
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.onSurfaceColor,
+                    letterSpacing: 0,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   '结余 (${ledger.baseCurrencyCode})',
                   style: const TextStyle(
-                    fontSize: 14,
-                    color: Color(0xFF6B7280),
+                    fontSize: 13,
+                    color: AppTheme.secondaryColor,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   balance.toStringAsFixed(2),
-                  style: const TextStyle(
-                    fontSize: 32,
+                  style: TextStyle(
+                    fontSize: 36,
                     fontWeight: FontWeight.w900,
-                    color: Color(0xFF1F2937),
+                    color: balanceColor,
+                    letterSpacing: 0,
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 18),
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _buildSummaryItem(
-                      '总收入',
-                      totalIncome,
-                      const Color(0xFF10B981),
+                    Expanded(
+                      child: _buildSummaryItem(
+                        '总收入',
+                        totalIncome,
+                        AppTheme.successColor,
+                      ),
                     ),
-                    _buildSummaryItem(
-                      '总支出',
-                      totalExpense,
-                      const Color(0xFFEF4444),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _buildSummaryItem(
+                        '总支出',
+                        totalExpense,
+                        AppTheme.errorColor,
+                      ),
                     ),
                   ],
                 ),
@@ -113,12 +122,8 @@ class ShareLedgerImageWidget extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           if (peopleInImage.isNotEmpty)
-            Container(
+            _ShareCard(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-              ),
               child: Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -126,39 +131,41 @@ class ShareLedgerImageWidget extends StatelessWidget {
                 children: peopleInImage.map((p) {
                   final pBalance = personBalances[p.uuid] ?? 0.0;
                   final isPositive = pBalance >= 0;
+                  final amountColor = isPositive
+                      ? AppTheme.successColor
+                      : AppTheme.errorColor;
                   return Container(
-                    width: 100,
+                    width: 104,
                     padding: const EdgeInsets.symmetric(
-                      vertical: 8,
-                      horizontal: 6,
+                      vertical: 9,
+                      horizontal: 7,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF9FAFB),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                      color: AppTheme.surfaceColor,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE0E2E8)),
                     ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(p.avatar, style: const TextStyle(fontSize: 20)),
-                        const SizedBox(height: 4),
+                        Text(p.avatar, style: const TextStyle(fontSize: 21)),
+                        const SizedBox(height: 5),
                         Text(
                           p.name,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontSize: 11,
-                            color: Color(0xFF4B5563),
+                            fontSize: 12,
+                            color: AppTheme.onSurfaceColor,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: 3),
                         Text(
                           '${isPositive ? '+' : ''}${pBalance.toStringAsFixed(2)}',
                           style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: isPositive
-                                ? const Color(0xFF10B981)
-                                : const Color(0xFFEF4444),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: amountColor,
                           ),
                         ),
                       ],
@@ -167,13 +174,9 @@ class ShareLedgerImageWidget extends StatelessWidget {
                 }).toList(),
               ),
             ),
-          const SizedBox(height: 16),
-          // Transactions List
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-            ),
+          const SizedBox(height: 14),
+          _ShareCard(
+            padding: EdgeInsets.zero,
             child: Column(
               children: transactions.map((t) {
                 final dateStr =
@@ -181,8 +184,11 @@ class ShareLedgerImageWidget extends StatelessWidget {
                 final peopleAvatars = avatarsForPeople(
                   personMap,
                   t.personUuids,
-                  fallbackAvatar: '👤',
+                  fallbackAvatar: '?',
                 );
+                final amountColor = t.type == 0
+                    ? AppTheme.errorColor
+                    : AppTheme.successColor;
 
                 return Container(
                   padding: const EdgeInsets.symmetric(
@@ -191,7 +197,7 @@ class ShareLedgerImageWidget extends StatelessWidget {
                   ),
                   decoration: const BoxDecoration(
                     border: Border(
-                      bottom: BorderSide(color: Color(0xFFF3F4F6), width: 1),
+                      bottom: BorderSide(color: Color(0xFFEDEEF2), width: 1),
                     ),
                   ),
                   child: Row(
@@ -203,24 +209,31 @@ class ShareLedgerImageWidget extends StatelessWidget {
                           children: [
                             Row(
                               children: [
-                                Text(
-                                  t.category,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
+                                Flexible(
                                   child: Text(
-                                    peopleAvatars,
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      color: Color(0xFF4B5563),
-                                    ),
+                                    t.category,
+                                    maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 15,
+                                      color: AppTheme.onSurfaceColor,
+                                    ),
                                   ),
                                 ),
+                                if (peopleAvatars.isNotEmpty) ...[
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      peopleAvatars,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        color: AppTheme.secondaryColor,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                             const SizedBox(height: 4),
@@ -228,17 +241,18 @@ class ShareLedgerImageWidget extends StatelessWidget {
                               dateStr,
                               style: const TextStyle(
                                 fontSize: 12,
-                                color: Color(0xFF9CA3AF),
+                                color: Color(0xFF8A8F99),
                               ),
                             ),
                             if (t.note.isNotEmpty) ...[
-                              const SizedBox(height: 2),
+                              const SizedBox(height: 3),
                               Text(
                                 t.note,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                  fontSize: 13,
-                                  color: Color(0xFF6B7280),
-                                  fontStyle: FontStyle.italic,
+                                  fontSize: 12,
+                                  color: AppTheme.secondaryColor,
                                 ),
                               ),
                             ],
@@ -249,11 +263,9 @@ class ShareLedgerImageWidget extends StatelessWidget {
                       Text(
                         '${t.type == 0 ? '-' : '+'} ${t.currencyCode} ${t.amount.toStringAsFixed(2)}',
                         style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          color: t.type == 0
-                              ? const Color(0xFFEF4444)
-                              : const Color(0xFF10B981),
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15,
+                          color: amountColor,
                         ),
                       ),
                     ],
@@ -262,16 +274,15 @@ class ShareLedgerImageWidget extends StatelessWidget {
               }).toList(),
             ),
           ),
-          const SizedBox(height: 24),
-          // Footer
+          const SizedBox(height: 22),
           const Center(
             child: Text(
               'Simon Ledger',
               style: TextStyle(
-                color: Color(0xFF9CA3AF),
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 2,
+                color: Color(0xFF8A8F99),
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0,
               ),
             ),
           ),
@@ -280,9 +291,10 @@ class ShareLedgerImageWidget extends StatelessWidget {
               child: Text(
                 '第 ${pageIndex ?? 1}/${totalPages ?? 1} 页',
                 style: const TextStyle(
-                  color: Color(0xFF9CA3AF),
+                  color: Color(0xFF8A8F99),
                   fontSize: 12,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0,
                 ),
               ),
             ),
@@ -293,22 +305,53 @@ class ShareLedgerImageWidget extends StatelessWidget {
   }
 
   Widget _buildSummaryItem(String label, double amount, Color color) {
-    return Column(
-      children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          amount.toStringAsFixed(2),
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: color,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: color,
+              fontWeight: FontWeight.w800,
+            ),
           ),
-        ),
-      ],
+          const SizedBox(height: 4),
+          Text(
+            amount.toStringAsFixed(2),
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w900,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ShareCard extends StatelessWidget {
+  const _ShareCard({required this.child, required this.padding});
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFE0E2E8)),
+      ),
+      child: child,
     );
   }
 }
