@@ -95,16 +95,16 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
   }
 
   Color _getColorForCategory(int index, BuildContext context) {
-    final colors = [
-      Theme.of(context).colorScheme.primary,
-      Theme.of(context).colorScheme.tertiary,
-      Theme.of(context).colorScheme.error,
-      Colors.orange.shade500,
-      Colors.purple.shade400,
-      Colors.cyan.shade500,
-      Colors.indigo.shade400,
-      Colors.lime.shade600,
-      Colors.pink.shade400,
+    const colors = [
+      Color(0xFF007AFF),
+      Color(0xFF34C759),
+      Color(0xFFFF9F0A),
+      Color(0xFFFF3B30),
+      Color(0xFF5E5CE6),
+      Color(0xFF64D2FF),
+      Color(0xFFFF2D55),
+      Color(0xFFAF52DE),
+      Color(0xFF30D158),
     ];
     return colors[index % colors.length];
   }
@@ -147,11 +147,14 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
             AppTheme.pagePadding,
             12,
           ),
-          child: AppAnimatedEntry(
-            child: AppSectionCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
+            child: AppAnimatedEntry(
+              child: AppSectionCard(
+                padding: const EdgeInsets.all(18),
+                color: Colors.white,
+                borderColor: Colors.white.withValues(alpha: 0.72),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                   _ResponsiveControls(
                     first: DropdownButtonFormField<String>(
                       key: ValueKey('stats-ledger-$_selectedLedgerUuid'),
@@ -480,12 +483,12 @@ class _SummaryChartCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final accent = isExpense ? colorScheme.error : colorScheme.primary;
+    final accent = isExpense ? colorScheme.error : AppTheme.successColor;
 
     return AppSectionCard(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
-      color: accent.withValues(alpha: 0.07),
-      borderColor: accent.withValues(alpha: 0.13),
+      color: Colors.white,
+      borderColor: Colors.white.withValues(alpha: 0.72),
       child: Column(
         children: [
           Text(

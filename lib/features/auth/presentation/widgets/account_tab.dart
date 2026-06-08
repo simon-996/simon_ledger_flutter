@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/di/providers.dart';
 import '../../../../core/services/cloud_import_service.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../ledgers/presentation/providers/ledger_provider.dart';
 import '../../../ledgers/presentation/providers/ledger_stats_provider.dart';
@@ -53,43 +54,51 @@ class _SignedInPanel extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        AppSectionCard(
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 28,
-                backgroundColor: colorScheme.primaryContainer,
-                child: Text(
-                  avatarText,
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      nickname,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+        AppAnimatedEntry(
+          child: AppSectionCard(
+            padding: const EdgeInsets.all(18),
+            color: Colors.white,
+            borderColor: Colors.white.withValues(alpha: 0.72),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 30,
+                  backgroundColor: colorScheme.primary.withValues(alpha: 0.1),
+                  child: Text(
+                    avatarText,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: colorScheme.primary,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      account,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        nickname,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        account,
+                        style: Theme.of(context).textTheme.bodyMedium
+                            ?.copyWith(color: colorScheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 16),
-        const _CloudImportCard(),
+        const AppAnimatedEntry(
+          delay: Duration(milliseconds: 70),
+          child: _CloudImportCard(),
+        ),
         const SizedBox(height: 16),
         FilledButton.icon(
           onPressed: () async {
@@ -105,6 +114,7 @@ class _SignedInPanel extends ConsumerWidget {
           },
           icon: const Icon(Icons.logout_rounded),
           label: const Text('退出登录'),
+          style: FilledButton.styleFrom(backgroundColor: AppTheme.errorColor),
         ),
       ],
     );
@@ -140,6 +150,9 @@ class _CloudImportCardState extends ConsumerState<_CloudImportCard> {
   @override
   Widget build(BuildContext context) {
     return AppSectionCard(
+      padding: const EdgeInsets.all(18),
+      color: Colors.white,
+      borderColor: Colors.white.withValues(alpha: 0.72),
       child: FutureBuilder<List<LocalLedgerImportCandidate>>(
         future: _scanFuture,
         builder: (context, snapshot) {
@@ -382,30 +395,37 @@ class _AuthPanelState extends ConsumerState<_AuthPanel> {
     return ListView(
       padding: EdgeInsets.fromLTRB(16, 16, 16, bottomInset + 16),
       children: [
-        SegmentedButton<bool>(
-          showSelectedIcon: false,
-          segments: const [
-            ButtonSegment(value: false, label: Text('登录')),
-            ButtonSegment(value: true, label: Text('注册')),
-          ],
-          selected: {_isRegister},
-          onSelectionChanged: _submitting
-              ? null
-              : (value) {
-                  setState(() {
-                    _isRegister = value.first;
-                    _errorText = null;
-                  });
-                },
+        AppAnimatedEntry(
+          child: SegmentedButton<bool>(
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(value: false, label: Text('登录')),
+              ButtonSegment(value: true, label: Text('注册')),
+            ],
+            selected: {_isRegister},
+            onSelectionChanged: _submitting
+                ? null
+                : (value) {
+                    setState(() {
+                      _isRegister = value.first;
+                      _errorText = null;
+                    });
+                  },
+          ),
         ),
         const SizedBox(height: 16),
-        AppSectionCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (_isRegister) ...[
-                TextField(
-                  controller: _nicknameController,
+        AppAnimatedEntry(
+          delay: const Duration(milliseconds: 70),
+          child: AppSectionCard(
+            padding: const EdgeInsets.all(18),
+            color: Colors.white,
+            borderColor: Colors.white.withValues(alpha: 0.72),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (_isRegister) ...[
+                  TextField(
+                    controller: _nicknameController,
                   textInputAction: TextInputAction.next,
                   decoration: const InputDecoration(
                     labelText: '昵称',
@@ -432,35 +452,38 @@ class _AuthPanelState extends ConsumerState<_AuthPanel> {
                     prefixIcon: Icon(Icons.phone_outlined),
                   ),
                 ),
-              ] else
+                ] else
+                  TextField(
+                    controller: _accountController,
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: '邮箱或手机号',
+                      prefixIcon: Icon(Icons.person_outline_rounded),
+                    ),
+                  ),
+                const SizedBox(height: 12),
                 TextField(
-                  controller: _accountController,
-                  keyboardType: TextInputType.emailAddress,
-                  textInputAction: TextInputAction.next,
+                  controller: _passwordController,
+                  obscureText: true,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _submit(),
                   decoration: const InputDecoration(
-                    labelText: '邮箱或手机号',
-                    prefixIcon: Icon(Icons.person_outline_rounded),
+                    labelText: '密码',
+                    prefixIcon: Icon(Icons.lock_outline_rounded),
                   ),
                 ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _passwordController,
-                obscureText: true,
-                textInputAction: TextInputAction.done,
-                onSubmitted: (_) => _submit(),
-                decoration: const InputDecoration(
-                  labelText: '密码',
-                  prefixIcon: Icon(Icons.lock_outline_rounded),
-                ),
-              ),
-              if (_errorText != null) ...[
-                const SizedBox(height: 12),
-                Text(
-                  _errorText!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
+                if (_errorText != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    _errorText!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
         const SizedBox(height: 16),
