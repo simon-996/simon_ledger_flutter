@@ -14,6 +14,36 @@ void main() {
       expect(lookup['bob'], same(bob));
     });
 
+    test('indexes synced remote uuid as an alias', () {
+      final alice = _person('local-alice', 'Alice', 'A')
+        ..syncedRemoteUuid = 'remote-alice';
+
+      final lookup = peopleByUuid([alice]);
+
+      expect(lookup['local-alice'], same(alice));
+      expect(lookup['remote-alice'], same(alice));
+    });
+
+    test('indexes linked user uuid as an alias', () {
+      final self = _person('self', 'Simon', 'S')..linkedUserUuid = 'user-simon';
+
+      final lookup = peopleByUuid([self]);
+
+      expect(lookup['self'], same(self));
+      expect(lookup['user-simon'], same(self));
+    });
+
+    test('keeps direct uuid mapping before synced alias', () {
+      final localAlice = _person('local-alice', 'Local Alice', 'L')
+        ..syncedRemoteUuid = 'remote-alice';
+      final remoteAlice = _person('remote-alice', 'Remote Alice', 'R');
+
+      final lookup = peopleByUuid([localAlice, remoteAlice]);
+
+      expect(lookup['local-alice'], same(localAlice));
+      expect(lookup['remote-alice'], same(remoteAlice));
+    });
+
     test('returns fallback person when uuid is missing', () {
       final fallback = personOrFallback(peopleByUuid([]), 'missing');
 

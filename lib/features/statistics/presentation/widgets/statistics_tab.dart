@@ -1,15 +1,22 @@
+import 'dart:async';
+
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/models/ledger.dart';
+import '../../../../core/models/money.dart';
 import '../../../../core/models/person_lookup.dart';
+import '../../../../core/models/person_transaction_stats.dart';
 import '../../../../core/models/transaction_record.dart';
+import '../../../../core/network/friendly_error.dart';
+import '../../../../core/preferences/statistics_preference.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
 import '../../../transactions/presentation/providers/transaction_provider.dart';
 import '../../../transactions/presentation/widgets/transaction_detail_sheet.dart';
+import '../../../transactions/presentation/widgets/transaction_form_components.dart';
 
 enum TimeFilter { week, month, year, all }
 
@@ -26,6 +33,7 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
   String? _selectedLedgerUuid;
   TimeFilter _timeFilter = TimeFilter.month;
   int _transactionType = 0;
+  String _displayCurrency = 'CNY';
 
   @override
   void initState() {
@@ -57,10 +65,76 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
     }
   }
 
-  void _initDefaults() {
-    if (widget.ledgers.isNotEmpty) {
-      _selectedLedgerUuid = widget.ledgers.first.uuid;
+  Future<void> _initDefaults() async {
+    final preference = await StatisticsPreference.read();
+    if (!mounted) return;
+    setState(() {
+      _timeFilter = TimeFilter.values.firstWhere(
+        (filter) => filter.name == preference?.timeFilter,
+        orElse: () => TimeFilter.month,
+      );
+      _transactionType = preference?.transactionType == 1 ? 1 : 0;
+      _displayCurrency = preference?.displayCurrency ?? 'CNY';
+      final preferredLedgerUuid = preference?.ledgerUuid;
+      if (widget.ledgers.any((ledger) => ledger.uuid == preferredLedgerUuid)) {
+        _selectedLedgerUuid = preferredLedgerUuid;
+      } else if (widget.ledgers.isNotEmpty) {
+        _selectedLedgerUuid = widget.ledgers.first.uuid;
+      }
+    });
+  }
+
+  Future<void> _showLedgerPicker() async {
+    final currentLedger = _effectiveLedger();
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: ListView.separated(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            itemCount: widget.ledgers.length,
+            separatorBuilder: (context, index) => const SizedBox(height: 8),
+            itemBuilder: (context, index) {
+              final ledger = widget.ledgers[index];
+              final selected = ledger.uuid == currentLedger?.uuid;
+              return _LedgerPickerTile(
+                ledger: ledger,
+                selected: selected,
+                onTap: () => Navigator.of(context).pop(ledger.uuid),
+              );
+            },
+          ),
+        );
+      },
+    );
+    if (selected == null || selected == _selectedLedgerUuid || !mounted) {
+      return;
     }
+    setState(() => _selectedLedgerUuid = selected);
+    _persistPreference();
+  }
+
+  void _persistPreference() {
+    unawaited(
+      StatisticsPreference.write(
+        StatisticsPreference(
+          ledgerUuid: _effectiveLedger()?.uuid ?? _selectedLedgerUuid,
+          timeFilter: _timeFilter.name,
+          transactionType: _transactionType,
+          displayCurrency: _displayCurrency,
+        ),
+      ),
+    );
+  }
+
+  Ledger? _effectiveLedger() {
+    if (widget.ledgers.isEmpty) return null;
+    return widget.ledgers.firstWhere(
+      (ledger) => ledger.uuid == _selectedLedgerUuid,
+      orElse: () => widget.ledgers.first,
+    );
   }
 
   List<TransactionRecord> _filterTransactions(
@@ -86,27 +160,20 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
 
   Map<String, double> _aggregateByCategory(
     List<TransactionRecord> transactions,
+    Ledger ledger,
+    String displayCurrency,
   ) {
     final map = <String, double>{};
     for (final t in transactions) {
-      map[t.category] = (map[t.category] ?? 0.0) + t.amount;
+      map[t.category] =
+          (map[t.category] ?? 0.0) +
+          transactionAmountForDisplay(t, ledger, displayCurrency);
     }
     return map;
   }
 
   Color _getColorForCategory(int index, BuildContext context) {
-    const colors = [
-      Color(0xFF007AFF),
-      Color(0xFF34C759),
-      Color(0xFFFF9F0A),
-      Color(0xFFFF3B30),
-      Color(0xFF5E5CE6),
-      Color(0xFF64D2FF),
-      Color(0xFFFF2D55),
-      Color(0xFFAF52DE),
-      Color(0xFF30D158),
-    ];
-    return colors[index % colors.length];
+    return AppTheme.chartColors[index % AppTheme.chartColors.length];
   }
 
   @override
@@ -119,22 +186,15 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
       );
     }
 
-    if (_selectedLedgerUuid == null) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    final currentLedger = widget.ledgers.firstWhere(
-      (l) => l.uuid == _selectedLedgerUuid,
-      orElse: () => widget.ledgers.first,
-    );
+    final currentLedger = _effectiveLedger()!;
 
     final transactionsAsyncValue = ref.watch(
-      transactionNotifierProvider(_selectedLedgerUuid!),
+      transactionNotifierProvider(currentLedger.uuid),
     );
     final peopleAsyncValue = ref.watch(
       personNotifierProvider(
         includeDeleted: true,
-        ledgerUuid: _selectedLedgerUuid,
+        ledgerUuid: currentLedger.uuid,
       ),
     );
 
@@ -148,92 +208,41 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
             12,
           ),
           child: AppAnimatedEntry(
-            child: AppSectionCard(
-              padding: const EdgeInsets.all(18),
-              color: Colors.white,
-              borderColor: Colors.white.withValues(alpha: 0.72),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _ResponsiveControls(
-                    first: DropdownButtonFormField<String>(
-                      key: ValueKey('stats-ledger-$_selectedLedgerUuid'),
-                      initialValue: _selectedLedgerUuid,
-                      decoration: const InputDecoration(
-                        labelText: '账本',
-                        prefixIcon: Icon(Icons.book_outlined),
-                      ),
-                      isExpanded: true,
-                      items: widget.ledgers
-                          .map(
-                            (l) => DropdownMenuItem(
-                              value: l.uuid,
-                              child: Text(l.name),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() => _selectedLedgerUuid = val);
-                        }
-                      },
-                    ),
-                    second: SegmentedButton<int>(
-                      showSelectedIcon: false,
-                      segments: const [
-                        ButtonSegment(
-                          value: 0,
-                          icon: Icon(Icons.remove_rounded),
-                          label: Text('支出'),
-                        ),
-                        ButtonSegment(
-                          value: 1,
-                          icon: Icon(Icons.add_rounded),
-                          label: Text('收入'),
-                        ),
-                      ],
-                      selected: {_transactionType},
-                      onSelectionChanged: (Set<int> newSelection) {
-                        setState(() => _transactionType = newSelection.first);
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: SegmentedButton<TimeFilter>(
-                      showSelectedIcon: false,
-                      segments: const [
-                        ButtonSegment(
-                          value: TimeFilter.week,
-                          label: Text('近7天'),
-                        ),
-                        ButtonSegment(
-                          value: TimeFilter.month,
-                          label: Text('本月'),
-                        ),
-                        ButtonSegment(
-                          value: TimeFilter.year,
-                          label: Text('本年'),
-                        ),
-                        ButtonSegment(value: TimeFilter.all, label: Text('全部')),
-                      ],
-                      selected: {_timeFilter},
-                      onSelectionChanged: (Set<TimeFilter> newSelection) {
-                        setState(() => _timeFilter = newSelection.first);
-                      },
-                    ),
-                  ),
-                ],
-              ),
+            child: _StatsFilterPanel(
+              ledger: currentLedger,
+              transactionType: _transactionType,
+              timeFilter: _timeFilter,
+              onLedgerTap: _showLedgerPicker,
+              onTypeChanged: (type) {
+                setState(() => _transactionType = type);
+                _persistPreference();
+              },
+              onTimeChanged: (filter) {
+                setState(() => _timeFilter = filter);
+                _persistPreference();
+              },
             ),
           ),
         ),
         Expanded(
           child: transactionsAsyncValue.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (err, stack) => Center(child: Text('加载统计失败: $err')),
+            loading: () => const AppLoadingState(
+              title: '正在加载统计',
+              message: '计算分类占比和人员结余',
+              icon: Icons.pie_chart_outline_rounded,
+            ),
+            error: (err, stack) => AppEmptyState(
+              icon: Icons.error_outline_rounded,
+              title: '加载统计失败',
+              message: FriendlyError.message(err, fallback: '暂时无法加载统计，请稍后重试。'),
+            ),
             data: (allTransactions) {
+              final displayCurrencies = supportedCurrenciesForLedger(
+                currentLedger,
+              );
+              if (!displayCurrencies.contains(_displayCurrency)) {
+                _displayCurrency = 'CNY';
+              }
               final filtered = _filterTransactions(allTransactions);
               if (filtered.isEmpty) {
                 return const AppEmptyState(
@@ -243,7 +252,11 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                 );
               }
 
-              final categoryMap = _aggregateByCategory(filtered);
+              final categoryMap = _aggregateByCategory(
+                filtered,
+                currentLedger,
+                _displayCurrency,
+              );
               final sortedCategories = categoryMap.entries.toList()
                 ..sort((a, b) => b.value.compareTo(a.value));
               final totalAmount = sortedCategories.fold<double>(
@@ -252,18 +265,17 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
               );
               final sortedTransactions = List<TransactionRecord>.from(filtered)
                 ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+              final averageAmount = totalAmount / sortedTransactions.length;
 
-              final personBalances = <String, double>{};
-              for (final t in sortedTransactions) {
-                if (t.personUuids.isEmpty) continue;
-                final splitAmount = t.amount / t.personUuids.length;
-                for (final pid in t.personUuids) {
-                  personBalances[pid] ??= 0.0;
-                  personBalances[pid] = t.type == 0
-                      ? personBalances[pid]! - splitAmount
-                      : personBalances[pid]! + splitAmount;
-                }
-              }
+              final personStats = calculatePersonTransactionStats(
+                sortedTransactions,
+                amountOf: (transaction) => transactionAmountForDisplay(
+                  transaction,
+                  currentLedger,
+                  _displayCurrency,
+                ),
+              );
+              final personBalances = personStats.personBalances;
 
               return CustomScrollView(
                 slivers: [
@@ -274,11 +286,21 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                         delay: const Duration(milliseconds: 70),
                         child: _SummaryChartCard(
                           title: '总${_transactionType == 0 ? "支出" : "收入"}',
-                          amount:
-                              '${currentLedger.baseCurrencyCode} ${totalAmount.toStringAsFixed(2)}',
+                          amount: formatMoney(_displayCurrency, totalAmount),
+                          transactionCount: sortedTransactions.length,
+                          averageAmount: formatMoney(
+                            _displayCurrency,
+                            averageAmount,
+                          ),
                           isExpense: _transactionType == 0,
                           categories: sortedCategories,
                           totalAmount: totalAmount,
+                          displayCurrencies: displayCurrencies,
+                          selectedCurrency: _displayCurrency,
+                          onCurrencyChanged: (currency) {
+                            setState(() => _displayCurrency = currency);
+                            _persistPreference();
+                          },
                           colorForIndex: (index) =>
                               _getColorForCategory(index, context),
                         ),
@@ -313,9 +335,9 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                         child: _CategoryBreakdownTile(
                           color: _getColorForCategory(index, context),
                           category: entry.key,
-                          amount:
-                              '${currentLedger.baseCurrencyCode} ${entry.value.toStringAsFixed(2)}',
+                          amount: formatMoney(_displayCurrency, entry.value),
                           percentage: '${percentage.toStringAsFixed(1)}%',
+                          progress: percentage / 100,
                         ),
                       );
                     },
@@ -323,12 +345,22 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                   peopleAsyncValue.when(
                     loading: () => const SliverToBoxAdapter(
                       child: Padding(
-                        padding: EdgeInsets.all(24),
-                        child: Center(child: CircularProgressIndicator()),
+                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        child: AppInlineLoadingCard(message: '正在加载人员结余'),
                       ),
                     ),
                     error: (e, st) => SliverToBoxAdapter(
-                      child: Center(child: Text('加载人员失败: $e')),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: AppSectionCard(
+                          child: Text(
+                            FriendlyError.message(
+                              e,
+                              fallback: '人员结余加载失败，请稍后重试。',
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                     data: (peoplePool) {
                       final personMap = peopleByUuid(peoplePool);
@@ -349,7 +381,7 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                             Padding(
                               padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
                               child: Text(
-                                '人员结余',
+                                _transactionType == 0 ? '人员承担' : '人员收入',
                                 style: Theme.of(context).textTheme.titleMedium,
                               ),
                             ),
@@ -375,14 +407,68 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                                     child: AppPersonBalanceCard(
                                       avatar: p.avatar,
                                       name: p.name,
-                                      balance:
-                                          '${pBalance >= 0 ? '+' : ''}${pBalance.toStringAsFixed(2)}',
+                                      balance: formatMoney(
+                                        _displayCurrency,
+                                        pBalance,
+                                        signed: true,
+                                      ),
                                       isPositive: pBalance >= 0,
                                     ),
                                   );
                                 },
                               ),
                             ),
+                            if (personStats.settlements.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  12,
+                                  16,
+                                  0,
+                                ),
+                                child: AppSectionCard(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      Text(
+                                        '代付结算',
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.titleMedium,
+                                      ),
+                                      const SizedBox(height: 10),
+                                      ...personStats.settlements.take(5).map((
+                                        settlement,
+                                      ) {
+                                        final from = personOrFallback(
+                                          personMap,
+                                          settlement.fromPersonUuid,
+                                        );
+                                        final to = personOrFallback(
+                                          personMap,
+                                          settlement.toPersonUuid,
+                                        );
+                                        return Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 8,
+                                          ),
+                                          child: AppSettlementTile(
+                                            fromAvatar: from.avatar,
+                                            fromName: from.name,
+                                            toAvatar: to.avatar,
+                                            toName: to.name,
+                                            amount: formatMoney(
+                                              _displayCurrency,
+                                              settlement.amount,
+                                            ),
+                                          ),
+                                        );
+                                      }),
+                                    ],
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       );
@@ -431,9 +517,17 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                               date: dateStr,
                               people: peopleStr,
                               note: t.note,
-                              amount:
-                                  '${t.type == 0 ? '-' : '+'} ${t.currencyCode} ${t.amount.toStringAsFixed(2)}',
+                              createdByText: t.createdByNickname,
+                              createdByAvatar: t.createdByAvatar,
+                              amount: formatTransactionPrimaryAmount(t),
+                              convertedAmount: formatTransactionConvertedAmount(
+                                t,
+                                currentLedger,
+                              ),
                               isExpense: t.type == 0,
+                              syncStatus: _syncStatusFor(t),
+                              syncError: t.syncError,
+                              compactSyncStatus: true,
                               onTap: () {
                                 showModalBottomSheet(
                                   context: context,
@@ -461,76 +555,239 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
       ],
     );
   }
+
+  TransactionSyncStatus? _syncStatusFor(TransactionRecord transaction) {
+    if (!transaction.pendingSync) {
+      return null;
+    }
+    final error = transaction.syncError;
+    if (error != null && error.isNotEmpty) {
+      return TransactionSyncStatus.failed;
+    }
+    return TransactionSyncStatus.pending;
+  }
 }
 
 class _SummaryChartCard extends StatelessWidget {
   const _SummaryChartCard({
     required this.title,
     required this.amount,
+    required this.transactionCount,
+    required this.averageAmount,
     required this.isExpense,
     required this.categories,
     required this.totalAmount,
+    required this.displayCurrencies,
+    required this.selectedCurrency,
+    required this.onCurrencyChanged,
     required this.colorForIndex,
   });
 
   final String title;
   final String amount;
+  final int transactionCount;
+  final String averageAmount;
   final bool isExpense;
   final List<MapEntry<String, double>> categories;
   final double totalAmount;
+  final List<String> displayCurrencies;
+  final String selectedCurrency;
+  final ValueChanged<String> onCurrencyChanged;
   final Color Function(int index) colorForIndex;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final accent = isExpense ? colorScheme.error : AppTheme.successColor;
+    final accent = transactionAccentColor(colorScheme, isExpense ? 0 : 1);
 
     return AppSectionCard(
+      key: const ValueKey('statistics-summary-card'),
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
-      color: Colors.white,
-      borderColor: Colors.white.withValues(alpha: 0.72),
+      color: colorScheme.surfaceContainerLowest,
+      borderColor: colorScheme.outlineVariant.withValues(alpha: 0.68),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 6),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              amount,
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.w900,
-                color: accent,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        amount,
+                        style: Theme.of(context).textTheme.headlineMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.w900,
+                              color: accent,
+                              height: 1.08,
+                            ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
+              const SizedBox(width: 12),
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  isExpense
+                      ? Icons.trending_down_rounded
+                      : Icons.trending_up_rounded,
+                  color: accent,
+                ),
+              ),
+            ],
           ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _SummaryMetric(
+                  label: '记录',
+                  value: '$transactionCount 条',
+                  color: accent,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _SummaryMetric(
+                  label: '平均',
+                  value: averageAmount,
+                  color: colorScheme.onSurface,
+                ),
+              ),
+            ],
+          ),
+          if (displayCurrencies.length > 1) ...[
+            const SizedBox(height: 12),
+            SegmentedButton<String>(
+              showSelectedIcon: false,
+              segments: displayCurrencies
+                  .map(
+                    (currency) =>
+                        ButtonSegment(value: currency, label: Text(currency)),
+                  )
+                  .toList(),
+              selected: {selectedCurrency},
+              onSelectionChanged: (selection) {
+                onCurrencyChanged(selection.first);
+              },
+            ),
+          ],
           const SizedBox(height: 20),
           SizedBox(
             height: 210,
-            child: PieChart(
-              PieChartData(
-                sectionsSpace: 2,
-                centerSpaceRadius: 46,
-                sections: List.generate(categories.length, (index) {
-                  final entry = categories[index];
-                  final percentage = entry.value / totalAmount * 100;
-                  return PieChartSectionData(
-                    color: colorForIndex(index),
-                    value: entry.value,
-                    title: '${percentage.toStringAsFixed(0)}%',
-                    radius: 58,
-                    titleStyle: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                PieChart(
+                  PieChartData(
+                    sectionsSpace: 3,
+                    centerSpaceRadius: 52,
+                    sections: List.generate(categories.length, (index) {
+                      final entry = categories[index];
+                      final percentage = entry.value / totalAmount * 100;
+                      return PieChartSectionData(
+                        color: colorForIndex(index),
+                        value: entry.value,
+                        title: percentage >= 6
+                            ? '${percentage.toStringAsFixed(0)}%'
+                            : '',
+                        radius: 58,
+                        titleStyle: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isExpense
+                          ? Icons.trending_down_rounded
+                          : Icons.trending_up_rounded,
+                      color: accent,
+                      size: 22,
                     ),
-                  );
-                }),
-              ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '分类',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryMetric extends StatelessWidget {
+  const _SummaryMetric({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: Theme.of(
+                context,
+              ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900),
             ),
           ),
         ],
@@ -545,12 +802,14 @@ class _CategoryBreakdownTile extends StatelessWidget {
     required this.category,
     required this.amount,
     required this.percentage,
+    required this.progress,
   });
 
   final Color color;
   final String category;
   final String amount;
   final String percentage;
+  final double progress;
 
   @override
   Widget build(BuildContext context) {
@@ -588,6 +847,16 @@ class _CategoryBreakdownTile extends StatelessWidget {
                       color: colorScheme.onSurfaceVariant,
                     ),
                   ),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: LinearProgressIndicator(
+                      minHeight: 6,
+                      value: progress.clamp(0, 1),
+                      color: color,
+                      backgroundColor: color.withValues(alpha: 0.12),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -612,6 +881,251 @@ class _CategoryBreakdownTile extends StatelessWidget {
   }
 }
 
+class _StatsFilterPanel extends StatelessWidget {
+  const _StatsFilterPanel({
+    required this.ledger,
+    required this.transactionType,
+    required this.timeFilter,
+    required this.onLedgerTap,
+    required this.onTypeChanged,
+    required this.onTimeChanged,
+  });
+
+  final Ledger ledger;
+  final int transactionType;
+  final TimeFilter timeFilter;
+  final VoidCallback onLedgerTap;
+  final ValueChanged<int> onTypeChanged;
+  final ValueChanged<TimeFilter> onTimeChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return AppSectionCard(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            onTap: onLedgerTap,
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: colorScheme.outlineVariant),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.query_stats_rounded, color: colorScheme.primary),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          ledger.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w900),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          ledger.displayCode,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _ResponsiveControls(
+            first: _StatsControlGroup(
+              label: '收支类型',
+              child: SegmentedButton<int>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(
+                    value: 0,
+                    icon: Icon(Icons.remove_rounded),
+                    label: Text('支出'),
+                  ),
+                  ButtonSegment(
+                    value: 1,
+                    icon: Icon(Icons.add_rounded),
+                    label: Text('收入'),
+                  ),
+                ],
+                selected: {transactionType},
+                onSelectionChanged: (selection) =>
+                    onTypeChanged(selection.first),
+              ),
+            ),
+            second: _StatsControlGroup(
+              label: '时间范围',
+              child: _TimeFilterChips(
+                selected: timeFilter,
+                onChanged: onTimeChanged,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatsControlGroup extends StatelessWidget {
+  const _StatsControlGroup({required this.label, required this.child});
+
+  final String label;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 8),
+        child,
+      ],
+    );
+  }
+}
+
+class _TimeFilterChips extends StatelessWidget {
+  const _TimeFilterChips({required this.selected, required this.onChanged});
+
+  final TimeFilter selected;
+  final ValueChanged<TimeFilter> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = const [
+      (TimeFilter.week, '近7天'),
+      (TimeFilter.month, '本月'),
+      (TimeFilter.year, '本年'),
+      (TimeFilter.all, '全部'),
+    ];
+
+    return Row(
+      children: [
+        for (var index = 0; index < items.length; index++) ...[
+          if (index > 0) const SizedBox(width: 6),
+          Expanded(
+            child: ChoiceChip(
+              showCheckmark: false,
+              labelPadding: EdgeInsets.zero,
+              visualDensity: VisualDensity.compact,
+              label: Center(
+                child: Text(
+                  items[index].$2,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              selected: selected == items[index].$1,
+              onSelected: (_) => onChanged(items[index].$1),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _LedgerPickerTile extends StatelessWidget {
+  const _LedgerPickerTile({
+    required this.ledger,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final Ledger ledger;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Material(
+      color: selected
+          ? colorScheme.primaryContainer.withValues(alpha: 0.62)
+          : colorScheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Icon(
+                selected
+                    ? Icons.check_circle_rounded
+                    : Icons.menu_book_outlined,
+                color: selected ? colorScheme.primary : colorScheme.onSurface,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      ledger.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      ledger.displayCode,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ResponsiveControls extends StatelessWidget {
   const _ResponsiveControls({required this.first, required this.second});
 
@@ -625,20 +1139,16 @@ class _ResponsiveControls extends StatelessWidget {
         if (constraints.maxWidth < 430) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              first,
-              const SizedBox(height: 12),
-              Align(alignment: Alignment.centerLeft, child: second),
-            ],
+            children: [first, const SizedBox(height: 12), second],
           );
         }
 
         return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Expanded(child: first),
             const SizedBox(width: 12),
-            second,
+            Expanded(child: second),
           ],
         );
       },

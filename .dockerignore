@@ -1,0 +1,17 @@
+.dart_tool/
+.idea/
+.vscode/
+.git/
+.github/
+coverage/
+test/
+android/
+ios/
+linux/
+macos/
+windows/
+build/*
+!build/web/
+!build/web/**
+*.iml
+.metadata

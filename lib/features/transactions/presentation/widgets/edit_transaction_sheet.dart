@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/models/transaction_record.dart';
-import '../../../../core/models/person_lookup.dart';
+
 import '../../../../core/models/ledger.dart';
-import '../../../../core/theme/app_theme.dart';
+import '../../../../core/models/money.dart';
+import '../../../../core/models/person_lookup.dart';
+import '../../../../core/models/transaction_record.dart';
+import '../../../../core/network/friendly_error.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
 import '../providers/transaction_provider.dart';
+import 'transaction_form_components.dart';
 
 class EditTransactionSheet extends ConsumerStatefulWidget {
   const EditTransactionSheet({
@@ -29,7 +32,10 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
 
   late int _transactionType;
   late String _selectedCategory;
+  late String _selectedCurrency;
+  String? _payerPersonUuid;
   final Set<String> _selectedPersonIds = {};
+  bool _saving = false;
 
   final List<String> _expenseCategories = [
     '默认',
@@ -46,11 +52,13 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
   void initState() {
     super.initState();
     _amountController = TextEditingController(
-      text: widget.transaction.amount.toString(),
+      text: _editableAmount(widget.transaction.amount),
     );
     _noteController = TextEditingController(text: widget.transaction.note);
-    _transactionType = widget.transaction.type;
-    _selectedCategory = widget.transaction.category;
+    _transactionType = widget.transaction.type == 1 ? 1 : 0;
+    _selectedCurrency = widget.transaction.currencyCode.trim().toUpperCase();
+    _payerPersonUuid = widget.transaction.payerPersonUuid;
+    _selectedCategory = _categoryOrDefault(widget.transaction.category);
     _selectedPersonIds.addAll(widget.transaction.personUuids);
   }
 
@@ -61,60 +69,112 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
     super.dispose();
   }
 
-  void _saveChanges() async {
+  List<String> get _currentCategories {
+    return _transactionType == 0 ? _expenseCategories : _incomeCategories;
+  }
+
+  String _categoryOrDefault(String? category) {
+    final value = category?.trim();
+    if (value != null && _currentCategories.contains(value)) {
+      return value;
+    }
+    return _currentCategories.first;
+  }
+
+  void _setTransactionType(int type) {
+    if (_transactionType == type) return;
+    setState(() {
+      _transactionType = type;
+      if (_transactionType == 1) {
+        _payerPersonUuid = null;
+      }
+      _selectedCategory = _currentCategories.first;
+    });
+  }
+
+  void _limitAmountPrecision(String value) {
+    if (!value.contains('.')) return;
+    final parts = value.split('.');
+    if (parts.length <= 1 || parts[1].length <= 2) return;
+
+    _amountController.text = '${parts[0]}.${parts[1].substring(0, 2)}';
+    _amountController.selection = TextSelection.fromPosition(
+      TextPosition(offset: _amountController.text.length),
+    );
+  }
+
+  Future<void> _saveChanges() async {
+    if (_saving) return;
+
     final amount = double.tryParse(_amountController.text);
     if (amount == null || amount <= 0) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('请输入有效金额')));
+      AppNotice.error(context, '请输入大于 0 的有效金额');
       return;
     }
 
     if (_selectedPersonIds.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('请至少选择一个参与人员')));
+      AppNotice.error(context, '请至少选择一个参与人员');
       return;
     }
 
     final oldAmount = widget.transaction.amount;
+    final oldCurrencyCode = widget.transaction.currencyCode;
     final oldType = widget.transaction.type;
+    final oldPayerPersonUuid = widget.transaction.payerPersonUuid;
     final oldCategory = widget.transaction.category;
     final oldNote = widget.transaction.note;
     final oldPersonUuids = List<String>.from(widget.transaction.personUuids);
 
     widget.transaction.amount = amount;
+    widget.transaction.currencyCode = _selectedCurrency;
     widget.transaction.type = _transactionType;
+    widget.transaction.payerPersonUuid = _transactionType == 0
+        ? _payerPersonUuid
+        : null;
     widget.transaction.category = _selectedCategory;
     widget.transaction.note = _noteController.text.trim();
     widget.transaction.personUuids = _selectedPersonIds.toList();
 
+    setState(() => _saving = true);
     try {
       await ref
           .read(transactionNotifierProvider(widget.ledger.uuid).notifier)
           .updateTransaction(widget.transaction);
     } catch (e) {
       widget.transaction.amount = oldAmount;
+      widget.transaction.currencyCode = oldCurrencyCode;
       widget.transaction.type = oldType;
+      widget.transaction.payerPersonUuid = oldPayerPersonUuid;
       widget.transaction.category = oldCategory;
       widget.transaction.note = oldNote;
       widget.transaction.personUuids = oldPersonUuids;
       if (!mounted) return;
-      ScaffoldMessenger.of(
+      AppNotice.error(
         context,
-      ).showSnackBar(SnackBar(content: Text('保存失败，请重试：$e')));
+        FriendlyError.message(e, fallback: '保存失败，请稍后重试。'),
+      );
+      setState(() => _saving = false);
       return;
     }
 
-    if (mounted) {
-      Navigator.of(context).pop(true); // Return true to indicate success
-    }
+    if (!mounted) return;
+    setState(() => _saving = false);
+    Navigator.of(context).pop(true);
   }
 
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    final maxHeight = MediaQuery.sizeOf(context).height * 0.86;
+    final viewportHeight = MediaQuery.sizeOf(context).height;
+    final sheetHeight = _stableSheetHeight(
+      viewportHeight: viewportHeight,
+      bottomInset: bottomInset,
+    );
+    final colorScheme = Theme.of(context).colorScheme;
+    final currencyOptions = supportedCurrenciesForLedger(widget.ledger);
+    if (!currencyOptions.contains(_selectedCurrency)) {
+      _selectedCurrency = currencyOptions.last;
+    }
     final peopleAsyncValue = ref.watch(
       personNotifierProvider(
         includeDeleted: true,
@@ -126,186 +186,238 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
       padding: EdgeInsets.only(
         left: 16,
         right: 16,
-        top: 16,
+        top: 8,
         bottom: bottomInset + 16,
       ),
       duration: AppMotion.fast,
       curve: AppMotion.standard,
       child: SafeArea(
         top: false,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: maxHeight),
+        child: SizedBox(
+          height: sheetHeight,
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Icon(
-                      Icons.receipt_long_rounded,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      '编辑明细',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                  ),
-                ],
+              _EditSheetHeader(
+                ledger: widget.ledger,
+                transactionType: _transactionType,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               Flexible(
                 child: SingleChildScrollView(
+                  clipBehavior: Clip.hardEdge,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      AppSectionCard(
-                        padding: const EdgeInsets.all(18),
-                        color: Colors.white,
-                        borderColor: Colors.white.withValues(alpha: 0.72),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: SegmentedButton<int>(
-                                showSelectedIcon: false,
-                                segments: const [
-                                  ButtonSegment(
-                                    value: 0,
-                                    icon: Icon(Icons.remove_rounded),
-                                    label: Text('支出'),
+                      AppAnimatedEntry(
+                        child: AppSectionCard(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              TransactionTypeSelector(
+                                selectedType: _transactionType,
+                                onChanged: _setTransactionType,
+                              ),
+                              const SizedBox(height: 14),
+                              TransactionResponsivePair(
+                                breakpoint: 0,
+                                first: SizedBox(
+                                  height: 56,
+                                  child: TextField(
+                                    controller: _amountController,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                          decimal: true,
+                                        ),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .headlineSmall
+                                        ?.copyWith(fontWeight: FontWeight.w800),
+                                    decoration: InputDecoration(
+                                      labelText: '金额',
+                                      hintText: '0.00',
+                                      hintStyle: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(
+                                            color: colorScheme.onSurfaceVariant
+                                                .withValues(alpha: 0.62),
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                      prefixText: '$_selectedCurrency ',
+                                      prefixStyle: Theme.of(context)
+                                          .textTheme
+                                          .labelLarge
+                                          ?.copyWith(
+                                            color: colorScheme.onSurfaceVariant,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                    ),
+                                    onChanged: _limitAmountPrecision,
                                   ),
-                                  ButtonSegment(
-                                    value: 1,
-                                    icon: Icon(Icons.add_rounded),
-                                    label: Text('收入'),
+                                ),
+                                second: CurrencySelector(
+                                  currencies: currencyOptions,
+                                  selectedCurrency: _selectedCurrency,
+                                  onChanged: (currency) {
+                                    setState(() {
+                                      _selectedCurrency = currency;
+                                    });
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      AppAnimatedEntry(
+                        delay: const Duration(milliseconds: 60),
+                        child: AppSectionCard(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              AppAnimatedSwitcher(
+                                child: AppSectionHeader(
+                                  key: ValueKey(
+                                    'edit-category-header-$_transactionType',
                                   ),
-                                ],
-                                selected: {_transactionType},
-                                onSelectionChanged: (Set<int> newSelection) {
+                                  title: '分类',
+                                  trailing: Icon(
+                                    _transactionType == 0
+                                        ? Icons.trending_down_rounded
+                                        : Icons.trending_up_rounded,
+                                    color: transactionAccentColor(
+                                      colorScheme,
+                                      _transactionType,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              CategorySelector(
+                                categories: _currentCategories,
+                                selectedCategory: _selectedCategory,
+                                isIncome: _transactionType == 1,
+                                onChanged: (category) {
                                   setState(() {
-                                    _transactionType = newSelection.first;
-                                    _selectedCategory = _transactionType == 0
-                                        ? _expenseCategories.first
-                                        : _incomeCategories.first;
+                                    _selectedCategory = category;
                                   });
                                 },
                               ),
-                            ),
-                            const SizedBox(height: 14),
-                            TextField(
-                              controller: _amountController,
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                    decimal: true,
-                                  ),
-                              style: Theme.of(context).textTheme.headlineSmall
-                                  ?.copyWith(
-                                    color: _transactionType == 0
-                                        ? Theme.of(context).colorScheme.error
-                                        : AppTheme.successColor,
-                                  ),
-                              decoration: InputDecoration(
-                                labelText: '金额',
-                                prefixText:
-                                    '${widget.ledger.baseCurrencyCode} ',
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      AppAnimatedEntry(
+                        delay: const Duration(milliseconds: 120),
+                        child: peopleAsyncValue.when(
+                          loading: () => const AppSectionCard(
+                            child: Center(
+                              child: SizedBox.square(
+                                dimension: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      AppSectionCard(
-                        padding: const EdgeInsets.all(18),
-                        color: Colors.white,
-                        borderColor: Colors.white.withValues(alpha: 0.72),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text(
-                              '分类',
-                              style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          error: (err, st) => AppSectionCard(
+                            child: Text(
+                              FriendlyError.message(
+                                err,
+                                fallback: '人员加载失败，请稍后重试。',
+                              ),
                             ),
-                            const SizedBox(height: 10),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children:
-                                  (_transactionType == 0
-                                          ? _expenseCategories
-                                          : _incomeCategories)
-                                      .map((cat) {
-                                        final isSelected =
-                                            _selectedCategory == cat;
-                                        return ChoiceChip(
-                                          label: Text(cat),
-                                          selected: isSelected,
-                                          onSelected: (selected) {
-                                            if (selected) {
-                                              setState(
-                                                () => _selectedCategory = cat,
-                                              );
-                                            }
-                                          },
-                                        );
-                                      })
-                                      .toList(),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      peopleAsyncValue.when(
-                        loading: () => const SizedBox.shrink(),
-                        error: (err, st) => const SizedBox.shrink(),
-                        data: (peoplePool) {
-                          if (widget.ledger.personUuids.isEmpty) {
-                            return const SizedBox.shrink();
-                          }
-                          final personMap = peopleByUuid(peoplePool);
-                          return AppSectionCard(
-                            padding: const EdgeInsets.all(18),
-                            color: Colors.white,
-                            borderColor: Colors.white.withValues(alpha: 0.72),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Text(
-                                  '参与人员',
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.titleMedium,
+                          ),
+                          data: (peoplePool) {
+                            final visiblePersonIds = _visiblePersonIds();
+                            if (visiblePersonIds.isEmpty) {
+                              return const SizedBox.shrink();
+                            }
+
+                            final personMap = peopleByUuid(peoplePool);
+                            final personChoices = visiblePersonIds.map((pid) {
+                              final person = personOrFallback(personMap, pid);
+                              return AppPersonChoiceItem(
+                                id: pid,
+                                name: person.isDeleted
+                                    ? '${person.name}（已删除）'
+                                    : person.name,
+                                avatar: person.avatar,
+                              );
+                            }).toList();
+
+                            return AppAnimatedSwitcher(
+                              child: AppSectionCard(
+                                key: ValueKey(
+                                  'edit-people-${widget.transaction.uuid}',
                                 ),
-                                const SizedBox(height: 10),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: widget.ledger.personUuids.map((
-                                    pid,
-                                  ) {
-                                    final person = personOrFallback(
-                                      personMap,
-                                      pid,
-                                    );
-                                    final isSelected = _selectedPersonIds
-                                        .contains(pid);
-                                    return FilterChip(
-                                      avatar: Text(person.avatar),
-                                      label: Text(person.name),
-                                      selected: isSelected,
-                                      onSelected: (selected) {
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    TransactionAnimatedVisibility(
+                                      visible: _transactionType == 0,
+                                      visibleKey: 'edit-payment-mode-panel',
+                                      hiddenKey: 'edit-payment-mode-empty',
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: 10,
+                                        ),
+                                        child: PaymentModePanel(
+                                          paidByPerson:
+                                              _payerPersonUuid != null,
+                                          description: _payerPersonUuid == null
+                                              ? '使用人员将平均分摊该支出金额。'
+                                              : '付款人先垫付，总额由使用人员平均分摊。',
+                                          onChanged: (paidByPerson) {
+                                            setState(() {
+                                              if (paidByPerson) {
+                                                _payerPersonUuid ??=
+                                                    _selectedPersonIds
+                                                        .isNotEmpty
+                                                    ? _selectedPersonIds.first
+                                                    : visiblePersonIds.first;
+                                              } else {
+                                                _payerPersonUuid = null;
+                                              }
+                                            });
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                    AppSectionHeader(
+                                      title: _transactionType == 0
+                                          ? '使用人员'
+                                          : '参与人员',
+                                      trailing: TextButton(
+                                        onPressed: () {
+                                          setState(() {
+                                            if (_selectedPersonIds.length ==
+                                                visiblePersonIds.length) {
+                                              _selectedPersonIds.clear();
+                                            } else {
+                                              _selectedPersonIds
+                                                ..clear()
+                                                ..addAll(visiblePersonIds);
+                                            }
+                                          });
+                                        },
+                                        child: Text(
+                                          _selectedPersonIds.length ==
+                                                  visiblePersonIds.length
+                                              ? '取消全选'
+                                              : '全选',
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    AppPersonChoiceGrid(
+                                      items: personChoices,
+                                      selectedIds: _selectedPersonIds,
+                                      onToggle: (pid, selected) {
                                         setState(() {
                                           if (selected) {
                                             _selectedPersonIds.add(pid);
@@ -314,40 +426,197 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                                           }
                                         });
                                       },
-                                    );
-                                  }).toList(),
+                                    ),
+                                    TransactionAnimatedVisibility(
+                                      visible:
+                                          _transactionType == 0 &&
+                                          _payerPersonUuid != null,
+                                      visibleKey: 'edit-payer-person-panel',
+                                      hiddenKey: 'edit-payer-person-empty',
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(top: 16),
+                                        child: DecoratedBox(
+                                          decoration: BoxDecoration(
+                                            color:
+                                                colorScheme.surfaceContainerLow,
+                                            borderRadius: BorderRadius.circular(
+                                              16,
+                                            ),
+                                            border: Border.all(
+                                              color: colorScheme.outlineVariant
+                                                  .withValues(alpha: 0.72),
+                                            ),
+                                          ),
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(12),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.stretch,
+                                              children: [
+                                                Text(
+                                                  '付款人',
+                                                  style: Theme.of(
+                                                    context,
+                                                  ).textTheme.titleSmall,
+                                                ),
+                                                const SizedBox(height: 8),
+                                                AppPersonChoiceGrid(
+                                                  items: personChoices,
+                                                  selectedId: _payerPersonUuid,
+                                                  onSelect: (pid) {
+                                                    setState(() {
+                                                      _payerPersonUuid = pid;
+                                                    });
+                                                  },
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                          );
-                        },
+                              ),
+                            );
+                          },
+                        ),
                       ),
                       const SizedBox(height: 14),
-                      TextField(
-                        controller: _noteController,
-                        decoration: const InputDecoration(
-                          labelText: '备注（选填）',
-                          prefixIcon: Icon(Icons.notes_outlined),
+                      AppAnimatedEntry(
+                        delay: const Duration(milliseconds: 180),
+                        child: TextField(
+                          controller: _noteController,
+                          decoration: const InputDecoration(
+                            labelText: '备注（选填）',
+                            prefixIcon: Icon(Icons.notes_outlined),
+                          ),
+                          maxLines: 2,
+                          minLines: 1,
                         ),
-                        maxLines: 2,
-                        minLines: 1,
                       ),
+                      const SizedBox(height: 18),
                     ],
                   ),
                 ),
               ),
-              const SizedBox(height: 14),
-              FilledButton(
-                onPressed: _saveChanges,
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(52),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: colorScheme.surface.withValues(alpha: 0.96),
+                  border: Border(
+                    top: BorderSide(
+                      color: colorScheme.outlineVariant.withValues(alpha: 0.7),
+                    ),
+                  ),
                 ),
-                child: const Text('保存修改'),
+                child: SafeArea(
+                  top: false,
+                  minimum: const EdgeInsets.only(top: 12),
+                  child: TransactionSaveButton(
+                    onPressed: _saving ? null : _saveChanges,
+                    loading: _saving,
+                    readyLabel: '保存修改',
+                    loadingLabel: '保存中',
+                  ),
+                ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  List<String> _visiblePersonIds() {
+    return {
+      ...widget.ledger.personUuids,
+      ...widget.transaction.personUuids,
+      if (widget.transaction.payerPersonUuid != null)
+        widget.transaction.payerPersonUuid!,
+    }.toList();
+  }
+
+  String _editableAmount(double value) {
+    if (value == value.roundToDouble()) {
+      return value.toStringAsFixed(0);
+    }
+    return value.toStringAsFixed(2);
+  }
+
+  double _stableSheetHeight({
+    required double viewportHeight,
+    required double bottomInset,
+  }) {
+    final maxHeight = viewportHeight * 0.9;
+    final availableHeight = (viewportHeight - bottomInset - 24).clamp(
+      280.0,
+      viewportHeight,
+    );
+    if (availableHeight <= 520) {
+      return availableHeight.toDouble();
+    }
+    return availableHeight.clamp(420.0, maxHeight).toDouble();
+  }
+}
+
+class _EditSheetHeader extends StatelessWidget {
+  const _EditSheetHeader({required this.ledger, required this.transactionType});
+
+  final Ledger ledger;
+  final int transactionType;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isIncome = transactionType == 1;
+    final accent = transactionAccentColor(colorScheme, transactionType);
+
+    return Row(
+      children: [
+        Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            color: accent.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: accent.withValues(alpha: 0.18)),
+          ),
+          child: Icon(
+            isIncome ? Icons.savings_outlined : Icons.receipt_long_outlined,
+            color: accent,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '编辑明细',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '${ledger.name} · ${ledger.displayCode}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+        IconButton(
+          tooltip: '关闭',
+          onPressed: () => Navigator.of(context).maybePop(),
+          icon: const Icon(Icons.close_rounded),
+        ),
+      ],
     );
   }
 }

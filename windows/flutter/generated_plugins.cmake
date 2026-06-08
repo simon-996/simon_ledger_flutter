@@ -3,6 +3,8 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  app_links
+  connectivity_plus
   gal
   permission_handler_windows
 )

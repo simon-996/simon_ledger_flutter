@@ -66,6 +66,16 @@ class ApiClient {
     );
   }
 
+  Future<void> postVoid(String path, {Object? data, String? idempotencyKey}) {
+    return _requestVoid(
+      () => _dio.post<Object?>(
+        path,
+        data: data,
+        options: _options(idempotencyKey),
+      ),
+    );
+  }
+
   Future<T> put<T>(
     String path, {
     Object? data,

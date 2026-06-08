@@ -8,16 +8,21 @@ part 'ledger_stats_provider.g.dart';
 class LedgerStats extends _$LedgerStats {
   @override
   Future<Map<String, Map<String, double>>> build() async {
-    final ledgerRepository = ref.read(ledgerRepositoryProvider);
-    final transactionRepository = ref.read(transactionRepositoryProvider);
-    final ledgers = await ledgerRepository.getAllLedgers();
-    final transactions = await transactionRepository.getTransactionsForLedgers(
-      ledgers.map((ledger) => ledger.uuid).toList(),
+    await ref.watch(authTokenProvider.future);
+    final ledgerRepository = ref.watch(ledgerRepositoryProvider);
+    final transactionRepository = ref.watch(transactionRepositoryProvider);
+    final ledgers = await ledgerRepository.getCachedLedgers();
+    final transactionsByLedger = await Future.wait(
+      ledgers.map(
+        (ledger) =>
+            transactionRepository.getCachedTransactionsForLedger(ledger.uuid),
+      ),
     );
 
     return calculateLedgerStats(
       ledgerUuids: ledgers.map((ledger) => ledger.uuid),
-      transactions: transactions,
+      ledgersByUuid: {for (final ledger in ledgers) ledger.uuid: ledger},
+      transactions: transactionsByLedger.expand((transactions) => transactions),
     );
   }
 

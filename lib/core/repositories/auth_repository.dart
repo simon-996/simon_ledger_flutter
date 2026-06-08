@@ -66,6 +66,8 @@ abstract class AuthRepository {
   Future<void> logout();
 
   Future<AuthUser> me();
+
+  Future<AuthUser> updateProfile({required String nickname, String? avatar});
 }
 
 class RemoteAuthRepository implements AuthRepository {
@@ -110,6 +112,7 @@ class RemoteAuthRepository implements AuthRepository {
       fromJson: AuthLoginResult.fromJson,
     );
     await _tokenStore.save(result.token);
+    await _tokenStore.saveAccountUuid(result.user.uuid);
     return result;
   }
 
@@ -123,9 +126,20 @@ class RemoteAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<AuthUser> me() {
-    return _apiClient.get<AuthUser>(
+  Future<AuthUser> me() async {
+    final user = await _apiClient.get<AuthUser>(
       '/api/auth/me',
+      fromJson: AuthUser.fromJson,
+    );
+    await _tokenStore.saveAccountUuid(user.uuid);
+    return user;
+  }
+
+  @override
+  Future<AuthUser> updateProfile({required String nickname, String? avatar}) {
+    return _apiClient.put<AuthUser>(
+      '/api/auth/me',
+      data: {'nickname': nickname, 'avatar': avatar},
       fromJson: AuthUser.fromJson,
     );
   }

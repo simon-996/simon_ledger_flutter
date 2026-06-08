@@ -1,3 +1,5 @@
+enum LedgerCloudPolicy { localOnly, uploadRequested, cloudManaged }
+
 class Ledger {
   int id = 0;
 
@@ -18,4 +20,78 @@ class Ledger {
   bool isDeleted = false; // Soft delete flag
 
   String? role;
+
+  int memberCount = 1;
+
+  List<LedgerMemberSummary> members = [];
+
+  String? syncedRemoteUuid;
+
+  String? cacheOwnerUserUuid;
+
+  LedgerCloudPolicy cloudPolicy = LedgerCloudPolicy.localOnly;
+
+  bool pendingSync = false;
+
+  String? syncError;
+
+  bool get isShared => memberCount > 1 || members.length > 1;
+
+  bool get isLocalTemporary => !_looksLikeRemoteUuid(uuid);
+
+  bool get hasSyncedRemoteCopy =>
+      syncedRemoteUuid != null && syncedRemoteUuid!.isNotEmpty;
+
+  bool get shouldUploadToCloud =>
+      cloudPolicy == LedgerCloudPolicy.uploadRequested;
+
+  bool get isCloudManaged =>
+      cloudPolicy == LedgerCloudPolicy.cloudManaged ||
+      hasSyncedRemoteCopy ||
+      !isLocalTemporary;
+
+  bool get isLocalOnly =>
+      cloudPolicy == LedgerCloudPolicy.localOnly && !isCloudManaged;
+
+  String get remoteSyncUuid => hasSyncedRemoteCopy ? syncedRemoteUuid! : uuid;
+
+  String get displayCode {
+    final normalizedUuid = uuid.trim();
+    final suffix = normalizedUuid.length <= 8
+        ? normalizedUuid
+        : normalizedUuid.substring(normalizedUuid.length - 8);
+    return 'Simon-$suffix';
+  }
+
+  String get displayNameWithCode => '$name · $displayCode';
+
+  bool _looksLikeRemoteUuid(String value) {
+    return RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(value);
+  }
+}
+
+class LedgerMemberSummary {
+  LedgerMemberSummary({
+    required this.uuid,
+    this.userUuid,
+    this.nickname,
+    this.avatar,
+    this.role,
+  });
+
+  final String uuid;
+  final String? userUuid;
+  final String? nickname;
+  final String? avatar;
+  final String? role;
+
+  String get displayName {
+    final value = nickname?.trim();
+    return value == null || value.isEmpty ? '成员' : value;
+  }
+
+  String get displayAvatar {
+    final value = avatar?.trim();
+    return value == null || value.isEmpty ? '👤' : value;
+  }
 }

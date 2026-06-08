@@ -12,6 +12,7 @@ class AuthToken {
 class TokenStore {
   static const _tokenNameKey = 'auth_token_name';
   static const _tokenValueKey = 'auth_token_value';
+  static const _accountUuidKey = 'auth_account_uuid';
 
   Future<AuthToken?> read() async {
     final prefs = await SharedPreferences.getInstance();
@@ -29,9 +30,20 @@ class TokenStore {
     await prefs.setString(_tokenValueKey, token.value);
   }
 
+  Future<String?> readAccountUuid() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_accountUuidKey);
+  }
+
+  Future<void> saveAccountUuid(String uuid) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_accountUuidKey, uuid);
+  }
+
   Future<void> clear() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenNameKey);
     await prefs.remove(_tokenValueKey);
+    await prefs.remove(_accountUuidKey);
   }
 }

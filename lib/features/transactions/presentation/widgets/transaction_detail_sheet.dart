@@ -3,8 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/models/person.dart';
 import '../../../../core/models/person_lookup.dart';
 import '../../../../core/models/ledger.dart';
+import '../../../../core/models/money.dart';
 import '../../../../core/models/transaction_record.dart';
-import '../../../../core/theme/app_theme.dart';
+import '../../../../core/network/friendly_error.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../providers/transaction_provider.dart';
 import 'edit_transaction_sheet.dart';
@@ -28,13 +29,20 @@ class TransactionDetailSheet extends ConsumerWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final accent = transaction.type == 0
         ? colorScheme.error
-        : AppTheme.successColor;
+        : colorScheme.primary;
     final maxHeight = MediaQuery.sizeOf(context).height * 0.82;
+    final convertedAmount = formatTransactionConvertedAmount(
+      transaction,
+      ledger,
+    );
 
     final splitAmount = transaction.personUuids.isNotEmpty
         ? transaction.amount / transaction.personUuids.length
         : transaction.amount;
     final personMap = peopleByUuid(peoplePool);
+    final payer = transaction.payerPersonUuid == null
+        ? null
+        : personOrFallback(personMap, transaction.payerPersonUuid!);
 
     return SafeArea(
       top: false,
@@ -77,7 +85,10 @@ class TransactionDetailSheet extends ConsumerWidget {
                           fit: BoxFit.scaleDown,
                           alignment: Alignment.centerLeft,
                           child: Text(
-                            '${transaction.currencyCode} ${transaction.amount.toStringAsFixed(2)}',
+                            formatMoney(
+                              transaction.currencyCode,
+                              transaction.amount,
+                            ),
                             style: Theme.of(context).textTheme.headlineMedium
                                 ?.copyWith(
                                   fontWeight: FontWeight.w900,
@@ -85,6 +96,17 @@ class TransactionDetailSheet extends ConsumerWidget {
                                 ),
                           ),
                         ),
+                        if (convertedAmount != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            convertedAmount,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -114,6 +136,7 @@ class TransactionDetailSheet extends ConsumerWidget {
                       color: colorScheme.error,
                     ),
                     onPressed: () async {
+                      final noticeContext = context;
                       final confirm = await showDialog<bool>(
                         context: context,
                         builder: (context) => AlertDialog(
@@ -136,7 +159,6 @@ class TransactionDetailSheet extends ConsumerWidget {
                       );
 
                       if (confirm == true && context.mounted) {
-                        final messenger = ScaffoldMessenger.of(context);
                         Navigator.pop(context);
                         try {
                           await ref
@@ -147,9 +169,12 @@ class TransactionDetailSheet extends ConsumerWidget {
                               )
                               .deleteTransaction(transaction.uuid);
                         } catch (e) {
-                          messenger.showSnackBar(
-                            SnackBar(content: Text('删除失败，请重试：$e')),
-                          );
+                          if (noticeContext.mounted) {
+                            AppNotice.error(
+                              noticeContext,
+                              FriendlyError.message(e, fallback: '删除失败，请稍后重试。'),
+                            );
+                          }
                         }
                       }
                     },
@@ -163,18 +188,41 @@ class TransactionDetailSheet extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       AppSectionCard(
-                        padding: const EdgeInsets.all(18),
-                        color: Colors.white,
-                        borderColor: Colors.white.withValues(alpha: 0.72),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            _buildDetailRow(
+                              context,
+                              Icons.book_outlined,
+                              '账本',
+                              ledger.displayNameWithCode,
+                            ),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 10),
+                              child: Divider(height: 1),
+                            ),
                             _buildDetailRow(
                               context,
                               Icons.access_time_rounded,
                               '时间',
                               dateStr,
                             ),
+                            if (transaction.createdByNickname != null &&
+                                transaction.createdByNickname!
+                                    .trim()
+                                    .isNotEmpty) ...[
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 10),
+                                child: Divider(height: 1),
+                              ),
+                              _buildDetailRow(
+                                context,
+                                Icons.person_outline_rounded,
+                                '添加人',
+                                '${transaction.createdByAvatar ?? ''} ${transaction.createdByNickname}'
+                                    .trim(),
+                              ),
+                            ],
                             const Padding(
                               padding: EdgeInsets.symmetric(vertical: 10),
                               child: Divider(height: 1),
@@ -185,6 +233,22 @@ class TransactionDetailSheet extends ConsumerWidget {
                               '分类',
                               transaction.category,
                             ),
+                            if (transaction.type == 0) ...[
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 10),
+                                child: Divider(height: 1),
+                              ),
+                              _buildDetailRow(
+                                context,
+                                payer == null
+                                    ? Icons.account_balance_wallet_outlined
+                                    : Icons.person_outline_rounded,
+                                '支出方式',
+                                payer == null
+                                    ? '共同钱包'
+                                    : '${payer.avatar} ${payer.name} 代付',
+                              ),
+                            ],
                             if (transaction.note.isNotEmpty) ...[
                               const Padding(
                                 padding: EdgeInsets.symmetric(vertical: 10),
@@ -202,7 +266,8 @@ class TransactionDetailSheet extends ConsumerWidget {
                       ),
                       const SizedBox(height: 16),
                       AppSectionHeader(
-                        title: '参与人员 (${transaction.personUuids.length}人)',
+                        title:
+                            '${transaction.type == 0 ? '使用人员' : '参与人员'} (${transaction.personUuids.length}人)',
                       ),
                       const SizedBox(height: 10),
                       ...transaction.personUuids.map((pid) {
@@ -211,8 +276,6 @@ class TransactionDetailSheet extends ConsumerWidget {
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 8),
                           child: AppSectionCard(
-                            color: Colors.white,
-                            borderColor: Colors.white.withValues(alpha: 0.72),
                             padding: const EdgeInsets.symmetric(
                               horizontal: 14,
                               vertical: 12,
@@ -236,7 +299,10 @@ class TransactionDetailSheet extends ConsumerWidget {
                                 ),
                                 const SizedBox(width: 12),
                                 Text(
-                                  '${transaction.currencyCode} ${splitAmount.toStringAsFixed(2)}',
+                                  formatMoney(
+                                    transaction.currencyCode,
+                                    splitAmount,
+                                  ),
                                   style: Theme.of(context).textTheme.titleSmall
                                       ?.copyWith(
                                         color: accent,

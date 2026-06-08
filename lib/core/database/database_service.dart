@@ -20,7 +20,7 @@ class DatabaseService {
     await _writePeople([
       Person()
         ..id = 1
-        ..uuid = 'p1'
+        ..uuid = 'self'
         ..name = '自己'
         ..avatar = '😎',
     ]);
@@ -56,13 +56,72 @@ class DatabaseService {
     await _writePeople(people);
   }
 
+  Future<void> replacePersonUuidReferences({
+    required String oldUuid,
+    required String newUuid,
+  }) async {
+    if (oldUuid == newUuid) {
+      return;
+    }
+
+    final people = await _readPeople();
+    final oldPersonIndex = people.indexWhere(
+      (person) => person.uuid == oldUuid,
+    );
+    final newPersonIndex = people.indexWhere(
+      (person) => person.uuid == newUuid,
+    );
+    if (oldPersonIndex != -1 && newPersonIndex != -1) {
+      people.removeAt(oldPersonIndex);
+      await _writePeople(people);
+    } else if (oldPersonIndex != -1) {
+      people[oldPersonIndex].uuid = newUuid;
+      await _writePeople(people);
+    }
+
+    final ledgers = await _readLedgers();
+    var ledgersChanged = false;
+    for (final ledger in ledgers) {
+      if (!ledger.personUuids.contains(oldUuid)) {
+        continue;
+      }
+      ledger.personUuids = ledger.personUuids
+          .map((uuid) => uuid == oldUuid ? newUuid : uuid)
+          .toSet()
+          .toList();
+      ledgersChanged = true;
+    }
+    if (ledgersChanged) {
+      await _writeLedgers(ledgers);
+    }
+
+    final transactions = await _readTransactions();
+    var transactionsChanged = false;
+    for (final transaction in transactions) {
+      if (transaction.personUuids.contains(oldUuid)) {
+        transaction.personUuids = transaction.personUuids
+            .map((uuid) => uuid == oldUuid ? newUuid : uuid)
+            .toSet()
+            .toList();
+        transactionsChanged = true;
+      }
+      if (transaction.payerPersonUuid == oldUuid) {
+        transaction.payerPersonUuid = newUuid;
+        transactionsChanged = true;
+      }
+    }
+    if (transactionsChanged) {
+      await _writeTransactions(transactions);
+    }
+  }
+
   // Ledger operations
   Future<List<Ledger>> getAllLedgers({bool includeDeleted = false}) async {
     final ledgers = await _readLedgers();
     final visible = includeDeleted
         ? ledgers
         : ledgers.where((ledger) => !ledger.isDeleted).toList();
-    visible.sort((left, right) => left.sortOrder.compareTo(right.sortOrder));
+    visible.sort((left, right) => right.sortOrder.compareTo(left.sortOrder));
     return visible;
   }
 
@@ -236,7 +295,12 @@ class DatabaseService {
       ..uuid = json['uuid']?.toString() ?? ''
       ..name = json['name']?.toString() ?? ''
       ..avatar = json['avatar']?.toString() ?? '🧑'
-      ..isDeleted = json['isDeleted'] == true;
+      ..linkedUserUuid = json['linkedUserUuid']?.toString()
+      ..syncedRemoteUuid = json['syncedRemoteUuid']?.toString()
+      ..isDeleted = json['isDeleted'] == true
+      ..pendingSync = json['pendingSync'] == true
+      ..syncError = json['syncError']?.toString()
+      ..pendingLedgerUuid = json['pendingLedgerUuid']?.toString();
   }
 
   static Map<String, dynamic> _personToJson(Person person) {
@@ -245,7 +309,12 @@ class DatabaseService {
       'uuid': person.uuid,
       'name': person.name,
       'avatar': person.avatar,
+      'linkedUserUuid': person.linkedUserUuid,
+      'syncedRemoteUuid': person.syncedRemoteUuid,
       'isDeleted': person.isDeleted,
+      'pendingSync': person.pendingSync,
+      'syncError': person.syncError,
+      'pendingLedgerUuid': person.pendingLedgerUuid,
     };
   }
 
@@ -262,7 +331,17 @@ class DatabaseService {
           .toList()
       ..sortOrder = (json['sortOrder'] as num?)?.toInt() ?? 0
       ..isDeleted = json['isDeleted'] == true
-      ..role = json['role']?.toString();
+      ..role = json['role']?.toString()
+      ..memberCount = (json['memberCount'] as num?)?.toInt() ?? 1
+      ..members = (json['members'] as List<dynamic>? ?? [])
+          .whereType<Map<dynamic, dynamic>>()
+          .map((value) => _ledgerMemberFromJson(value.cast<String, dynamic>()))
+          .toList()
+      ..syncedRemoteUuid = json['syncedRemoteUuid']?.toString()
+      ..cacheOwnerUserUuid = json['cacheOwnerUserUuid']?.toString()
+      ..cloudPolicy = _ledgerCloudPolicyFromJson(json['cloudPolicy'])
+      ..pendingSync = json['pendingSync'] == true
+      ..syncError = json['syncError']?.toString();
   }
 
   static Map<String, dynamic> _ledgerToJson(Ledger ledger) {
@@ -276,6 +355,40 @@ class DatabaseService {
       'sortOrder': ledger.sortOrder,
       'isDeleted': ledger.isDeleted,
       'role': ledger.role,
+      'memberCount': ledger.memberCount,
+      'members': ledger.members.map(_ledgerMemberToJson).toList(),
+      'syncedRemoteUuid': ledger.syncedRemoteUuid,
+      'cacheOwnerUserUuid': ledger.cacheOwnerUserUuid,
+      'cloudPolicy': ledger.cloudPolicy.name,
+      'pendingSync': ledger.pendingSync,
+      'syncError': ledger.syncError,
+    };
+  }
+
+  static LedgerCloudPolicy _ledgerCloudPolicyFromJson(Object? value) {
+    return LedgerCloudPolicy.values.where((policy) {
+          return policy.name == value?.toString();
+        }).firstOrNull ??
+        LedgerCloudPolicy.localOnly;
+  }
+
+  static LedgerMemberSummary _ledgerMemberFromJson(Map<String, dynamic> json) {
+    return LedgerMemberSummary(
+      uuid: json['uuid']?.toString() ?? '',
+      userUuid: json['userUuid']?.toString(),
+      nickname: json['nickname']?.toString(),
+      avatar: json['avatar']?.toString(),
+      role: json['role']?.toString(),
+    );
+  }
+
+  static Map<String, dynamic> _ledgerMemberToJson(LedgerMemberSummary member) {
+    return {
+      'uuid': member.uuid,
+      'userUuid': member.userUuid,
+      'nickname': member.nickname,
+      'avatar': member.avatar,
+      'role': member.role,
     };
   }
 
@@ -285,6 +398,9 @@ class DatabaseService {
       ..uuid = json['uuid']?.toString() ?? ''
       ..ledgerUuid = json['ledgerUuid']?.toString() ?? ''
       ..type = (json['type'] as num?)?.toInt() ?? 0
+      ..payerPersonUuid = json['payerPersonUuid']?.toString()
+      ..clientOperationId = json['clientOperationId']?.toString()
+      ..version = (json['version'] as num?)?.toInt()
       ..amount = (json['amount'] as num?)?.toDouble() ?? 0
       ..currencyCode = json['currencyCode']?.toString() ?? 'CNY'
       ..category = json['category']?.toString() ?? ''
@@ -292,9 +408,14 @@ class DatabaseService {
           .map((value) => value.toString())
           .toList()
       ..note = json['note']?.toString() ?? ''
+      ..createdByUserUuid = json['createdByUserUuid']?.toString()
+      ..createdByNickname = json['createdByNickname']?.toString()
+      ..createdByAvatar = json['createdByAvatar']?.toString()
       ..createdAt =
           DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
           DateTime.now()
+      ..pendingSync = json['pendingSync'] == true
+      ..syncError = json['syncError']?.toString()
       ..isDeleted = json['isDeleted'] == true;
   }
 
@@ -306,12 +427,20 @@ class DatabaseService {
       'uuid': transaction.uuid,
       'ledgerUuid': transaction.ledgerUuid,
       'type': transaction.type,
+      'payerPersonUuid': transaction.payerPersonUuid,
+      'clientOperationId': transaction.clientOperationId,
+      'version': transaction.version,
       'amount': transaction.amount,
       'currencyCode': transaction.currencyCode,
       'category': transaction.category,
       'personUuids': transaction.personUuids,
       'note': transaction.note,
+      'createdByUserUuid': transaction.createdByUserUuid,
+      'createdByNickname': transaction.createdByNickname,
+      'createdByAvatar': transaction.createdByAvatar,
       'createdAt': transaction.createdAt.toIso8601String(),
+      'pendingSync': transaction.pendingSync,
+      'syncError': transaction.syncError,
       'isDeleted': transaction.isDeleted,
     };
   }

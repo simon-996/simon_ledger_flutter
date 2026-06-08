@@ -7,11 +7,24 @@ class AppTheme {
   static const Color tertiaryColor = Color(0xFFFF9F0A);
   static const Color errorColor = Color(0xFFFF3B30);
   static const Color successColor = Color(0xFF34C759);
+  static const Color infoColor = Color(0xFF64D2FF);
 
   static const Color surfaceColor = Color(0xFFF5F5F7);
   static const Color surfaceContainerColor = Color(0xFFFFFFFF);
   static const Color surfaceMutedColor = Color(0xFFEDEEF2);
   static const Color onSurfaceColor = Color(0xFF1D1D1F);
+
+  static const List<Color> chartColors = [
+    primaryColor,
+    successColor,
+    tertiaryColor,
+    errorColor,
+    Color(0xFF5E5CE6),
+    infoColor,
+    Color(0xFFFF2D55),
+    Color(0xFFAF52DE),
+    Color(0xFF30D158),
+  ];
 
   static const double radiusSmall = 12;
   static const double radiusMedium = 18;
@@ -168,7 +181,7 @@ class AppTheme {
         ),
       ),
       dividerTheme: DividerThemeData(
-        color: colorScheme.outlineVariant.withValues(alpha: 0.78),
+        color: colorScheme.outlineVariant.withValues(alpha: 0.7),
         thickness: 1,
         space: 1,
       ),
@@ -193,7 +206,7 @@ class AppTheme {
           final selected = states.contains(WidgetState.selected);
           return IconThemeData(
             color: selected ? primaryColor : secondaryColor,
-            size: selected ? 25 : 23,
+            size: selected ? 24 : 23,
           );
         }),
       ),
@@ -219,14 +232,7 @@ class AppTheme {
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: ButtonStyle(
           visualDensity: VisualDensity.compact,
-          side: WidgetStateProperty.resolveWith((states) {
-            final selected = states.contains(WidgetState.selected);
-            return BorderSide(
-              color: selected
-                  ? primaryColor.withValues(alpha: 0.36)
-                  : Colors.transparent,
-            );
-          }),
+          side: WidgetStateProperty.all(BorderSide.none),
           backgroundColor: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.selected)) {
               return Colors.white;
@@ -237,9 +243,6 @@ class AppTheme {
             if (states.contains(WidgetState.selected)) return primaryColor;
             return colorScheme.onSurfaceVariant;
           }),
-          overlayColor: WidgetStateProperty.all(
-            primaryColor.withValues(alpha: 0.08),
-          ),
           textStyle: WidgetStateProperty.all(
             const TextStyle(fontWeight: FontWeight.w800, letterSpacing: 0),
           ),
@@ -247,9 +250,6 @@ class AppTheme {
             RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(radiusMedium),
             ),
-          ),
-          padding: WidgetStateProperty.all(
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
           ),
         ),
       ),
@@ -304,10 +304,10 @@ class AppTheme {
           color: primaryColor,
           fontWeight: FontWeight.w800,
         ),
-        selectedColor: primaryColor.withValues(alpha: 0.12),
+        selectedColor: primaryColor.withValues(alpha: 0.13),
         checkmarkColor: primaryColor,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        side: BorderSide(color: colorScheme.outlineVariant),
+        side: BorderSide.none,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
       ),
       bottomSheetTheme: BottomSheetThemeData(
@@ -316,7 +316,7 @@ class AppTheme {
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
         ),
-        dragHandleColor: colorScheme.outline,
+        dragHandleColor: colorScheme.outlineVariant.withValues(alpha: 0.72),
         showDragHandle: true,
       ),
       dialogTheme: DialogThemeData(

@@ -1,6 +1,11 @@
+import 'dart:async';
+
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../../core/di/providers.dart';
 import '../../../../core/models/ledger.dart';
+import '../../../../core/models/person.dart';
+import '../../../../core/repositories/ledger_repository.dart';
+import '../../../people_pool/presentation/providers/person_provider.dart';
 
 part 'ledger_provider.g.dart';
 
@@ -8,31 +13,50 @@ part 'ledger_provider.g.dart';
 class LedgerNotifier extends _$LedgerNotifier {
   @override
   Future<List<Ledger>> build() async {
-    return _fetchLedgers();
+    await ref.watch(authTokenProvider.future);
+    final repository = ref.watch(ledgerRepositoryProvider);
+    if (repository is! RemoteLedgerRepository) {
+      return repository.getAllLedgers();
+    }
+
+    var disposed = false;
+    ref.onDispose(() => disposed = true);
+    unawaited(_refreshRemote(repository, isDisposed: () => disposed));
+    return repository.getCachedLedgers();
   }
 
-  Future<List<Ledger>> _fetchLedgers() async {
-    final repository = ref.read(ledgerRepositoryProvider);
-    return await repository.getAllLedgers();
+  Future<void> _refreshRemote(
+    RemoteLedgerRepository repository, {
+    required bool Function() isDisposed,
+  }) async {
+    final ledgers = await repository.getAllLedgers();
+    if (isDisposed()) return;
+    ref.invalidate(cachedPeopleProvider);
+    state = AsyncValue.data(ledgers);
   }
 
   Future<void> addLedger(Ledger ledger) async {
     final repository = ref.read(ledgerRepositoryProvider);
-    // Give it the highest sort order (put at the end)
     final currentLedgers = state.valueOrNull ?? [];
-    if (currentLedgers.isNotEmpty) {
-      ledger.sortOrder = currentLedgers.last.sortOrder + 1;
-    }
+    ledger.sortOrder = _nextSortOrder(currentLedgers);
     await repository.saveLedger(ledger);
-    // Refresh the state
-    ref.invalidateSelf();
+    state = AsyncValue.data(_upsertLedger(currentLedgers, ledger));
+  }
+
+  Future<void> addLedgerWithPeople(Ledger ledger, List<Person> people) async {
+    final repository = ref.read(ledgerRepositoryProvider);
+    final currentLedgers = state.valueOrNull ?? [];
+    ledger.sortOrder = _nextSortOrder(currentLedgers);
+    final created = await repository.createLedgerWithPeople(ledger, people);
+    ref.invalidate(cachedPeopleProvider);
+    state = AsyncValue.data(_upsertLedger(currentLedgers, created.ledger));
   }
 
   Future<void> updateLedger(Ledger ledger) async {
     final repository = ref.read(ledgerRepositoryProvider);
+    final currentLedgers = state.valueOrNull ?? [];
     await repository.saveLedger(ledger);
-    // Refresh the state
-    ref.invalidateSelf();
+    state = AsyncValue.data(_upsertLedger(currentLedgers, ledger));
   }
 
   Future<void> reorderLedgers(int oldIndex, int newIndex) async {
@@ -44,25 +68,59 @@ class LedgerNotifier extends _$LedgerNotifier {
     final item = items.removeAt(oldIndex);
     items.insert(newIndex, item);
 
-    // Update sortOrder for all items
+    // The first visible ledger owns the highest sort order.
     for (int i = 0; i < items.length; i++) {
-      items[i].sortOrder = i;
+      items[i].sortOrder = items.length - i;
     }
 
     // Optimistically update the UI state
     state = AsyncValue.data(items);
 
-    // Persist changes to database
-    final repository = ref.read(ledgerRepositoryProvider);
+    // Ordering is a device preference and must never wait for cloud writes.
+    final database = ref.read(databaseProvider);
     for (final ledger in items) {
-      await repository.saveLedger(ledger);
+      await database.saveLedger(ledger);
     }
   }
 
   Future<void> deleteLedger(String uuid) async {
     final repository = ref.read(ledgerRepositoryProvider);
-    await repository.deleteLedger(uuid);
-    // Refresh the state
-    ref.invalidateSelf();
+    final previousLedgers = state.valueOrNull;
+    if (previousLedgers != null) {
+      state = AsyncValue.data(
+        previousLedgers.where((ledger) => ledger.uuid != uuid).toList(),
+      );
+    }
+
+    try {
+      await repository.deleteLedger(uuid);
+    } catch (_) {
+      if (previousLedgers != null) {
+        state = AsyncValue.data(previousLedgers);
+      }
+      rethrow;
+    }
+  }
+
+  List<Ledger> _upsertLedger(List<Ledger> ledgers, Ledger ledger) {
+    final items = List<Ledger>.from(ledgers);
+    final index = items.indexWhere((item) => item.uuid == ledger.uuid);
+    if (index == -1) {
+      items.add(ledger);
+    } else {
+      items[index] = ledger;
+    }
+    items.sort((left, right) => right.sortOrder.compareTo(left.sortOrder));
+    return items;
+  }
+
+  int _nextSortOrder(List<Ledger> ledgers) {
+    var maxSortOrder = -1;
+    for (final ledger in ledgers) {
+      if (ledger.sortOrder > maxSortOrder) {
+        maxSortOrder = ledger.sortOrder;
+      }
+    }
+    return maxSortOrder + 1;
   }
 }

@@ -19,7 +19,7 @@ void main() {
       final people = await database.getAllPeople();
 
       expect(people, hasLength(1));
-      expect(people.single.uuid, 'p1');
+      expect(people.single.uuid, 'self');
       expect(people.single.name, '自己');
     });
 
@@ -37,6 +37,7 @@ void main() {
           ..uuid = 'tx-older'
           ..ledgerUuid = 'ledger-1'
           ..type = 0
+          ..payerPersonUuid = 'p1'
           ..amount = 12
           ..currencyCode = 'CNY'
           ..category = '餐饮'
@@ -59,6 +60,7 @@ void main() {
       final transactions = await database.getTransactionsForLedger('ledger-1');
 
       expect(ledgers.single.name, '家庭账本');
+      expect(transactions.last.payerPersonUuid, 'p1');
       expect(transactions.map((transaction) => transaction.uuid), [
         'tx-newer',
         'tx-older',
@@ -96,6 +98,30 @@ void main() {
         ),
         hasLength(1),
       );
+    });
+
+    test('returns ledgers with the newest sort order first', () async {
+      await database.saveLedger(
+        Ledger()
+          ..uuid = 'ledger-older'
+          ..name = '旧账本'
+          ..baseCurrencyCode = 'CNY'
+          ..sortOrder = 0,
+      );
+      await database.saveLedger(
+        Ledger()
+          ..uuid = 'ledger-newer'
+          ..name = '新账本'
+          ..baseCurrencyCode = 'CNY'
+          ..sortOrder = 1,
+      );
+
+      final ledgers = await database.getAllLedgers();
+
+      expect(ledgers.map((ledger) => ledger.uuid), [
+        'ledger-newer',
+        'ledger-older',
+      ]);
     });
   });
 }
