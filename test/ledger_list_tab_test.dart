@@ -136,6 +136,51 @@ void main() {
     expect(find.text('已同步'), findsOneWidget);
   });
 
+  testWidgets('ledger card shows expense before income', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final database = DatabaseService();
+    final ledger = Ledger()
+      ..uuid = 'stats-ledger'
+      ..name = '旅行账本'
+      ..baseCurrencyCode = 'CNY';
+    await database.saveLedger(ledger);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          authTokenProvider.overrideWith((ref) async => null),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: LedgerListTab(
+              ledgers: [ledger],
+              ledgerStats: const {
+                'stats-ledger': {'expense': 45, 'income': 88, 'balance': 43},
+              },
+              onTap: (_) {},
+              onEdit: (_) {},
+              onShare: (_) async {},
+              onDelete: (_) async {},
+              onCreate: () {},
+              onSync: (_) async {},
+              autoSyncEnabled: false,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(
+      tester.getTopLeft(find.text('支出')).dx,
+      lessThan(tester.getTopLeft(find.text('收入')).dx),
+    );
+  });
+
   testWidgets('viewer ledger hides management actions', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final database = DatabaseService();

@@ -19,9 +19,14 @@ import '../providers/transaction_provider.dart';
 import 'transaction_form_components.dart';
 
 class BookkeepingTab extends ConsumerStatefulWidget {
-  const BookkeepingTab({super.key, required this.ledgers});
+  const BookkeepingTab({
+    super.key,
+    required this.ledgers,
+    this.isActive = true,
+  });
 
   final List<Ledger> ledgers;
+  final bool isActive;
 
   @override
   ConsumerState<BookkeepingTab> createState() => _BookkeepingTabState();
@@ -50,11 +55,19 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
   void initState() {
     super.initState();
     _initDefaults();
+    _focusAmountAfterFrame();
   }
 
   @override
   void didUpdateWidget(covariant BookkeepingTab oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.isActive != oldWidget.isActive) {
+      if (widget.isActive) {
+        _focusAmountAfterFrame();
+      } else {
+        _amountFocusNode.unfocus();
+      }
+    }
     if (widget.ledgers == oldWidget.ledgers || _selectedLedgerUuid == null) {
       return;
     }
@@ -74,6 +87,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
       _sanitizeCurrentSelection(currentLedger);
     });
     _persistDraft();
+    _focusAmountAfterFrame();
   }
 
   Ledger? get _selectedLedger {
@@ -217,6 +231,16 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
         payerPersonUuid: _transactionType == 0 ? _payerPersonUuid : null,
       ),
     );
+  }
+
+  void _focusAmountAfterFrame() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !widget.isActive || _recordableLedgers.isEmpty) {
+        return;
+      }
+
+      _amountFocusNode.requestFocus();
+    });
   }
 
   @override
@@ -422,6 +446,12 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
       child: Builder(
         builder: (context) {
           final colorScheme = Theme.of(context).colorScheme;
+          final keyboardBottom = MediaQuery.viewInsetsOf(context).bottom;
+          final navigationReserve =
+              Theme.of(context).navigationBarTheme.height ?? 70;
+          final keyboardLift = keyboardBottom > navigationReserve
+              ? keyboardBottom - navigationReserve
+              : 0.0;
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -474,6 +504,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                           },
                           amountController: _amountController,
                           amountFocusNode: _amountFocusNode,
+                          autofocus: widget.isActive,
                           selectedCurrency: _selectedCurrency ?? 'CNY',
                           currencies: currencyOptions,
                           onCurrencyChanged: (currency) {
@@ -713,41 +744,48 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                   ),
                 ),
               ),
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: colorScheme.surface.withValues(alpha: 0.96),
-                  border: Border(
-                    top: BorderSide(
-                      color: colorScheme.outlineVariant.withValues(alpha: 0.7),
+              AnimatedPadding(
+                duration: AppMotion.fast,
+                curve: AppMotion.standard,
+                padding: EdgeInsets.only(bottom: keyboardLift),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: colorScheme.surface.withValues(alpha: 0.96),
+                    border: Border(
+                      top: BorderSide(
+                        color: colorScheme.outlineVariant.withValues(
+                          alpha: 0.7,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-                child: SafeArea(
-                  top: false,
-                  minimum: EdgeInsets.only(
-                    left: 16,
-                    right: 16,
-                    top: 12,
-                    bottom: 12,
-                  ),
-                  child: AppAnimatedSwitcher(
-                    child: peopleAsyncValue.maybeWhen(
-                      data: (peoplePool) => TransactionSaveButton(
-                        key: const ValueKey('save-enabled'),
-                        onPressed:
-                            _selectedLedgerUuid == null || _savingTransaction
-                            ? null
-                            : () => _saveTransaction(peoplePool),
-                        loading: _savingTransaction,
-                        readyLabel: '保存记账',
-                        loadingLabel: '保存中',
-                      ),
-                      orElse: () => const TransactionSaveButton(
-                        key: ValueKey('save-loading'),
-                        onPressed: null,
-                        loading: true,
-                        readyLabel: '保存记账',
-                        loadingLabel: '准备中',
+                  child: SafeArea(
+                    top: false,
+                    minimum: EdgeInsets.only(
+                      left: 16,
+                      right: 16,
+                      top: 12,
+                      bottom: 12,
+                    ),
+                    child: AppAnimatedSwitcher(
+                      child: peopleAsyncValue.maybeWhen(
+                        data: (peoplePool) => TransactionSaveButton(
+                          key: const ValueKey('save-enabled'),
+                          onPressed:
+                              _selectedLedgerUuid == null || _savingTransaction
+                              ? null
+                              : () => _saveTransaction(peoplePool),
+                          loading: _savingTransaction,
+                          readyLabel: '保存记账',
+                          loadingLabel: '保存中',
+                        ),
+                        orElse: () => const TransactionSaveButton(
+                          key: ValueKey('save-loading'),
+                          onPressed: null,
+                          loading: true,
+                          readyLabel: '保存记账',
+                          loadingLabel: '准备中',
+                        ),
                       ),
                     ),
                   ),
@@ -864,6 +902,7 @@ class _BookkeepingAmountPanel extends StatelessWidget {
     required this.onTypeChanged,
     required this.amountController,
     required this.amountFocusNode,
+    required this.autofocus,
     required this.selectedCurrency,
     required this.currencies,
     required this.onCurrencyChanged,
@@ -874,6 +913,7 @@ class _BookkeepingAmountPanel extends StatelessWidget {
   final ValueChanged<int> onTypeChanged;
   final TextEditingController amountController;
   final FocusNode amountFocusNode;
+  final bool autofocus;
   final String selectedCurrency;
   final List<String> currencies;
   final ValueChanged<String> onCurrencyChanged;
@@ -917,7 +957,7 @@ class _BookkeepingAmountPanel extends StatelessWidget {
                   key: const ValueKey('bookkeeping-amount-input'),
                   controller: amountController,
                   focusNode: amountFocusNode,
-                  autofocus: true,
+                  autofocus: autofocus,
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),

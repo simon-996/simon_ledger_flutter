@@ -29,7 +29,11 @@ void main() {
           authTokenProvider.overrideWith((ref) async => null),
         ],
         child: MaterialApp(
-          home: Scaffold(body: BookkeepingTab(ledgers: [ledger])),
+          home: Scaffold(
+            resizeToAvoidBottomInset: false,
+            body: BookkeepingTab(ledgers: [ledger]),
+            bottomNavigationBar: const SizedBox(height: 70),
+          ),
         ),
       ),
     );

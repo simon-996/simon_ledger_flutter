@@ -3,13 +3,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:simon_ledger_flutter/core/theme/app_theme.dart';
 
 void main() {
-  test('AppTheme uses the Apple blue visual baseline', () {
+  test('AppTheme uses a calm semantic color baseline', () {
     final theme = AppTheme.lightTheme;
     final scheme = theme.colorScheme;
 
-    expect(AppTheme.primaryColor, const Color(0xFF007AFF));
+    expect(AppTheme.primaryColor, const Color(0xFF3F78A3));
     expect(AppTheme.incomeColor, const Color(0xFF3F7F63));
-    expect(AppTheme.expenseColor, const Color(0xFFA85F54));
+    expect(AppTheme.expenseColor, const Color(0xFF9F6258));
     expect(AppTheme.surfaceColor, const Color(0xFFF5F5F7));
     expect(AppTheme.radiusLarge, 24);
     expect(theme.scaffoldBackgroundColor, AppTheme.surfaceColor);

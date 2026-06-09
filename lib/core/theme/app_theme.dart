@@ -2,14 +2,14 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  static const Color primaryColor = Color(0xFF007AFF);
+  static const Color primaryColor = Color(0xFF3F78A3);
   static const Color secondaryColor = Color(0xFF6E7380);
   static const Color tertiaryColor = Color(0xFFFF9F0A);
   static const Color errorColor = Color(0xFFFF3B30);
   static const Color successColor = Color(0xFF34C759);
   static const Color infoColor = Color(0xFF64D2FF);
   static const Color incomeColor = Color(0xFF3F7F63);
-  static const Color expenseColor = Color(0xFFA85F54);
+  static const Color expenseColor = Color(0xFF9F6258);
 
   static const Color surfaceColor = Color(0xFFF5F5F7);
   static const Color surfaceContainerColor = Color(0xFFFFFFFF);
@@ -57,8 +57,8 @@ class AppTheme {
     final colorScheme = base.colorScheme.copyWith(
       primary: primaryColor,
       onPrimary: Colors.white,
-      primaryContainer: const Color(0xFFE8F2FF),
-      onPrimaryContainer: const Color(0xFF053A70),
+      primaryContainer: const Color(0xFFE8F1F7),
+      onPrimaryContainer: const Color(0xFF173A52),
       secondary: secondaryColor,
       tertiary: tertiaryColor,
       error: errorColor,

@@ -36,4 +36,42 @@ void main() {
       expect(find.byType(AppBar), findsNothing);
     }
   });
+
+  testWidgets(
+    'switching from account to non-bookkeeping tabs keeps keyboard hidden',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final database = DatabaseService();
+      await database.saveLedger(
+        Ledger()
+          ..uuid = 'ledger-keyboard'
+          ..name = '旅行账本'
+          ..baseCurrencyCode = 'CNY',
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            databaseProvider.overrideWithValue(database),
+            authTokenProvider.overrideWith((ref) async => null),
+          ],
+          child: const MaterialApp(home: HomePage(initialIndex: 3)),
+        ),
+      );
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      expect(tester.testTextInput.isVisible, isFalse);
+
+      await tester.tap(find.text('账本'));
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('bookkeeping-amount-input')),
+        findsOneWidget,
+      );
+      expect(tester.testTextInput.isVisible, isFalse);
+    },
+  );
 }
