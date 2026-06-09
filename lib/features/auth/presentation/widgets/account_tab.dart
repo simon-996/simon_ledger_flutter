@@ -1037,7 +1037,7 @@ class _ProfileDialog extends StatefulWidget {
 }
 
 class _ProfileDialogState extends State<_ProfileDialog> {
-  static const int _avatarOptionsPerPage = 8;
+  static const int _avatarOptionsPerPage = 10;
 
   late final TextEditingController _nicknameController;
   late final PageController _avatarPageController;
@@ -1068,10 +1068,12 @@ class _ProfileDialogState extends State<_ProfileDialog> {
     final avatarPages = _avatarPages();
 
     return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       title: const Text('编辑资料', textAlign: TextAlign.center),
-      contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+      contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
       content: SizedBox(
-        width: 360,
+        key: const ValueKey('profile-dialog-content'),
+        width: 420,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1115,15 +1117,17 @@ class _ProfileDialogState extends State<_ProfileDialog> {
               ),
             ),
             if (avatarPages.length > 1) ...[
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               _ProfileAvatarPageIndicator(
                 pageCount: avatarPages.length,
                 currentPage: _avatarPageIndex,
               ),
+              const SizedBox(height: 6),
             ],
           ],
         ),
       ),
+      actionsPadding: const EdgeInsets.fromLTRB(24, 4, 24, 20),
       actions: [
         Row(
           children: [

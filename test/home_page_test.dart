@@ -74,4 +74,21 @@ void main() {
       expect(tester.testTextInput.isVisible, isFalse);
     },
   );
+
+  testWidgets('account keyboard hides bottom navigation', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    tester.view.viewInsets = const FakeViewPadding(bottom: 320);
+    addTearDown(tester.view.resetViewInsets);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [authTokenProvider.overrideWith((ref) async => null)],
+        child: const MaterialApp(home: HomePage(initialIndex: 3)),
+      ),
+    );
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('home-navigation-bar')), findsNothing);
+  });
 }

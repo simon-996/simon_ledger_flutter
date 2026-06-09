@@ -346,7 +346,23 @@ void main() {
       findsOneWidget,
     );
     expect(
+      find.byKey(const ValueKey('profile-dialog-content')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<SizedBox>(
+            find.byKey(const ValueKey('profile-dialog-content')),
+          )
+          .width,
+      greaterThanOrEqualTo(400),
+    );
+    expect(
       find.byKey(const ValueKey('profile-avatar-option-face')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('profile-avatar-option-avatar_01')),
       findsOneWidget,
     );
 
