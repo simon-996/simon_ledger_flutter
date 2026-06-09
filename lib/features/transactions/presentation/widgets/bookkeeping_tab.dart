@@ -39,6 +39,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
 
   final _amountController = TextEditingController();
   final _noteController = TextEditingController();
+  final _amountFocusNode = FocusNode();
 
   List<String> _expenseCategories =
       TransactionCategoryPreference.defaultExpenseCategories;
@@ -220,6 +221,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
 
   @override
   void dispose() {
+    _amountFocusNode.dispose();
     _amountController.dispose();
     _noteController.dispose();
     super.dispose();
@@ -471,6 +473,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                             });
                           },
                           amountController: _amountController,
+                          amountFocusNode: _amountFocusNode,
                           selectedCurrency: _selectedCurrency ?? 'CNY',
                           currencies: currencyOptions,
                           onCurrencyChanged: (currency) {
@@ -725,7 +728,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                     left: 16,
                     right: 16,
                     top: 12,
-                    bottom: 12 + MediaQuery.of(context).viewInsets.bottom,
+                    bottom: 12,
                   ),
                   child: AppAnimatedSwitcher(
                     child: peopleAsyncValue.maybeWhen(
@@ -860,6 +863,7 @@ class _BookkeepingAmountPanel extends StatelessWidget {
     required this.selectedType,
     required this.onTypeChanged,
     required this.amountController,
+    required this.amountFocusNode,
     required this.selectedCurrency,
     required this.currencies,
     required this.onCurrencyChanged,
@@ -869,6 +873,7 @@ class _BookkeepingAmountPanel extends StatelessWidget {
   final int selectedType;
   final ValueChanged<int> onTypeChanged;
   final TextEditingController amountController;
+  final FocusNode amountFocusNode;
   final String selectedCurrency;
   final List<String> currencies;
   final ValueChanged<String> onCurrencyChanged;
@@ -909,7 +914,10 @@ class _BookkeepingAmountPanel extends StatelessWidget {
               first: SizedBox(
                 height: 58,
                 child: TextField(
+                  key: const ValueKey('bookkeeping-amount-input'),
                   controller: amountController,
+                  focusNode: amountFocusNode,
+                  autofocus: true,
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),

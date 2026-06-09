@@ -47,11 +47,14 @@ class _HomePageState extends ConsumerState<HomePage> {
     final ledgersAsyncValue = ref.watch(ledgerNotifierProvider);
     final ledgerStatsAsyncValue = ref.watch(ledgerStatsProvider);
     final isAccountTab = _currentIndex == 3;
+    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
     final showLedgerFab =
-        _currentIndex == 1 && ledgersAsyncValue.valueOrNull?.isNotEmpty == true;
+        _currentIndex == 1 &&
+        !keyboardVisible &&
+        ledgersAsyncValue.valueOrNull?.isNotEmpty == true;
 
     return Scaffold(
-      resizeToAvoidBottomInset: false,
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
         top: true,
         child: isAccountTab
@@ -136,35 +139,43 @@ class _HomePageState extends ConsumerState<HomePage> {
               )
             : const SizedBox.shrink(key: ValueKey('empty-fab')),
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.edit_note_outlined),
-            selectedIcon: Icon(Icons.edit_note),
-            label: '记账',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.book_outlined),
-            selectedIcon: Icon(Icons.book),
-            label: '账本',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.bar_chart_outlined),
-            selectedIcon: Icon(Icons.bar_chart),
-            label: '统计',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.account_circle_outlined),
-            selectedIcon: Icon(Icons.account_circle),
-            label: '我的',
-          ),
-        ],
+      bottomNavigationBar: AnimatedSwitcher(
+        duration: AppMotion.fast,
+        switchInCurve: AppMotion.standard,
+        switchOutCurve: AppMotion.standard,
+        child: keyboardVisible
+            ? const SizedBox.shrink(key: ValueKey('keyboard-hidden-nav'))
+            : NavigationBar(
+                key: const ValueKey('home-navigation-bar'),
+                selectedIndex: _currentIndex,
+                onDestinationSelected: (index) {
+                  setState(() {
+                    _currentIndex = index;
+                  });
+                },
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(Icons.edit_note_outlined),
+                    selectedIcon: Icon(Icons.edit_note),
+                    label: '记账',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.book_outlined),
+                    selectedIcon: Icon(Icons.book),
+                    label: '账本',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.bar_chart_outlined),
+                    selectedIcon: Icon(Icons.bar_chart),
+                    label: '统计',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.account_circle_outlined),
+                    selectedIcon: Icon(Icons.account_circle),
+                    label: '我的',
+                  ),
+                ],
+              ),
       ),
     );
   }

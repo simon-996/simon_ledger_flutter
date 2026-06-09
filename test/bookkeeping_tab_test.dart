@@ -134,6 +134,50 @@ void main() {
     expect(decoration.boxShadow, isNotEmpty);
   });
 
+  testWidgets(
+    'bookkeeping amount input autofocuses with a tight keyboard bar',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+      addTearDown(() {
+        tester.view.resetViewInsets();
+        tester.binding.setSurfaceSize(null);
+      });
+
+      final database = DatabaseService();
+      final ledger = await _saveLedgerFixture(database);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            databaseProvider.overrideWithValue(database),
+            authTokenProvider.overrideWith((ref) async => null),
+          ],
+          child: MaterialApp(
+            home: Scaffold(body: BookkeepingTab(ledgers: [ledger])),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final amountInput = find.byKey(
+        const ValueKey('bookkeeping-amount-input'),
+      );
+      expect(amountInput, findsOneWidget);
+      expect(tester.widget<TextField>(amountInput).autofocus, isTrue);
+      expect(tester.testTextInput.isVisible, isTrue);
+
+      final keyboardTop =
+          tester.view.physicalSize.height / tester.view.devicePixelRatio -
+          tester.view.viewInsets.bottom / tester.view.devicePixelRatio;
+      final saveButtonBottom = tester
+          .getBottomLeft(find.byKey(const ValueKey('save-enabled')))
+          .dy;
+      expect(keyboardTop - saveButtonBottom, lessThanOrEqualTo(24));
+    },
+  );
+
   testWidgets('viewer ledgers are hidden from bookkeeping flow', (
     tester,
   ) async {
