@@ -339,6 +339,15 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('选择头像'), findsOneWidget);
+    expect(tester.widget<Text>(find.text('编辑资料')).textAlign, TextAlign.center);
+    expect(tester.widget<Text>(find.text('选择头像')).textAlign, TextAlign.center);
+    final avatarWrap = tester.widget<Wrap>(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(Wrap),
+      ),
+    );
+    expect(avatarWrap.alignment, WrapAlignment.center);
     expect(find.widgetWithText(FilledButton, '保存'), findsOneWidget);
   });
 

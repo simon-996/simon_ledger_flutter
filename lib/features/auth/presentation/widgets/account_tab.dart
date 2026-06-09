@@ -1061,7 +1061,7 @@ class _ProfileDialogState extends State<_ProfileDialog> {
     final avatar = AvatarConfig.avatarForKey(_avatarIcon);
 
     return AlertDialog(
-      title: const Text('编辑资料'),
+      title: const Text('编辑资料', textAlign: TextAlign.center),
       contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
       content: SingleChildScrollView(
         child: Column(
@@ -1095,6 +1095,7 @@ class _ProfileDialogState extends State<_ProfileDialog> {
             const SizedBox(height: 18),
             Text(
               '选择头像',
+              textAlign: TextAlign.center,
               style: Theme.of(
                 context,
               ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
@@ -1103,6 +1104,8 @@ class _ProfileDialogState extends State<_ProfileDialog> {
             Wrap(
               spacing: 8,
               runSpacing: 8,
+              alignment: WrapAlignment.center,
+              runAlignment: WrapAlignment.center,
               children: AvatarConfig.options.map((option) {
                 return ChoiceChip(
                   label: Text(
