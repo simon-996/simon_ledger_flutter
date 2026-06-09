@@ -22,8 +22,8 @@ final currentUserProvider = FutureProvider<AuthUser?>((ref) async {
     }
     ref.invalidate(localProfileProvider);
     ref.invalidate(cachedPeopleProvider);
-    ref.invalidate(personNotifierProvider);
-    ref.invalidate(ledgerNotifierProvider);
+    ref.invalidate(personProvider);
+    ref.invalidate(ledgerProvider);
     return user;
   } on ApiException catch (error) {
     if (error.code == 401001 || error.statusCode == 401) {

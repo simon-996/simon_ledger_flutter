@@ -55,7 +55,7 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
 
   @override
   Widget build(BuildContext context) {
-    final token = ref.watch(authTokenProvider).valueOrNull;
+    final token = ref.watch(authTokenProvider).value;
     final isCloudMode = token != null && token.isValid;
     final peopleById = ref
         .watch(cachedPeopleProvider)
@@ -149,9 +149,7 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
       itemCount: visibleLedgers.length,
       onReorderItem: (oldIndex, newIndex) {
         if (searching) return;
-        ref
-            .read(ledgerNotifierProvider.notifier)
-            .reorderLedgers(oldIndex, newIndex);
+        ref.read(ledgerProvider.notifier).reorderLedgers(oldIndex, newIndex);
       },
       proxyDecorator: (child, index, animation) {
         return AnimatedBuilder(
@@ -264,10 +262,10 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
       if (changed && mounted) {
         for (final ledger in widget.ledgers) {
           ref.invalidate(ledgerSyncStatusProvider(ledger.uuid));
-          ref.invalidate(transactionNotifierProvider(ledger.uuid));
+          ref.invalidate(transactionProvider(ledger.uuid));
         }
-        ref.invalidate(ledgerNotifierProvider);
-        ref.invalidate(personNotifierProvider);
+        ref.invalidate(ledgerProvider);
+        ref.invalidate(personProvider);
         ref.invalidate(ledgerStatsProvider);
         ref.invalidate(syncOverviewProvider);
       }
@@ -691,7 +689,7 @@ class _LedgerCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final hasRate = ledger.exchangeRateToCNY != 1.0;
-    final syncStatusValue = syncStatus.valueOrNull;
+    final syncStatusValue = syncStatus.value;
     final hasPendingSync = syncStatusValue?.hasPending == true;
     final isBusy = operation != null;
     final isSyncing = operation == _LedgerCardOperation.sync;

@@ -6,25 +6,59 @@ part of 'ledger_stats_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$ledgerStatsHash() => r'c68b1193b829583c80fea9f3c59452528ddd3480';
+// GENERATED CODE - DO NOT MODIFY BY HAND
+// ignore_for_file: type=lint, type=warning
 
-/// See also [LedgerStats].
 @ProviderFor(LedgerStats)
-final ledgerStatsProvider =
-    AutoDisposeAsyncNotifierProvider<
-      LedgerStats,
-      Map<String, Map<String, double>>
-    >.internal(
-      LedgerStats.new,
-      name: r'ledgerStatsProvider',
-      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
-          ? null
-          : _$ledgerStatsHash,
-      dependencies: null,
-      allTransitiveDependencies: null,
-    );
+final ledgerStatsProvider = LedgerStatsProvider._();
 
-typedef _$LedgerStats =
-    AutoDisposeAsyncNotifier<Map<String, Map<String, double>>>;
-// ignore_for_file: type=lint
-// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member
+final class LedgerStatsProvider
+    extends
+        $AsyncNotifierProvider<LedgerStats, Map<String, Map<String, double>>> {
+  LedgerStatsProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'ledgerStatsProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$ledgerStatsHash();
+
+  @$internal
+  @override
+  LedgerStats create() => LedgerStats();
+}
+
+String _$ledgerStatsHash() => r'ae43f9ec2796df55c4e41d71f88d351f09677610';
+
+abstract class _$LedgerStats
+    extends $AsyncNotifier<Map<String, Map<String, double>>> {
+  FutureOr<Map<String, Map<String, double>>> build();
+  @$mustCallSuper
+  @override
+  void runBuild() {
+    final ref =
+        this.ref
+            as $Ref<
+              AsyncValue<Map<String, Map<String, double>>>,
+              Map<String, Map<String, double>>
+            >;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<
+                AsyncValue<Map<String, Map<String, double>>>,
+                Map<String, Map<String, double>>
+              >,
+              AsyncValue<Map<String, Map<String, double>>>,
+              Object?,
+              Object?
+            >;
+    element.handleCreate(ref, build);
+  }
+}

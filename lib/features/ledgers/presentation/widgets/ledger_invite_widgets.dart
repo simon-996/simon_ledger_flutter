@@ -579,7 +579,7 @@ class _LedgerInviteJoinPageState extends ConsumerState<LedgerInviteJoinPage> {
   }
 
   Widget _buildBottomAction(LedgerInvite invite) {
-    final token = ref.watch(authTokenProvider).valueOrNull;
+    final token = ref.watch(authTokenProvider).value;
     final isSignedIn = token != null && token.isValid;
     return SafeArea(
       child: Padding(
@@ -649,7 +649,7 @@ class _LedgerInviteJoinPageState extends ConsumerState<LedgerInviteJoinPage> {
     try {
       await (widget.onJoin?.call() ??
           ref.read(inviteRepositoryProvider).join(widget.code));
-      ref.invalidate(ledgerNotifierProvider);
+      ref.invalidate(ledgerProvider);
       ref.invalidate(ledgerStatsProvider);
       ref.invalidate(syncOverviewProvider);
       if (!mounted) return;

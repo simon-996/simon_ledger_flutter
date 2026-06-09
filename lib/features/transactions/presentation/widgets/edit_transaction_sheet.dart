@@ -168,7 +168,7 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
     setState(() => _saving = true);
     try {
       await ref
-          .read(transactionNotifierProvider(widget.ledger.uuid).notifier)
+          .read(transactionProvider(widget.ledger.uuid).notifier)
           .updateTransaction(widget.transaction);
       await _rememberCategory(_transactionType, _selectedCategory);
     } catch (e) {
@@ -223,10 +223,7 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
       _selectedCurrency = currencyOptions.last;
     }
     final peopleAsyncValue = ref.watch(
-      personNotifierProvider(
-        includeDeleted: true,
-        ledgerUuid: widget.ledger.uuid,
-      ),
+      personProvider(includeDeleted: true, ledgerUuid: widget.ledger.uuid),
     );
 
     return AnimatedPadding(

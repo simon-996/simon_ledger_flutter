@@ -111,7 +111,7 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
       try {
         await ref
             .read(
-              personNotifierProvider(
+              personProvider(
                 includeDeleted: false,
                 ledgerUuid: ledgerUuid,
               ).notifier,
@@ -156,7 +156,7 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
       try {
         await ref
             .read(
-              personNotifierProvider(
+              personProvider(
                 includeDeleted: false,
                 ledgerUuid: ledgerUuid,
               ).notifier,
@@ -202,7 +202,7 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
       try {
         await ref
             .read(
-              personNotifierProvider(
+              personProvider(
                 includeDeleted: false,
                 ledgerUuid: _personLedgerUuid,
               ).notifier,
@@ -220,7 +220,7 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
   String? get _personLedgerUuid => widget.existingLedger?.uuid;
 
   bool get _isDraftPeopleMode {
-    final token = ref.read(authTokenProvider).valueOrNull;
+    final token = ref.read(authTokenProvider).value;
     return widget.existingLedger == null && token != null && token.isValid;
   }
 
@@ -295,25 +295,22 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
       viewportHeight: viewportHeight,
       bottomInset: bottomInset,
     );
-    final token = ref.watch(authTokenProvider).valueOrNull;
+    final token = ref.watch(authTokenProvider).value;
     final isCloudMode = token != null && token.isValid;
     final personLedgerUuid = isCloudMode ? widget.existingLedger?.uuid : null;
     final isDraftPeopleMode = isCloudMode && widget.existingLedger == null;
     final canManagePeople =
         !isCloudMode || personLedgerUuid != null || isDraftPeopleMode;
     final localProfileAsync = ref.watch(localProfileProvider);
-    final localProfile = localProfileAsync.valueOrNull;
-    final currentUser = ref.watch(currentUserProvider).valueOrNull;
+    final localProfile = localProfileAsync.value;
+    final currentUser = ref.watch(currentUserProvider).value;
     final effectiveSelectedPersonIds = _effectiveSelectedPersonIds(
       isDraftPeopleMode,
     );
     final selectedPeopleCount = effectiveSelectedPersonIds.length;
     final peopleAsyncValue = canManagePeople && !isDraftPeopleMode
         ? ref.watch(
-            personNotifierProvider(
-              includeDeleted: false,
-              ledgerUuid: personLedgerUuid,
-            ),
+            personProvider(includeDeleted: false, ledgerUuid: personLedgerUuid),
           )
         : null;
 

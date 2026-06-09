@@ -44,7 +44,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   @override
   Widget build(BuildContext context) {
     // 监听 Provider
-    final ledgersAsyncValue = ref.watch(ledgerNotifierProvider);
+    final ledgersAsyncValue = ref.watch(ledgerProvider);
     final ledgerStatsAsyncValue = ref.watch(ledgerStatsProvider);
     final isAccountTab = _currentIndex == 3;
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
@@ -52,7 +52,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     final showLedgerFab =
         _currentIndex == 1 &&
         !hideNavigationForKeyboard &&
-        ledgersAsyncValue.valueOrNull?.isNotEmpty == true;
+        ledgersAsyncValue.value?.isNotEmpty == true;
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
@@ -243,16 +243,16 @@ class _HomePageState extends ConsumerState<HomePage> {
       final isCloudMode = token != null && token.isValid;
       if (isCloudMode) {
         await ref
-            .read(ledgerNotifierProvider.notifier)
+            .read(ledgerProvider.notifier)
             .addLedgerWithPeople(newLedger, result.people);
       } else {
         final personRepository = ref.read(personRepositoryProvider);
         for (final person in result.people) {
           await personRepository.savePerson(person);
         }
-        await ref.read(ledgerNotifierProvider.notifier).addLedger(newLedger);
+        await ref.read(ledgerProvider.notifier).addLedger(newLedger);
       }
-      ref.invalidate(personNotifierProvider);
+      ref.invalidate(personProvider);
       ref.invalidate(cachedPeopleProvider);
       if (!isCloudMode && result.includeSelf) {
         await _addSelfToLedgerWithRetry(newLedger);
@@ -284,13 +284,13 @@ class _HomePageState extends ConsumerState<HomePage> {
     ledger.personUuids = result.personIds;
 
     try {
-      await ref.read(ledgerNotifierProvider.notifier).updateLedger(ledger);
+      await ref.read(ledgerProvider.notifier).updateLedger(ledger);
       final personRepository = ref.read(personRepositoryProvider);
       for (final person in result.people) {
         await personRepository.savePerson(person, ledgerUuid: ledger.uuid);
       }
       if (result.people.isNotEmpty) {
-        ref.invalidate(personNotifierProvider);
+        ref.invalidate(personProvider);
         ref.invalidate(cachedPeopleProvider);
       }
       await _syncRemoteLedgerPeopleSelection(
@@ -335,13 +335,13 @@ class _HomePageState extends ConsumerState<HomePage> {
     for (final personUuid in removedPersonUuids) {
       await personRepository.deletePerson(personUuid, ledgerUuid: ledgerUuid);
     }
-    ref.invalidate(personNotifierProvider);
+    ref.invalidate(personProvider);
     ref.invalidate(cachedPeopleProvider);
-    ref.invalidate(ledgerNotifierProvider);
+    ref.invalidate(ledgerProvider);
   }
 
   Future<void> _deleteLedger(Ledger ledger) async {
-    await ref.read(ledgerNotifierProvider.notifier).deleteLedger(ledger.uuid);
+    await ref.read(ledgerProvider.notifier).deleteLedger(ledger.uuid);
     await LastSelectedLedgerPreference.clearIfMatches(ledger.uuid);
     ref.invalidate(ledgerStatsProvider);
     ref.invalidate(syncOverviewProvider);
@@ -358,11 +358,11 @@ class _HomePageState extends ConsumerState<HomePage> {
       final result = await ref
           .read(syncCoordinatorProvider)
           .syncLedger(ledger.uuid, force: true);
-      ref.invalidate(ledgerNotifierProvider);
-      ref.invalidate(personNotifierProvider);
+      ref.invalidate(ledgerProvider);
+      ref.invalidate(personProvider);
       ref.invalidate(cachedPeopleProvider);
       ref.invalidate(ledgerSyncStatusProvider(ledger.uuid));
-      ref.invalidate(transactionNotifierProvider(ledger.uuid));
+      ref.invalidate(transactionProvider(ledger.uuid));
       ref.invalidate(ledgerStatsProvider);
       ref.invalidate(syncOverviewProvider);
       if (!mounted) return;
@@ -435,7 +435,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       ..avatar = profile.personAvatar
       ..linkedUserUuid = user?.uuid;
     await personRepository.savePerson(person, ledgerUuid: ledgerScope);
-    ref.invalidate(personNotifierProvider);
+    ref.invalidate(personProvider);
     ref.invalidate(cachedPeopleProvider);
     return person.uuid;
   }
@@ -455,7 +455,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
 
     ledger.personUuids = [...ledger.personUuids, selfPersonUuid];
-    await ref.read(ledgerNotifierProvider.notifier).updateLedger(ledger);
+    await ref.read(ledgerProvider.notifier).updateLedger(ledger);
   }
 
   void _showSelfJoinError(Ledger ledger, Object error) {

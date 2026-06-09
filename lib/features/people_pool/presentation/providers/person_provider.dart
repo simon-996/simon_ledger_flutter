@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../../core/di/providers.dart';
 import '../../../../core/models/person.dart';
@@ -56,7 +57,7 @@ class PersonNotifier extends _$PersonNotifier {
     final repository = ref.read(personRepositoryProvider);
     await repository.savePerson(person, ledgerUuid: ledgerUuid);
     ref.invalidate(cachedPeopleProvider);
-    final current = state.valueOrNull;
+    final current = state.value;
     if (current != null) {
       state = AsyncValue.data(_upsertPerson(current, person));
     }
@@ -67,7 +68,7 @@ class PersonNotifier extends _$PersonNotifier {
     final repository = ref.read(personRepositoryProvider);
     await repository.deletePerson(uuid, ledgerUuid: ledgerUuid);
     ref.invalidate(cachedPeopleProvider);
-    final current = state.valueOrNull;
+    final current = state.value;
     if (current != null) {
       if (includeDeleted) {
         state = AsyncValue.data(

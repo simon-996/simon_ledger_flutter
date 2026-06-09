@@ -189,13 +189,10 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
     final currentLedger = _effectiveLedger()!;
 
     final transactionsAsyncValue = ref.watch(
-      transactionNotifierProvider(currentLedger.uuid),
+      transactionProvider(currentLedger.uuid),
     );
     final peopleAsyncValue = ref.watch(
-      personNotifierProvider(
-        includeDeleted: true,
-        ledgerUuid: currentLedger.uuid,
-      ),
+      personProvider(includeDeleted: true, ledgerUuid: currentLedger.uuid),
     );
 
     return Column(

@@ -342,7 +342,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     setState(() => _savingTransaction = true);
     try {
       final profile = await ref.read(localProfileProvider.future);
-      final currentUser = ref.read(currentUserProvider).valueOrNull;
+      final currentUser = ref.read(currentUserProvider).value;
       final record = TransactionRecord()
         ..uuid = DateTime.now().microsecondsSinceEpoch.toString()
         ..ledgerUuid = ledgerId
@@ -360,7 +360,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
         ..createdAt = DateTime.now();
 
       await ref
-          .read(transactionNotifierProvider(ledgerId).notifier)
+          .read(transactionProvider(ledgerId).notifier)
           .addTransaction(record);
       await _rememberCategory(_transactionType, category);
     } catch (e) {
@@ -428,17 +428,14 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
       _selectedCurrency = currencyOptions.last;
     }
     final peopleAsyncValue = ref.watch(
-      personNotifierProvider(
-        includeDeleted: false,
-        ledgerUuid: selectedLedger?.uuid,
-      ),
+      personProvider(includeDeleted: false, ledgerUuid: selectedLedger?.uuid),
     );
     final ledgerPeopleById = ref
         .watch(cachedPeopleProvider)
         .maybeWhen(data: peopleByUuid, orElse: () => const <String, Person>{});
     final syncStatus = selectedLedger == null
         ? null
-        : ref.watch(ledgerSyncStatusProvider(selectedLedger.uuid)).valueOrNull;
+        : ref.watch(ledgerSyncStatusProvider(selectedLedger.uuid)).value;
     return AnimatedTheme(
       duration: AppMotion.fast,
       curve: AppMotion.standard,

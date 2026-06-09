@@ -37,7 +37,7 @@ class LedgerNotifier extends _$LedgerNotifier {
 
   Future<void> addLedger(Ledger ledger) async {
     final repository = ref.read(ledgerRepositoryProvider);
-    final currentLedgers = state.valueOrNull ?? [];
+    final currentLedgers = state.value ?? [];
     ledger.sortOrder = _nextSortOrder(currentLedgers);
     await repository.saveLedger(ledger);
     state = AsyncValue.data(_upsertLedger(currentLedgers, ledger));
@@ -45,7 +45,7 @@ class LedgerNotifier extends _$LedgerNotifier {
 
   Future<void> addLedgerWithPeople(Ledger ledger, List<Person> people) async {
     final repository = ref.read(ledgerRepositoryProvider);
-    final currentLedgers = state.valueOrNull ?? [];
+    final currentLedgers = state.value ?? [];
     ledger.sortOrder = _nextSortOrder(currentLedgers);
     final created = await repository.createLedgerWithPeople(ledger, people);
     ref.invalidate(cachedPeopleProvider);
@@ -54,13 +54,13 @@ class LedgerNotifier extends _$LedgerNotifier {
 
   Future<void> updateLedger(Ledger ledger) async {
     final repository = ref.read(ledgerRepositoryProvider);
-    final currentLedgers = state.valueOrNull ?? [];
+    final currentLedgers = state.value ?? [];
     await repository.saveLedger(ledger);
     state = AsyncValue.data(_upsertLedger(currentLedgers, ledger));
   }
 
   Future<void> reorderLedgers(int oldIndex, int newIndex) async {
-    final currentLedgers = state.valueOrNull;
+    final currentLedgers = state.value;
     if (currentLedgers == null) return;
 
     final items = List<Ledger>.from(currentLedgers);
@@ -85,7 +85,7 @@ class LedgerNotifier extends _$LedgerNotifier {
 
   Future<void> deleteLedger(String uuid) async {
     final repository = ref.read(ledgerRepositoryProvider);
-    final previousLedgers = state.valueOrNull;
+    final previousLedgers = state.value;
     if (previousLedgers != null) {
       state = AsyncValue.data(
         previousLedgers.where((ledger) => ledger.uuid != uuid).toList(),

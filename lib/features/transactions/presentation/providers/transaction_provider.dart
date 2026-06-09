@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../../core/di/providers.dart';
 import '../../../../core/models/transaction_record.dart';
@@ -105,7 +106,7 @@ class TransactionNotifier extends _$TransactionNotifier {
     final repository = ref.read(transactionRepositoryProvider);
     await repository.saveTransaction(transaction);
 
-    final current = state.valueOrNull;
+    final current = state.value;
     if (current != null) {
       state = AsyncValue.data([transaction, ...current]);
     }
@@ -118,7 +119,7 @@ class TransactionNotifier extends _$TransactionNotifier {
   Future<void> updateTransaction(TransactionRecord transaction) async {
     final repository = ref.read(transactionRepositoryProvider);
     await repository.saveTransaction(transaction);
-    final current = state.valueOrNull;
+    final current = state.value;
     if (current != null) {
       state = AsyncValue.data(_upsertTransaction(current, transaction));
     }
@@ -130,7 +131,7 @@ class TransactionNotifier extends _$TransactionNotifier {
   Future<void> deleteTransaction(String uuid) async {
     final repository = ref.read(transactionRepositoryProvider);
     await repository.deleteTransaction(ledgerUuid, uuid);
-    final current = state.valueOrNull;
+    final current = state.value;
     if (current != null) {
       state = AsyncValue.data(
         current.where((transaction) => transaction.uuid != uuid).toList(),

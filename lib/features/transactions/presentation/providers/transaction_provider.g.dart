@@ -6,173 +6,105 @@ part of 'transaction_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$transactionNotifierHash() =>
-    r'560ae912f8b53bbde4714239cd2c7b62c82a89c9';
+// GENERATED CODE - DO NOT MODIFY BY HAND
+// ignore_for_file: type=lint, type=warning
 
-/// Copied from Dart SDK
-class _SystemHash {
-  _SystemHash._();
-
-  static int combine(int hash, int value) {
-    // ignore: parameter_assignments
-    hash = 0x1fffffff & (hash + value);
-    // ignore: parameter_assignments
-    hash = 0x1fffffff & (hash + ((0x0007ffff & hash) << 10));
-    return hash ^ (hash >> 6);
-  }
-
-  static int finish(int hash) {
-    // ignore: parameter_assignments
-    hash = 0x1fffffff & (hash + ((0x03ffffff & hash) << 3));
-    // ignore: parameter_assignments
-    hash = hash ^ (hash >> 11);
-    return 0x1fffffff & (hash + ((0x00003fff & hash) << 15));
-  }
-}
-
-abstract class _$TransactionNotifier
-    extends BuildlessAutoDisposeAsyncNotifier<List<TransactionRecord>> {
-  late final String ledgerUuid;
-
-  FutureOr<List<TransactionRecord>> build(String ledgerUuid);
-}
-
-/// See also [TransactionNotifier].
 @ProviderFor(TransactionNotifier)
-const transactionNotifierProvider = TransactionNotifierFamily();
+final transactionProvider = TransactionNotifierFamily._();
 
-/// See also [TransactionNotifier].
-class TransactionNotifierFamily
-    extends Family<AsyncValue<List<TransactionRecord>>> {
-  /// See also [TransactionNotifier].
-  const TransactionNotifierFamily();
-
-  /// See also [TransactionNotifier].
-  TransactionNotifierProvider call(String ledgerUuid) {
-    return TransactionNotifierProvider(ledgerUuid);
-  }
-
-  @override
-  TransactionNotifierProvider getProviderOverride(
-    covariant TransactionNotifierProvider provider,
-  ) {
-    return call(provider.ledgerUuid);
-  }
-
-  static const Iterable<ProviderOrFamily>? _dependencies = null;
-
-  @override
-  Iterable<ProviderOrFamily>? get dependencies => _dependencies;
-
-  static const Iterable<ProviderOrFamily>? _allTransitiveDependencies = null;
-
-  @override
-  Iterable<ProviderOrFamily>? get allTransitiveDependencies =>
-      _allTransitiveDependencies;
-
-  @override
-  String? get name => r'transactionNotifierProvider';
-}
-
-/// See also [TransactionNotifier].
-class TransactionNotifierProvider
+final class TransactionNotifierProvider
     extends
-        AutoDisposeAsyncNotifierProviderImpl<
-          TransactionNotifier,
-          List<TransactionRecord>
-        > {
-  /// See also [TransactionNotifier].
-  TransactionNotifierProvider(String ledgerUuid)
-    : this._internal(
-        () => TransactionNotifier()..ledgerUuid = ledgerUuid,
-        from: transactionNotifierProvider,
-        name: r'transactionNotifierProvider',
-        debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
-            ? null
-            : _$transactionNotifierHash,
-        dependencies: TransactionNotifierFamily._dependencies,
-        allTransitiveDependencies:
-            TransactionNotifierFamily._allTransitiveDependencies,
-        ledgerUuid: ledgerUuid,
-      );
-
-  TransactionNotifierProvider._internal(
-    super._createNotifier, {
-    required super.name,
-    required super.dependencies,
-    required super.allTransitiveDependencies,
-    required super.debugGetCreateSourceHash,
-    required super.from,
-    required this.ledgerUuid,
-  }) : super.internal();
-
-  final String ledgerUuid;
+        $AsyncNotifierProvider<TransactionNotifier, List<TransactionRecord>> {
+  TransactionNotifierProvider._({
+    required TransactionNotifierFamily super.from,
+    required String super.argument,
+  }) : super(
+         retry: null,
+         name: r'transactionProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
 
   @override
-  FutureOr<List<TransactionRecord>> runNotifierBuild(
-    covariant TransactionNotifier notifier,
-  ) {
-    return notifier.build(ledgerUuid);
-  }
+  String debugGetCreateSourceHash() => _$transactionNotifierHash();
 
   @override
-  Override overrideWith(TransactionNotifier Function() create) {
-    return ProviderOverride(
-      origin: this,
-      override: TransactionNotifierProvider._internal(
-        () => create()..ledgerUuid = ledgerUuid,
-        from: from,
-        name: null,
-        dependencies: null,
-        allTransitiveDependencies: null,
-        debugGetCreateSourceHash: null,
-        ledgerUuid: ledgerUuid,
-      ),
-    );
+  String toString() {
+    return r'transactionProvider'
+        ''
+        '($argument)';
   }
 
+  @$internal
   @override
-  AutoDisposeAsyncNotifierProviderElement<
-    TransactionNotifier,
-    List<TransactionRecord>
-  >
-  createElement() {
-    return _TransactionNotifierProviderElement(this);
-  }
+  TransactionNotifier create() => TransactionNotifier();
 
   @override
   bool operator ==(Object other) {
-    return other is TransactionNotifierProvider &&
-        other.ledgerUuid == ledgerUuid;
+    return other is TransactionNotifierProvider && other.argument == argument;
   }
 
   @override
   int get hashCode {
-    var hash = _SystemHash.combine(0, runtimeType.hashCode);
-    hash = _SystemHash.combine(hash, ledgerUuid.hashCode);
-
-    return _SystemHash.finish(hash);
+    return argument.hashCode;
   }
 }
 
-mixin TransactionNotifierRef
-    on AutoDisposeAsyncNotifierProviderRef<List<TransactionRecord>> {
-  /// The parameter `ledgerUuid` of this provider.
-  String get ledgerUuid;
-}
+String _$transactionNotifierHash() =>
+    r'b49c75df1b2fab125e223f8974f70cb30972390f';
 
-class _TransactionNotifierProviderElement
-    extends
-        AutoDisposeAsyncNotifierProviderElement<
+final class TransactionNotifierFamily extends $Family
+    with
+        $ClassFamilyOverride<
           TransactionNotifier,
-          List<TransactionRecord>
-        >
-    with TransactionNotifierRef {
-  _TransactionNotifierProviderElement(super.provider);
+          AsyncValue<List<TransactionRecord>>,
+          List<TransactionRecord>,
+          FutureOr<List<TransactionRecord>>,
+          String
+        > {
+  TransactionNotifierFamily._()
+    : super(
+        retry: null,
+        name: r'transactionProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  TransactionNotifierProvider call(String ledgerUuid) =>
+      TransactionNotifierProvider._(argument: ledgerUuid, from: this);
 
   @override
-  String get ledgerUuid => (origin as TransactionNotifierProvider).ledgerUuid;
+  String toString() => r'transactionProvider';
 }
 
-// ignore_for_file: type=lint
-// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member
+abstract class _$TransactionNotifier
+    extends $AsyncNotifier<List<TransactionRecord>> {
+  late final _$args = ref.$arg as String;
+  String get ledgerUuid => _$args;
+
+  FutureOr<List<TransactionRecord>> build(String ledgerUuid);
+  @$mustCallSuper
+  @override
+  void runBuild() {
+    final ref =
+        this.ref
+            as $Ref<
+              AsyncValue<List<TransactionRecord>>,
+              List<TransactionRecord>
+            >;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<
+                AsyncValue<List<TransactionRecord>>,
+                List<TransactionRecord>
+              >,
+              AsyncValue<List<TransactionRecord>>,
+              Object?,
+              Object?
+            >;
+    element.handleCreate(ref, () => build(_$args));
+  }
+}

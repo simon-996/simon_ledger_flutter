@@ -6,21 +6,49 @@ part of 'ledger_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$ledgerNotifierHash() => r'5bc6a5f60b341a915dc880980224248bb454ad3d';
+// GENERATED CODE - DO NOT MODIFY BY HAND
+// ignore_for_file: type=lint, type=warning
 
-/// See also [LedgerNotifier].
 @ProviderFor(LedgerNotifier)
-final ledgerNotifierProvider =
-    AutoDisposeAsyncNotifierProvider<LedgerNotifier, List<Ledger>>.internal(
-      LedgerNotifier.new,
-      name: r'ledgerNotifierProvider',
-      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
-          ? null
-          : _$ledgerNotifierHash,
-      dependencies: null,
-      allTransitiveDependencies: null,
-    );
+final ledgerProvider = LedgerNotifierProvider._();
 
-typedef _$LedgerNotifier = AutoDisposeAsyncNotifier<List<Ledger>>;
-// ignore_for_file: type=lint
-// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member
+final class LedgerNotifierProvider
+    extends $AsyncNotifierProvider<LedgerNotifier, List<Ledger>> {
+  LedgerNotifierProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'ledgerProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$ledgerNotifierHash();
+
+  @$internal
+  @override
+  LedgerNotifier create() => LedgerNotifier();
+}
+
+String _$ledgerNotifierHash() => r'c5d8c9941773a02d7dd9ac3cc620fe816f8c355c';
+
+abstract class _$LedgerNotifier extends $AsyncNotifier<List<Ledger>> {
+  FutureOr<List<Ledger>> build();
+  @$mustCallSuper
+  @override
+  void runBuild() {
+    final ref = this.ref as $Ref<AsyncValue<List<Ledger>>, List<Ledger>>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<AsyncValue<List<Ledger>>, List<Ledger>>,
+              AsyncValue<List<Ledger>>,
+              Object?,
+              Object?
+            >;
+    element.handleCreate(ref, build);
+  }
+}

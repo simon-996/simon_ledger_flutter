@@ -43,7 +43,7 @@ class AccountTab extends ConsumerWidget {
           return const _AuthPanel();
         }
 
-        final user = userAsync.valueOrNull;
+        final user = userAsync.value;
         return _SignedInPanel(
           account: user?.email ?? user?.phone ?? user?.uuid,
           syncingProfile: userAsync.isLoading,
@@ -122,7 +122,7 @@ class _AccountActionsSection extends ConsumerWidget {
     }
     ref.invalidate(authTokenProvider);
     ref.invalidate(currentUserProvider);
-    ref.invalidate(ledgerNotifierProvider);
+    ref.invalidate(ledgerProvider);
     ref.invalidate(ledgerStatsProvider);
   }
 }
@@ -246,9 +246,9 @@ class _SyncCenterCardState extends ConsumerState<_SyncCenterCard> {
       );
     } finally {
       ref.invalidate(syncOverviewProvider);
-      ref.invalidate(ledgerNotifierProvider);
-      ref.invalidate(personNotifierProvider);
-      ref.invalidate(transactionNotifierProvider);
+      ref.invalidate(ledgerProvider);
+      ref.invalidate(personProvider);
+      ref.invalidate(transactionProvider);
       ref.invalidate(ledgerStatsProvider);
       if (mounted) setState(() => _syncing = false);
     }
@@ -770,8 +770,8 @@ class _UnifiedProfileCardState extends ConsumerState<_UnifiedProfileCard> {
       previous,
       next,
     ) {
-      final wasPending = previous?.valueOrNull?.pendingSync ?? false;
-      final isPending = next.valueOrNull?.pendingSync ?? false;
+      final wasPending = previous?.value?.pendingSync ?? false;
+      final isPending = next.value?.pendingSync ?? false;
       if (!widget.isSignedIn || !wasPending || isPending) {
         return;
       }
@@ -960,8 +960,8 @@ class _UnifiedProfileCardState extends ConsumerState<_UnifiedProfileCard> {
     ref.invalidate(localProfileProvider);
     ref.invalidate(currentUserProvider);
     ref.invalidate(cachedPeopleProvider);
-    ref.invalidate(personNotifierProvider);
-    ref.invalidate(ledgerNotifierProvider);
+    ref.invalidate(personProvider);
+    ref.invalidate(ledgerProvider);
     ref.invalidate(ledgerStatsProvider);
   }
 
@@ -1463,9 +1463,9 @@ class _CloudImportCardState extends ConsumerState<_CloudImportCard> {
 
     if (!mounted || imported != true) return;
     _reload();
-    ref.invalidate(ledgerNotifierProvider);
-    ref.invalidate(personNotifierProvider);
-    ref.invalidate(transactionNotifierProvider);
+    ref.invalidate(ledgerProvider);
+    ref.invalidate(personProvider);
+    ref.invalidate(transactionProvider);
     ref.invalidate(ledgerStatsProvider);
     ref.invalidate(syncOverviewProvider);
     AppNotice.success(context, '本地账本导入完成');
@@ -1811,7 +1811,7 @@ class _AuthPanelState extends ConsumerState<_AuthPanel> {
 
       ref.invalidate(authTokenProvider);
       ref.invalidate(currentUserProvider);
-      ref.invalidate(ledgerNotifierProvider);
+      ref.invalidate(ledgerProvider);
       ref.invalidate(ledgerStatsProvider);
     } catch (error) {
       if (!mounted) return;

@@ -56,12 +56,9 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
     try {
       final changed = await ref.read(syncCoordinatorProvider).syncAllPending();
       if (!changed || !mounted) return;
-      ref.invalidate(transactionNotifierProvider(widget.ledger.uuid));
+      ref.invalidate(transactionProvider(widget.ledger.uuid));
       ref.invalidate(
-        personNotifierProvider(
-          includeDeleted: true,
-          ledgerUuid: widget.ledger.uuid,
-        ),
+        personProvider(includeDeleted: true, ledgerUuid: widget.ledger.uuid),
       );
       ref.invalidate(ledgerStatsProvider);
       ref.invalidate(syncOverviewProvider);
@@ -266,13 +263,10 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
   @override
   Widget build(BuildContext context) {
     final transactionsAsyncValue = ref.watch(
-      transactionNotifierProvider(widget.ledger.uuid),
+      transactionProvider(widget.ledger.uuid),
     );
     final peopleAsyncValue = ref.watch(
-      personNotifierProvider(
-        includeDeleted: true,
-        ledgerUuid: widget.ledger.uuid,
-      ),
+      personProvider(includeDeleted: true, ledgerUuid: widget.ledger.uuid),
     );
 
     return Scaffold(
@@ -308,7 +302,7 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
             tooltip: '刷新',
             icon: const Icon(Icons.refresh),
             onPressed: () {
-              ref.invalidate(transactionNotifierProvider(widget.ledger.uuid));
+              ref.invalidate(transactionProvider(widget.ledger.uuid));
             },
           ),
         ],

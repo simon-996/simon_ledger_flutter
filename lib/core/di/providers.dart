@@ -57,7 +57,7 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
 });
 
 final ledgerRepositoryProvider = Provider<LedgerRepository>((ref) {
-  final token = ref.watch(authTokenProvider).valueOrNull;
+  final token = ref.watch(authTokenProvider).value;
   if (token != null && token.isValid) {
     return RemoteLedgerRepository(
       apiClient: ref.watch(apiClientProvider),
@@ -77,7 +77,7 @@ final inviteRepositoryProvider = Provider<InviteRepository>((ref) {
 });
 
 final personRepositoryProvider = Provider<PersonRepository>((ref) {
-  final token = ref.watch(authTokenProvider).valueOrNull;
+  final token = ref.watch(authTokenProvider).value;
   if (token != null && token.isValid) {
     return RemotePersonRepository(
       apiClient: ref.watch(apiClientProvider),
@@ -90,7 +90,7 @@ final personRepositoryProvider = Provider<PersonRepository>((ref) {
 });
 
 final transactionRepositoryProvider = Provider<TransactionRepository>((ref) {
-  final token = ref.watch(authTokenProvider).valueOrNull;
+  final token = ref.watch(authTokenProvider).value;
   if (token != null && token.isValid) {
     return RemoteTransactionRepository(
       apiClient: ref.watch(apiClientProvider),

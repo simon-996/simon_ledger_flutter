@@ -140,9 +140,9 @@ class _SimonLedgerAppState extends ConsumerState<SimonLedgerApp>
       if (token == null || !token.isValid) return;
       final changed = await ref.read(syncCoordinatorProvider).syncAllPending();
       if (!changed || !mounted) return;
-      ref.invalidate(ledgerNotifierProvider);
-      ref.invalidate(personNotifierProvider);
-      ref.invalidate(transactionNotifierProvider);
+      ref.invalidate(ledgerProvider);
+      ref.invalidate(personProvider);
+      ref.invalidate(transactionProvider);
       ref.invalidate(ledgerStatsProvider);
       ref.invalidate(syncOverviewProvider);
     } catch (_) {

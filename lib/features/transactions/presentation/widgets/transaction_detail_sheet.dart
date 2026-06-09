@@ -165,11 +165,7 @@ class TransactionDetailSheet extends ConsumerWidget {
                           Navigator.pop(context);
                           try {
                             await ref
-                                .read(
-                                  transactionNotifierProvider(
-                                    ledger.uuid,
-                                  ).notifier,
-                                )
+                                .read(transactionProvider(ledger.uuid).notifier)
                                 .deleteTransaction(transaction.uuid);
                           } catch (e) {
                             if (noticeContext.mounted) {
