@@ -1,17 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
 
-const transactionIncomeAccentColor = Color(0xFFB85C4A);
-
-Color transactionAccentColor(ColorScheme colorScheme, int transactionType) {
-  return transactionType == 1
-      ? transactionIncomeAccentColor
-      : colorScheme.primary;
+Color transactionAccentColor(ColorScheme _, int transactionType) {
+  return transactionType == 1 ? AppTheme.incomeColor : AppTheme.expenseColor;
 }
 
-Color transactionOnAccentColor(ColorScheme colorScheme, int transactionType) {
-  return transactionType == 1 ? Colors.white : colorScheme.onPrimary;
+Color transactionOnAccentColor(ColorScheme _, int transactionType) {
+  return Colors.white;
 }
 
 class TransactionTypeSelector extends StatelessWidget {

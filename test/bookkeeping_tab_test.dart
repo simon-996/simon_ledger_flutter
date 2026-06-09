@@ -7,12 +7,11 @@ import 'package:simon_ledger_flutter/core/di/providers.dart';
 import 'package:simon_ledger_flutter/core/models/ledger.dart';
 import 'package:simon_ledger_flutter/core/models/person.dart';
 import 'package:simon_ledger_flutter/core/network/token_store.dart';
+import 'package:simon_ledger_flutter/core/theme/app_theme.dart';
 import 'package:simon_ledger_flutter/core/widgets/app_components.dart';
 import 'package:simon_ledger_flutter/features/transactions/presentation/widgets/bookkeeping_tab.dart';
 
 void main() {
-  const incomeAccentColor = Color(0xFFB85C4A);
-
   testWidgets('bookkeeping header keeps ledger selector visually quiet', (
     tester,
   ) async {
@@ -81,23 +80,20 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final rootScheme = Theme.of(
-      tester.element(find.byType(BookkeepingTab)),
-    ).colorScheme;
     expect(
       tester.widget<Icon>(find.byIcon(Icons.receipt_long_outlined)).color,
-      rootScheme.primary,
+      AppTheme.expenseColor,
     );
-    expect(_saveButtonScheme(tester).primary, rootScheme.primary);
+    expect(_saveButtonScheme(tester).primary, AppTheme.expenseColor);
 
     await tester.tap(find.text('收入'));
     await tester.pumpAndSettle();
 
     expect(
       tester.widget<Icon>(find.byIcon(Icons.savings_outlined)).color,
-      incomeAccentColor,
+      AppTheme.incomeColor,
     );
-    expect(_saveButtonScheme(tester).primary, incomeAccentColor);
+    expect(_saveButtonScheme(tester).primary, AppTheme.incomeColor);
   });
 
   testWidgets('bookkeeping amount controls use an Apple input panel', (

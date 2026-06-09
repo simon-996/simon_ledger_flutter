@@ -11,8 +11,6 @@ import 'package:simon_ledger_flutter/core/widgets/app_components.dart';
 import 'package:simon_ledger_flutter/features/statistics/presentation/widgets/statistics_tab.dart';
 
 void main() {
-  const incomeAccentColor = Color(0xFFB85C4A);
-
   testWidgets(
     'statistics filters stay complete before a ledger preference loads',
     (tester) async {
@@ -161,9 +159,6 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
 
-    final colorScheme = Theme.of(
-      tester.element(find.byType(StatisticsTab)),
-    ).colorScheme;
     expect(
       tester
           .widget<Icon>(
@@ -175,7 +170,7 @@ void main() {
                 .first,
           )
           .color,
-      colorScheme.primary,
+      AppTheme.expenseColor,
     );
 
     await tester.tap(find.text('收入'));
@@ -193,7 +188,7 @@ void main() {
                 .first,
           )
           .color,
-      incomeAccentColor,
+      AppTheme.incomeColor,
     );
   });
 }

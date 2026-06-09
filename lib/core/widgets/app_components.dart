@@ -779,7 +779,9 @@ class AppPersonBalanceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final amountColor = isPositive ? colorScheme.primary : colorScheme.error;
+    final amountColor = isPositive
+        ? AppTheme.incomeColor
+        : AppTheme.expenseColor;
 
     return _AnimatedTapSurface(
       color: isSelected
@@ -1339,7 +1341,9 @@ class AppTransactionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final amountColor = isExpense ? colorScheme.error : colorScheme.primary;
+    final amountColor = isExpense
+        ? AppTheme.expenseColor
+        : AppTheme.incomeColor;
     final hasNote = note != null && note!.isNotEmpty;
 
     return Padding(

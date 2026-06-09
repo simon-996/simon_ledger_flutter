@@ -105,9 +105,7 @@ class _ShareLedgerImageContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final balanceColor = balance >= 0
-        ? AppTheme.successColor
-        : AppTheme.errorColor;
+    final balanceColor = AppTheme.semanticAmountColor(context, balance >= 0);
 
     return Container(
       width: double.infinity,
@@ -169,7 +167,7 @@ class _ShareLedgerImageContent extends StatelessWidget {
                       child: _ShareSummaryItem(
                         label: '总收入',
                         amount: totalIncome,
-                        color: AppTheme.successColor,
+                        color: AppTheme.incomeColor,
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -177,7 +175,7 @@ class _ShareLedgerImageContent extends StatelessWidget {
                       child: _ShareSummaryItem(
                         label: '总支出',
                         amount: totalExpense,
-                        color: AppTheme.errorColor,
+                        color: AppTheme.expenseColor,
                       ),
                     ),
                   ],
@@ -196,9 +194,10 @@ class _ShareLedgerImageContent extends StatelessWidget {
                 children: peopleInImage.map((p) {
                   final pBalance = personBalances[p.uuid] ?? 0.0;
                   final isPositive = pBalance >= 0;
-                  final amountColor = isPositive
-                      ? AppTheme.successColor
-                      : AppTheme.errorColor;
+                  final amountColor = AppTheme.semanticAmountColor(
+                    context,
+                    isPositive,
+                  );
                   return Container(
                     width: 104,
                     padding: const EdgeInsets.symmetric(
@@ -267,8 +266,8 @@ class _ShareLedgerImageContent extends StatelessWidget {
                           fallbackAvatar: '?',
                         );
                         final amountColor = t.type == 0
-                            ? AppTheme.errorColor
-                            : AppTheme.successColor;
+                            ? AppTheme.expenseColor
+                            : AppTheme.incomeColor;
 
                         return Container(
                           padding: const EdgeInsets.symmetric(

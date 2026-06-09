@@ -8,6 +8,8 @@ class AppTheme {
   static const Color errorColor = Color(0xFFFF3B30);
   static const Color successColor = Color(0xFF34C759);
   static const Color infoColor = Color(0xFF64D2FF);
+  static const Color incomeColor = Color(0xFF3F7F63);
+  static const Color expenseColor = Color(0xFFA85F54);
 
   static const Color surfaceColor = Color(0xFFF5F5F7);
   static const Color surfaceContainerColor = Color(0xFFFFFFFF);
@@ -340,7 +342,7 @@ class AppTheme {
   }
 
   static Color semanticAmountColor(BuildContext context, bool isPositive) {
-    return isPositive ? successColor : errorColor;
+    return isPositive ? incomeColor : expenseColor;
   }
 
   static OutlineInputBorder _inputBorder(Color color, {double width = 1}) {

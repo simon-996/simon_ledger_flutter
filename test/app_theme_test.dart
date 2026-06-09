@@ -8,6 +8,8 @@ void main() {
     final scheme = theme.colorScheme;
 
     expect(AppTheme.primaryColor, const Color(0xFF007AFF));
+    expect(AppTheme.incomeColor, const Color(0xFF3F7F63));
+    expect(AppTheme.expenseColor, const Color(0xFFA85F54));
     expect(AppTheme.surfaceColor, const Color(0xFFF5F5F7));
     expect(AppTheme.radiusLarge, 24);
     expect(theme.scaffoldBackgroundColor, AppTheme.surfaceColor);

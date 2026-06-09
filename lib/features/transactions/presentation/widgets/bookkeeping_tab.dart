@@ -1205,7 +1205,7 @@ class _QuickEntryHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final accent = colorScheme.primary;
+    final accent = isIncome ? AppTheme.incomeColor : AppTheme.expenseColor;
     final mutedColor = colorScheme.onSurfaceVariant.withValues(alpha: 0.68);
 
     return Material(

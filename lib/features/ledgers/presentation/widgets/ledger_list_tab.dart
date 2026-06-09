@@ -876,7 +876,7 @@ class _LedgerCard extends StatelessWidget {
                                 child: _StatPill(
                                   label: '收入',
                                   value: formatMoney('CNY', income),
-                                  color: colorScheme.primary,
+                                  color: AppTheme.incomeColor,
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -884,7 +884,7 @@ class _LedgerCard extends StatelessWidget {
                                 child: _StatPill(
                                   label: '支出',
                                   value: formatMoney('CNY', expense),
-                                  color: colorScheme.error,
+                                  color: AppTheme.expenseColor,
                                 ),
                               ),
                               const SizedBox(width: 8),
