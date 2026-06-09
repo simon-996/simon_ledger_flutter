@@ -1037,8 +1037,12 @@ class _ProfileDialog extends StatefulWidget {
 }
 
 class _ProfileDialogState extends State<_ProfileDialog> {
+  static const int _avatarOptionsPerPage = 8;
+
   late final TextEditingController _nicknameController;
+  late final PageController _avatarPageController;
   late String _avatarIcon;
+  late int _avatarPageIndex;
 
   @override
   void initState() {
@@ -1047,40 +1051,32 @@ class _ProfileDialogState extends State<_ProfileDialog> {
       text: widget.profile.normalizedNickname,
     );
     _avatarIcon = AvatarConfig.normalizeKey(widget.profile.avatarIcon);
+    _avatarPageIndex = _pageIndexForAvatar(_avatarIcon);
+    _avatarPageController = PageController(initialPage: _avatarPageIndex);
   }
 
   @override
   void dispose() {
+    _avatarPageController.dispose();
     _nicknameController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final avatar = AvatarConfig.avatarForKey(_avatarIcon);
+    final avatarPages = _avatarPages();
 
     return AlertDialog(
       title: const Text('编辑资料', textAlign: TextAlign.center),
       contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
-      content: SingleChildScrollView(
+      content: SizedBox(
+        width: 360,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Center(
-              child: Container(
-                key: const ValueKey('profile-dialog-avatar-preview'),
-                width: 86,
-                height: 86,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: colorScheme.primary.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Text(avatar, style: const TextStyle(fontSize: 40)),
-              ),
-            ),
+            _ProfileAvatarPreview(avatarKey: _avatarIcon, avatar: avatar),
             const SizedBox(height: 18),
             TextField(
               controller: _nicknameController,
@@ -1101,23 +1097,30 @@ class _ProfileDialogState extends State<_ProfileDialog> {
               ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              alignment: WrapAlignment.center,
-              runAlignment: WrapAlignment.center,
-              children: AvatarConfig.options.map((option) {
-                return ChoiceChip(
-                  label: Text(
-                    option.avatar,
-                    style: const TextStyle(fontSize: 18),
-                  ),
-                  showCheckmark: false,
-                  selected: _avatarIcon == option.key,
-                  onSelected: (_) => setState(() => _avatarIcon = option.key),
-                );
-              }).toList(),
+            SizedBox(
+              height: 116,
+              child: PageView.builder(
+                key: const ValueKey('profile-avatar-page-view'),
+                controller: _avatarPageController,
+                onPageChanged: (index) =>
+                    setState(() => _avatarPageIndex = index),
+                itemCount: avatarPages.length,
+                itemBuilder: (context, index) {
+                  return _ProfileAvatarOptionPage(
+                    options: avatarPages[index],
+                    selectedKey: _avatarIcon,
+                    onSelected: _selectAvatar,
+                  );
+                },
+              ),
             ),
+            if (avatarPages.length > 1) ...[
+              const SizedBox(height: 10),
+              _ProfileAvatarPageIndicator(
+                pageCount: avatarPages.length,
+                currentPage: _avatarPageIndex,
+              ),
+            ],
           ],
         ),
       ),
@@ -1150,6 +1153,224 @@ class _ProfileDialogState extends State<_ProfileDialog> {
     Navigator.of(
       context,
     ).pop(LocalProfile(nickname: nickname, avatarIcon: _avatarIcon));
+  }
+
+  void _selectAvatar(String key) {
+    if (_avatarIcon == key) {
+      return;
+    }
+
+    setState(() => _avatarIcon = key);
+  }
+
+  List<List<AvatarOption>> _avatarPages() {
+    final pages = <List<AvatarOption>>[];
+    for (
+      var index = 0;
+      index < AvatarConfig.options.length;
+      index += _avatarOptionsPerPage
+    ) {
+      final end = index + _avatarOptionsPerPage;
+      pages.add(
+        AvatarConfig.options.sublist(
+          index,
+          end > AvatarConfig.options.length ? AvatarConfig.options.length : end,
+        ),
+      );
+    }
+    return pages;
+  }
+
+  static int _pageIndexForAvatar(String avatarKey) {
+    final index = AvatarConfig.options.indexWhere(
+      (option) => option.key == avatarKey,
+    );
+    if (index < 0) {
+      return 0;
+    }
+    return index ~/ _avatarOptionsPerPage;
+  }
+}
+
+class _ProfileAvatarPreview extends StatelessWidget {
+  const _ProfileAvatarPreview({required this.avatarKey, required this.avatar});
+
+  final String avatarKey;
+  final String avatar;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Center(
+      child: Container(
+        key: const ValueKey('profile-dialog-avatar-preview'),
+        width: 86,
+        height: 86,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: colorScheme.primary.withValues(alpha: 0.1),
+          shape: BoxShape.circle,
+        ),
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 420),
+          reverseDuration: AppMotion.normal,
+          transitionBuilder: (child, animation) {
+            final scale = Tween<double>(begin: 0.68, end: 1).animate(
+              CurvedAnimation(
+                parent: animation,
+                curve: Curves.elasticOut,
+                reverseCurve: Curves.easeInCubic,
+              ),
+            );
+            final offset =
+                Tween<Offset>(
+                  begin: const Offset(0, 0.16),
+                  end: Offset.zero,
+                ).animate(
+                  CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                    reverseCurve: Curves.easeInCubic,
+                  ),
+                );
+
+            return FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: offset,
+                child: ScaleTransition(scale: scale, child: child),
+              ),
+            );
+          },
+          child: Text(
+            avatar,
+            key: ValueKey('profile-avatar-preview-$avatarKey'),
+            style: const TextStyle(fontSize: 40),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileAvatarOptionPage extends StatelessWidget {
+  const _ProfileAvatarOptionPage({
+    required this.options,
+    required this.selectedKey,
+    required this.onSelected,
+  });
+
+  final List<AvatarOption> options;
+  final String selectedKey;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      alignment: WrapAlignment.center,
+      runAlignment: WrapAlignment.center,
+      children: options.map((option) {
+        return _ProfileAvatarChoice(
+          option: option,
+          selected: selectedKey == option.key,
+          onSelected: onSelected,
+        );
+      }).toList(),
+    );
+  }
+}
+
+class _ProfileAvatarChoice extends StatelessWidget {
+  const _ProfileAvatarChoice({
+    required this.option,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final AvatarOption option;
+  final bool selected;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final borderColor = selected
+        ? colorScheme.primary.withValues(alpha: 0.42)
+        : colorScheme.outlineVariant.withValues(alpha: 0.36);
+
+    return SizedBox(
+      width: 58,
+      height: 54,
+      child: Semantics(
+        button: true,
+        selected: selected,
+        child: AnimatedContainer(
+          duration: AppMotion.fast,
+          curve: AppMotion.standard,
+          decoration: BoxDecoration(
+            color: selected
+                ? colorScheme.primary.withValues(alpha: 0.12)
+                : colorScheme.surfaceContainerHigh.withValues(alpha: 0.54),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: borderColor),
+          ),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              key: ValueKey('profile-avatar-option-${option.key}'),
+              onTap: () => onSelected(option.key),
+              child: Center(
+                child: Text(
+                  option.avatar,
+                  style: const TextStyle(fontSize: 24),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileAvatarPageIndicator extends StatelessWidget {
+  const _ProfileAvatarPageIndicator({
+    required this.pageCount,
+    required this.currentPage,
+  });
+
+  final int pageCount;
+  final int currentPage;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Row(
+      key: const ValueKey('profile-avatar-page-indicator'),
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(pageCount, (index) {
+        final selected = currentPage == index;
+        return AnimatedContainer(
+          duration: AppMotion.fast,
+          curve: AppMotion.standard,
+          width: selected ? 18 : 6,
+          height: 6,
+          margin: const EdgeInsets.symmetric(horizontal: 3),
+          decoration: BoxDecoration(
+            color: selected
+                ? colorScheme.primary.withValues(alpha: 0.62)
+                : colorScheme.outlineVariant.withValues(alpha: 0.74),
+            borderRadius: BorderRadius.circular(999),
+          ),
+        );
+      }),
+    );
   }
 }
 
