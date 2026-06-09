@@ -336,6 +336,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
       await ref
           .read(transactionNotifierProvider(ledgerId).notifier)
           .addTransaction(record);
+      await _rememberCategory(_transactionType, category);
     } catch (e) {
       if (!mounted) return;
       AppNotice.error(
@@ -361,6 +362,22 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
       _amountController.clear();
       _noteController.clear();
       FocusScope.of(context).unfocus();
+    }
+  }
+
+  Future<void> _rememberCategory(int transactionType, String category) async {
+    try {
+      final categories = await TransactionCategoryPreference.markRecentlyUsed(
+        transactionType: transactionType,
+        category: category,
+      );
+      if (!mounted) return;
+      setState(() {
+        _expenseCategories = categories.expense;
+        _incomeCategories = categories.income;
+      });
+    } catch (_) {
+      // Recent category order is a convenience cache; it must not affect saving.
     }
   }
 

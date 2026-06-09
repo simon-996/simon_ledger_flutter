@@ -34,4 +34,27 @@ void main() {
     expect(categories.income, contains('奖金'));
     expect(categories.income, isNot(contains('咖啡')));
   });
+
+  test('recent categories are ordered first by transaction type', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    await TransactionCategoryPreference.markRecentlyUsed(
+      transactionType: 0,
+      category: '餐饮',
+    );
+    await TransactionCategoryPreference.markRecentlyUsed(
+      transactionType: 0,
+      category: '交通',
+    );
+    await TransactionCategoryPreference.markRecentlyUsed(
+      transactionType: 1,
+      category: '工资',
+    );
+
+    final categories = await TransactionCategoryPreference.read();
+
+    expect(categories.expense.take(2), ['交通', '餐饮']);
+    expect(categories.income.first, '工资');
+    expect(categories.income, isNot(contains('交通')));
+  });
 }

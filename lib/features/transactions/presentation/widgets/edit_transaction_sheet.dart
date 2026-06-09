@@ -170,6 +170,7 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
       await ref
           .read(transactionNotifierProvider(widget.ledger.uuid).notifier)
           .updateTransaction(widget.transaction);
+      await _rememberCategory(_transactionType, _selectedCategory);
     } catch (e) {
       widget.transaction.amount = oldAmount;
       widget.transaction.currencyCode = oldCurrencyCode;
@@ -190,6 +191,22 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
     if (!mounted) return;
     setState(() => _saving = false);
     Navigator.of(context).pop(true);
+  }
+
+  Future<void> _rememberCategory(int transactionType, String category) async {
+    try {
+      final categories = await TransactionCategoryPreference.markRecentlyUsed(
+        transactionType: transactionType,
+        category: category,
+      );
+      if (!mounted) return;
+      setState(() {
+        _expenseCategories = categories.expense;
+        _incomeCategories = categories.income;
+      });
+    } catch (_) {
+      // Recent category order is a convenience cache; it must not affect saving.
+    }
   }
 
   @override
