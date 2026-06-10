@@ -187,6 +187,72 @@ void main() {
     expect(result!.people.single.linkedUserUuid, 'account-1');
     expect(userCompleter.isCompleted, isFalse);
   });
+
+  testWidgets('new cloud ledger self person follows loaded account profile', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({
+      'auth_token_name': 'satoken',
+      'auth_token_value': 'token',
+      'auth_account_uuid': 'account-1',
+    });
+    CreateLedgerResult? result;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authTokenProvider.overrideWith(
+            (ref) async => const AuthToken(name: 'satoken', value: 'token'),
+          ),
+          currentUserProvider.overrideWith(
+            (ref) async => const AuthUser(
+              uuid: 'account-1',
+              nickname: '远端 Simon',
+              avatar: '😎',
+            ),
+          ),
+          localProfileProvider.overrideWith(
+            (ref) async => LocalProfile.defaultProfile,
+          ),
+        ],
+        child: MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: FilledButton(
+                onPressed: () async {
+                  result = await showModalBottomSheet<CreateLedgerResult>(
+                    context: context,
+                    builder: (context) => const CreateLedgerSheet(),
+                  );
+                },
+                child: const Text('打开'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.tap(find.text('打开'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('远端 Simon'), findsOneWidget);
+
+    final ledgerNameField = find.byWidgetPredicate(
+      (widget) => widget is TextField && widget.decoration?.labelText == '账本名称',
+    );
+    await tester.enterText(ledgerNameField, '家庭账本');
+    await tester.pump();
+    await tester.tap(find.text('创建账本'));
+    await tester.pumpAndSettle();
+
+    expect(result, isNotNull);
+    expect(result!.people.single.name, '远端 Simon');
+    expect(result!.people.single.avatar, '😎');
+    expect(result!.people.single.linkedUserUuid, 'account-1');
+  });
 }
 
 Finder _rateFieldFinder() {

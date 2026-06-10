@@ -112,6 +112,7 @@ Web 构建产物需要通过 HTTP 服务或 nginx 部署，不能直接双击 `b
 - [UI 方向](docs/ui-direction.md)
 - [账本邀请功能](docs/ledger-invite-feature.md)
 - [邀请链接部署](docs/invite-link-deployment.md)
+- [图片头像选项待做项](docs/custom-avatar-image-todo.md)
 
 ## Git
 

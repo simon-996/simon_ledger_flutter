@@ -41,6 +41,8 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
   int _transactionType = 0;
   bool _savingTransaction = false;
   bool _successDialogVisible = false;
+  bool _highlightLedgerSelector = false;
+  int _ledgerSelectorAttentionRequest = 0;
 
   final _amountController = TextEditingController();
   final _noteController = TextEditingController();
@@ -216,6 +218,21 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
   void _setAndPersist(VoidCallback update) {
     setState(update);
     _persistDraft();
+  }
+
+  void _requestLedgerSelectionAttention() {
+    AppNotice.error(context, '请先选择一个所属账本');
+    final request = _ledgerSelectorAttentionRequest + 1;
+    setState(() {
+      _ledgerSelectorAttentionRequest = request;
+      _highlightLedgerSelector = true;
+    });
+    Future.delayed(const Duration(milliseconds: 760), () {
+      if (!mounted || _ledgerSelectorAttentionRequest != request) {
+        return;
+      }
+      setState(() => _highlightLedgerSelector = false);
+    });
   }
 
   void _persistDraft() {
@@ -474,8 +491,10 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                           peopleById: ledgerPeopleById,
                           currencyCode: _selectedCurrency,
                           isIncome: _transactionType == 1,
+                          highlight: _highlightLedgerSelector,
                           onLedgerChanged: (ledgerUuid) {
                             setState(() {
+                              _highlightLedgerSelector = false;
                               _updateSelectedLedger(ledgerUuid);
                             });
                           },
@@ -765,13 +784,22 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                       bottom: 12,
                     ),
                     child: AppAnimatedSwitcher(
-                      child: peopleAsyncValue.maybeWhen(
-                        data: (peoplePool) => TransactionSaveButton(
+                      child: selectedLedger == null
+                          ? TransactionSaveButton(
+                              key: const ValueKey('save-needs-ledger'),
+                              onPressed: _savingTransaction
+                                  ? null
+                                  : _requestLedgerSelectionAttention,
+                              loading: _savingTransaction,
+                              readyLabel: '保存记账',
+                              loadingLabel: '保存中',
+                            )
+                          : peopleAsyncValue.maybeWhen(
+                              data: (peoplePool) => TransactionSaveButton(
                           key: const ValueKey('save-enabled'),
-                          onPressed:
-                              _selectedLedgerUuid == null || _savingTransaction
-                              ? null
-                              : () => _saveTransaction(peoplePool),
+                                  onPressed: _savingTransaction
+                                      ? null
+                                      : () => _saveTransaction(peoplePool),
                           loading: _savingTransaction,
                           readyLabel: '保存记账',
                           loadingLabel: '保存中',

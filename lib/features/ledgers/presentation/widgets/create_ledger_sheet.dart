@@ -548,13 +548,14 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
     }
 
     final profile = await ref.read(localProfileProvider.future);
+    final currentUser = ref.read(currentUserProvider).value;
     final accountUuid = await ref.read(tokenStoreProvider).readAccountUuid();
     return [
       Person()
         ..uuid = 'self-${DateTime.now().microsecondsSinceEpoch}'
-        ..name = profile.normalizedNickname
-        ..avatar = profile.personAvatar
-        ..linkedUserUuid = accountUuid,
+        ..name = _effectiveSelfName(profile, currentUser)
+        ..avatar = _effectiveSelfAvatar(profile, currentUser)
+        ..linkedUserUuid = currentUser?.uuid ?? accountUuid,
       ...selectedPeople,
     ];
   }
@@ -602,9 +603,32 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
   Person _buildDraftSelfPerson(LocalProfile? profile, AuthUser? user) {
     return Person()
       ..uuid = _draftSelfPersonUuid
-      ..name = profile?.normalizedNickname ?? user?.nickname ?? '本人'
-      ..avatar = profile?.personAvatar ?? user?.avatar ?? '😎'
+      ..name = _effectiveSelfName(profile, user)
+      ..avatar = _effectiveSelfAvatar(profile, user)
       ..linkedUserUuid = user?.uuid;
+  }
+
+  String _effectiveSelfName(LocalProfile? profile, AuthUser? user) {
+    if (_shouldPreferAccountProfile(profile, user)) {
+      return user!.nickname.trim().isEmpty ? '本人' : user.nickname.trim();
+    }
+    return profile?.normalizedNickname ?? user?.nickname ?? '本人';
+  }
+
+  String _effectiveSelfAvatar(LocalProfile? profile, AuthUser? user) {
+    if (_shouldPreferAccountProfile(profile, user)) {
+      final avatar = user!.avatar?.trim();
+      return avatar == null || avatar.isEmpty ? '😎' : avatar;
+    }
+    return profile?.personAvatar ?? user?.avatar ?? '😎';
+  }
+
+  bool _shouldPreferAccountProfile(LocalProfile? profile, AuthUser? user) {
+    if (user == null || profile == null || profile.pendingSync) {
+      return false;
+    }
+    return profile.normalizedNickname == LocalProfile.defaultProfile.nickname &&
+        profile.avatarIcon == LocalProfile.defaultProfile.avatarIcon;
   }
 
   void _togglePersonSelection(Person person, bool selected) {
