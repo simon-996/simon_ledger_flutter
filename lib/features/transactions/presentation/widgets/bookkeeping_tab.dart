@@ -796,22 +796,22 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                             )
                           : peopleAsyncValue.maybeWhen(
                               data: (peoplePool) => TransactionSaveButton(
-                          key: const ValueKey('save-enabled'),
-                                  onPressed: _savingTransaction
-                                      ? null
-                                      : () => _saveTransaction(peoplePool),
-                          loading: _savingTransaction,
-                          readyLabel: '保存记账',
-                          loadingLabel: '保存中',
-                        ),
-                        orElse: () => const TransactionSaveButton(
-                          key: ValueKey('save-loading'),
-                          onPressed: null,
-                          loading: true,
-                          readyLabel: '保存记账',
-                          loadingLabel: '准备中',
-                        ),
-                      ),
+                                key: const ValueKey('save-enabled'),
+                                onPressed: _savingTransaction
+                                    ? null
+                                    : () => _saveTransaction(peoplePool),
+                                loading: _savingTransaction,
+                                readyLabel: '保存记账',
+                                loadingLabel: '保存中',
+                              ),
+                              orElse: () => const TransactionSaveButton(
+                                key: ValueKey('save-loading'),
+                                onPressed: null,
+                                loading: true,
+                                readyLabel: '保存记账',
+                                loadingLabel: '准备中',
+                              ),
+                            ),
                     ),
                   ),
                 ),
@@ -1265,6 +1265,7 @@ class _QuickEntryHeader extends StatelessWidget {
     required this.peopleById,
     required this.currencyCode,
     required this.isIncome,
+    required this.highlight,
     required this.onLedgerChanged,
   });
 
@@ -1273,6 +1274,7 @@ class _QuickEntryHeader extends StatelessWidget {
   final Map<String, Person> peopleById;
   final String? currencyCode;
   final bool isIncome;
+  final bool highlight;
   final ValueChanged<String> onLedgerChanged;
 
   @override
@@ -1289,7 +1291,9 @@ class _QuickEntryHeader extends StatelessWidget {
         child: AppSectionCard(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           color: colorScheme.surfaceContainerLow.withValues(alpha: 0.46),
-          borderColor: colorScheme.outlineVariant.withValues(alpha: 0.46),
+          borderColor: highlight
+              ? colorScheme.error.withValues(alpha: 0.72)
+              : colorScheme.outlineVariant.withValues(alpha: 0.46),
           child: Row(
             children: [
               Container(

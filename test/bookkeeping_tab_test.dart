@@ -182,6 +182,69 @@ void main() {
     },
   );
 
+  testWidgets(
+    'saving without selected ledger highlights selector and shows notice',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final database = DatabaseService();
+      final firstLedger = await _saveLedgerFixture(database);
+      final secondLedger = Ledger()
+        ..uuid = 'ledger-2'
+        ..name = '家庭账本'
+        ..baseCurrencyCode = 'CNY'
+        ..personUuids = ['person-1'];
+      await database.saveLedger(secondLedger);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            databaseProvider.overrideWithValue(database),
+            authTokenProvider.overrideWith((ref) async => null),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: BookkeepingTab(ledgers: [firstLedger, secondLedger]),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('点击选择一个账本'), findsOneWidget);
+
+      await tester.tap(find.text('保存记账'));
+      await tester.pump();
+
+      expect(find.text('请先选择一个所属账本'), findsOneWidget);
+
+      final context = tester.element(find.byType(BookkeepingTab));
+      final colorScheme = Theme.of(context).colorScheme;
+      AppSectionCard headerCard() {
+        final headerCards = find.ancestor(
+          of: find.text('点击选择一个账本'),
+          matching: find.byType(AppSectionCard),
+        );
+        return tester.widget<AppSectionCard>(headerCards.first);
+      }
+
+      expect(
+        headerCard().borderColor,
+        colorScheme.error.withValues(alpha: 0.72),
+      );
+
+      await tester.pump(const Duration(milliseconds: 800));
+
+      expect(
+        headerCard().borderColor,
+        colorScheme.outlineVariant.withValues(alpha: 0.46),
+      );
+      await tester.pump(const Duration(seconds: 4));
+    },
+  );
+
   testWidgets('viewer ledgers are hidden from bookkeeping flow', (
     tester,
   ) async {
