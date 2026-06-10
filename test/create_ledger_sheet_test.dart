@@ -188,6 +188,37 @@ void main() {
     expect(userCompleter.isCompleted, isFalse);
   });
 
+  testWidgets(
+    'new ledger draft self matches default local profile while loading',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({
+        'auth_token_name': 'satoken',
+        'auth_token_value': 'token',
+        'auth_account_uuid': 'account-1',
+      });
+      final profileCompleter = Completer<LocalProfile>();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authTokenProvider.overrideWith(
+              (ref) async => const AuthToken(name: 'satoken', value: 'token'),
+            ),
+            currentUserProvider.overrideWith((ref) async => null),
+            localProfileProvider.overrideWith((ref) => profileCompleter.future),
+          ],
+          child: const MaterialApp(home: Scaffold(body: CreateLedgerSheet())),
+        ),
+      );
+
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('我'), findsOneWidget);
+      expect(find.text('本人'), findsNothing);
+    },
+  );
+
   testWidgets('new cloud ledger self person follows loaded account profile', (
     tester,
   ) async {

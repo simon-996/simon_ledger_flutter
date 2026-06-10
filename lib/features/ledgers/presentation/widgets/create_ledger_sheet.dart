@@ -610,17 +610,29 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
 
   String _effectiveSelfName(LocalProfile? profile, AuthUser? user) {
     if (_shouldPreferAccountProfile(profile, user)) {
-      return user!.nickname.trim().isEmpty ? '本人' : user.nickname.trim();
+      return user!.nickname.trim().isEmpty
+          ? LocalProfile.defaultProfile.nickname
+          : user.nickname.trim();
     }
-    return profile?.normalizedNickname ?? user?.nickname ?? '本人';
+    final userNickname = user?.nickname.trim();
+    return profile?.normalizedNickname ??
+        (userNickname == null || userNickname.isEmpty
+            ? LocalProfile.defaultProfile.nickname
+            : userNickname);
   }
 
   String _effectiveSelfAvatar(LocalProfile? profile, AuthUser? user) {
     if (_shouldPreferAccountProfile(profile, user)) {
       final avatar = user!.avatar?.trim();
-      return avatar == null || avatar.isEmpty ? '😎' : avatar;
+      return avatar == null || avatar.isEmpty
+          ? LocalProfile.defaultProfile.personAvatar
+          : avatar;
     }
-    return profile?.personAvatar ?? user?.avatar ?? '😎';
+    final userAvatar = user?.avatar?.trim();
+    return profile?.personAvatar ??
+        (userAvatar == null || userAvatar.isEmpty
+            ? LocalProfile.defaultProfile.personAvatar
+            : userAvatar);
   }
 
   bool _shouldPreferAccountProfile(LocalProfile? profile, AuthUser? user) {
