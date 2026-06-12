@@ -279,7 +279,12 @@ class DatabaseService {
       return [];
     }
 
-    final decoded = jsonDecode(raw);
+    final Object? decoded;
+    try {
+      decoded = jsonDecode(raw);
+    } on FormatException {
+      return [];
+    }
     if (decoded is! List<dynamic>) {
       return [];
     }

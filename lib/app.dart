@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/di/providers.dart';
+import 'core/network/friendly_error.dart';
 import 'core/services/invite_link_service.dart';
 import 'core/theme/app_theme.dart';
 import 'core/widgets/app_components.dart';
@@ -34,6 +35,7 @@ class _SimonLedgerAppState extends ConsumerState<SimonLedgerApp>
   bool _checkingClipboard = false;
   String? _lastOpenedInviteCode;
   String? _lastPromptedClipboardCode;
+  DateTime? _lastSyncErrorNoticeAt;
 
   @override
   void initState() {
@@ -138,18 +140,53 @@ class _SimonLedgerAppState extends ConsumerState<SimonLedgerApp>
     try {
       final token = await ref.read(authTokenProvider.future);
       if (token == null || !token.isValid) return;
-      final changed = await ref.read(syncCoordinatorProvider).syncAllPending();
-      if (!changed || !mounted) return;
+      final result = await ref
+          .read(syncCoordinatorProvider)
+          .syncAllPendingResult();
+      if (!mounted) return;
+      if (result.hasError && _shouldShowSyncErrorNotice()) {
+        AppNotice.error(
+          context,
+          FriendlyError.message(
+            result.error,
+            fallback: '部分数据仍保存在本机，网络恢复后会继续同步。',
+          ),
+          actionLabel: '重试',
+          onAction: () => _syncPending(),
+        );
+      }
+      if (!result.changed) return;
       ref.invalidate(ledgerProvider);
       ref.invalidate(personProvider);
       ref.invalidate(transactionProvider);
       ref.invalidate(ledgerStatsProvider);
       ref.invalidate(syncOverviewProvider);
-    } catch (_) {
-      // Silent retry: pending items stay local until the next sync trigger.
+    } catch (error) {
+      if (mounted && _shouldShowSyncErrorNotice()) {
+        AppNotice.error(
+          context,
+          FriendlyError.message(
+            error,
+            fallback: '部分数据仍保存在本机，网络恢复后会继续同步。',
+          ),
+          actionLabel: '重试',
+          onAction: () => _syncPending(),
+        );
+      }
     } finally {
       _syncing = false;
     }
+  }
+
+  bool _shouldShowSyncErrorNotice() {
+    final now = DateTime.now();
+    final lastNoticeAt = _lastSyncErrorNoticeAt;
+    if (lastNoticeAt != null &&
+        now.difference(lastNoticeAt) < const Duration(minutes: 2)) {
+      return false;
+    }
+    _lastSyncErrorNoticeAt = now;
+    return true;
   }
 
   @override

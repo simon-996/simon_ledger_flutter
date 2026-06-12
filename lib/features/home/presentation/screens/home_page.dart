@@ -341,10 +341,19 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Future<void> _deleteLedger(Ledger ledger) async {
-    await ref.read(ledgerProvider.notifier).deleteLedger(ledger.uuid);
-    await LastSelectedLedgerPreference.clearIfMatches(ledger.uuid);
-    ref.invalidate(ledgerStatsProvider);
-    ref.invalidate(syncOverviewProvider);
+    try {
+      await ref.read(ledgerProvider.notifier).deleteLedger(ledger.uuid);
+      await LastSelectedLedgerPreference.clearIfMatches(ledger.uuid);
+      ref.invalidate(ledgerStatsProvider);
+      ref.invalidate(syncOverviewProvider);
+      if (!mounted) return;
+      AppNotice.success(
+        context,
+        ledger.isLocalOnly ? '账本已删除' : '账本已在本机移除，将自动同步',
+      );
+    } catch (error) {
+      _showWriteError(error);
+    }
   }
 
   void _openLedger(Ledger ledger) {
