@@ -248,7 +248,8 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
   }
 
   void _showPersonOptions(Person person) {
-    if (person.uuid == _draftSelfPersonUuid) {
+    if (person.uuid == _draftSelfPersonUuid || _isLocalSelfPerson(person)) {
+      AppNotice.info(context, '请在“我的”页面编辑本人资料');
       return;
     }
 
@@ -448,14 +449,22 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
                                       )
                                     : _buildPeopleSelector(_latestPeoplePool),
                                 data: (peoplePool) {
-                                  _latestPeoplePool = peoplePool;
+                                  final visiblePeoplePool =
+                                      _applyLocalProfileToLocalSelfPeople(
+                                        peoplePool,
+                                        localProfile,
+                                        useLocalProfileSelf: !isCloudMode,
+                                      );
+                                  _latestPeoplePool = visiblePeoplePool;
                                   _selectDefaultSelfPerson(
-                                    peoplePool,
+                                    visiblePeoplePool,
                                     localProfile,
                                     currentUser,
                                   );
 
-                                  return _buildPeopleSelector(peoplePool);
+                                  return _buildPeopleSelector(
+                                    visiblePeoplePool,
+                                  );
                                 },
                               ),
                           ],
@@ -537,7 +546,7 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
           .toList();
     }
     if (!_isDraftPeopleMode) {
-      return const [];
+      return _selectedLocalSelfPeopleToSave();
     }
 
     final selectedPeople = _draftPeople
@@ -606,6 +615,74 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
       ..name = _effectiveSelfName(profile, user)
       ..avatar = _effectiveSelfAvatar(profile, user)
       ..linkedUserUuid = user?.uuid;
+  }
+
+  Future<List<Person>> _selectedLocalSelfPeopleToSave() async {
+    final selectedSelfPeople = _latestPeoplePool
+        .where(
+          (person) =>
+              _selectedPersonIds.contains(person.uuid) &&
+              _isLocalSelfPerson(person),
+        )
+        .toList();
+    final selectedSelfUuid = _selectedPersonIds
+        .where(_isLocalSelfUuid)
+        .firstOrNull;
+    if (selectedSelfPeople.isEmpty && selectedSelfUuid == null) return const [];
+
+    final profile = await ref.read(localProfileProvider.future);
+    if (selectedSelfPeople.isEmpty) {
+      return [
+        Person()
+          ..uuid = selectedSelfUuid!
+          ..name = profile.normalizedNickname
+          ..avatar = profile.personAvatar,
+      ];
+    }
+
+    return selectedSelfPeople
+        .map((person) => _copyWithLocalProfile(person, profile))
+        .toList();
+  }
+
+  List<Person> _applyLocalProfileToLocalSelfPeople(
+    List<Person> people,
+    LocalProfile? profile, {
+    required bool useLocalProfileSelf,
+  }) {
+    if (!useLocalProfileSelf) {
+      return people;
+    }
+
+    final effectiveProfile = profile ?? LocalProfile.defaultProfile;
+    return people.map((person) {
+      if (!_isLocalSelfPerson(person)) {
+        return person;
+      }
+      return _copyWithLocalProfile(person, effectiveProfile);
+    }).toList();
+  }
+
+  Person _copyWithLocalProfile(Person person, LocalProfile profile) {
+    return Person()
+      ..id = person.id
+      ..uuid = person.uuid
+      ..name = profile.normalizedNickname
+      ..avatar = profile.personAvatar
+      ..linkedUserUuid = person.linkedUserUuid
+      ..syncedRemoteUuid = person.syncedRemoteUuid
+      ..isDeleted = person.isDeleted
+      ..pendingSync = person.pendingSync
+      ..syncError = person.syncError
+      ..pendingLedgerUuid = person.pendingLedgerUuid;
+  }
+
+  bool _isLocalSelfPerson(Person person) {
+    return _isLocalSelfUuid(person.uuid);
+  }
+
+  bool _isLocalSelfUuid(String uuid) {
+    return uuid == 'self' || uuid == 'p1';
   }
 
   String _effectiveSelfName(LocalProfile? profile, AuthUser? user) {
@@ -689,7 +766,11 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
           nickname != null &&
           nickname.isNotEmpty &&
           person.name.trim() == nickname;
-      if (isSelfUuid || isLinkedUser || isProfileName || person.name == '自己') {
+      if (isSelfUuid ||
+          isLinkedUser ||
+          isProfileName ||
+          person.name == '自己' ||
+          person.name == '本人') {
         return person;
       }
     }

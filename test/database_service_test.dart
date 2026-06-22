@@ -2,7 +2,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simon_ledger_flutter/core/database/database_service.dart';
 import 'package:simon_ledger_flutter/core/models/ledger.dart';
+import 'package:simon_ledger_flutter/core/models/local_profile.dart';
+import 'package:simon_ledger_flutter/core/models/person.dart';
 import 'package:simon_ledger_flutter/core/models/transaction_record.dart';
+import 'package:simon_ledger_flutter/core/preferences/local_profile_store.dart';
 
 void main() {
   group('DatabaseService', () {
@@ -20,7 +23,41 @@ void main() {
 
       expect(people, hasLength(1));
       expect(people.single.uuid, 'self');
-      expect(people.single.name, '自己');
+      expect(people.single.name, '我');
+      expect(people.single.avatar, '🧑');
+    });
+
+    test('normalizes legacy default local person', () async {
+      await database.savePerson(
+        Person()
+          ..uuid = 'self'
+          ..name = '本人'
+          ..avatar = '😎',
+      );
+
+      await database.init();
+
+      final people = await database.getAllPeople();
+      expect(people.single.name, '我');
+      expect(people.single.avatar, '🧑');
+    });
+
+    test('syncs local self person from saved local profile on init', () async {
+      await const LocalProfileStore().save(
+        const LocalProfile(nickname: 'Simon', avatarIcon: 'star'),
+      );
+      await database.savePerson(
+        Person()
+          ..uuid = 'self'
+          ..name = '本人'
+          ..avatar = '😎',
+      );
+
+      await database.init();
+
+      final people = await database.getAllPeople();
+      expect(people.single.name, 'Simon');
+      expect(people.single.avatar, '⭐');
     });
 
     test('stores ledgers and transactions in local preferences', () async {

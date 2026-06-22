@@ -8,6 +8,7 @@ import 'package:simon_ledger_flutter/core/database/database_service.dart';
 import 'package:simon_ledger_flutter/core/di/providers.dart';
 import 'package:simon_ledger_flutter/core/models/ledger.dart';
 import 'package:simon_ledger_flutter/core/models/local_profile.dart';
+import 'package:simon_ledger_flutter/core/models/person.dart';
 import 'package:simon_ledger_flutter/core/network/token_store.dart';
 import 'package:simon_ledger_flutter/core/repositories/auth_repository.dart';
 import 'package:simon_ledger_flutter/features/auth/presentation/providers/auth_provider.dart';
@@ -128,6 +129,93 @@ void main() {
     final personTile = tester.widget<AnimatedContainer>(personTileFinder);
     final decoration = personTile.decoration! as BoxDecoration;
     expect(decoration.border, isNull);
+  });
+
+  testWidgets('local ledger creation uses the same default self profile', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final database = DatabaseService();
+    await database.init();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          authTokenProvider.overrideWith((ref) async => null),
+        ],
+        child: const MaterialApp(home: Scaffold(body: CreateLedgerSheet())),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('我'), findsOneWidget);
+    expect(find.text('本人'), findsNothing);
+  });
+
+  testWidgets('local ledger creation links self person to local profile', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final database = DatabaseService();
+    await database.savePerson(
+      Person()
+        ..uuid = 'self'
+        ..name = '本人'
+        ..avatar = '😎',
+    );
+    CreateLedgerResult? result;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          authTokenProvider.overrideWith((ref) async => null),
+          localProfileProvider.overrideWith(
+            (ref) async =>
+                const LocalProfile(nickname: 'Simon', avatarIcon: 'star'),
+          ),
+        ],
+        child: MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: FilledButton(
+                onPressed: () async {
+                  result = await showModalBottomSheet<CreateLedgerResult>(
+                    context: context,
+                    builder: (context) => const CreateLedgerSheet(),
+                  );
+                },
+                child: const Text('打开'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.tap(find.text('打开'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('Simon'), findsOneWidget);
+    expect(find.text('本人'), findsNothing);
+
+    final ledgerNameField = find.byWidgetPredicate(
+      (widget) => widget is TextField && widget.decoration?.labelText == '账本名称',
+    );
+    await tester.enterText(ledgerNameField, '本地账本');
+    await tester.pump();
+    await tester.tap(find.text('创建账本'));
+    await tester.pumpAndSettle();
+
+    expect(result, isNotNull);
+    expect(result!.personIds, contains('self'));
+    expect(result!.people.single.uuid, 'self');
+    expect(result!.people.single.name, 'Simon');
+    expect(result!.people.single.avatar, '⭐');
   });
 
   testWidgets('creating ledger does not wait for remote account profile', (

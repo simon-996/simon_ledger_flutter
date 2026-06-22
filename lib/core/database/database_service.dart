@@ -3,8 +3,10 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/ledger.dart';
+import '../models/local_profile.dart';
 import '../models/person.dart';
 import '../models/transaction_record.dart';
+import '../preferences/local_profile_store.dart';
 
 class DatabaseService {
   static const _peopleKey = 'local_store.people.v1';
@@ -12,8 +14,10 @@ class DatabaseService {
   static const _transactionsKey = 'local_store.transactions.v1';
 
   Future<void> init() async {
+    final profile = await const LocalProfileStore().read();
     final people = await _readPeople();
     if (people.isNotEmpty) {
+      await _syncLocalSelfPerson(people, profile);
       return;
     }
 
@@ -21,9 +25,33 @@ class DatabaseService {
       Person()
         ..id = 1
         ..uuid = 'self'
-        ..name = '自己'
-        ..avatar = '😎',
+        ..name = profile.normalizedNickname
+        ..avatar = profile.personAvatar,
     ]);
+  }
+
+  Future<void> _syncLocalSelfPerson(
+    List<Person> people,
+    LocalProfile profile,
+  ) async {
+    var changed = false;
+    for (final person in people) {
+      if (person.uuid != 'self' && person.uuid != 'p1') {
+        continue;
+      }
+
+      final name = profile.normalizedNickname;
+      final avatar = profile.personAvatar;
+      if (person.name == name && person.avatar == avatar) continue;
+      person
+        ..name = name
+        ..avatar = avatar;
+      changed = true;
+    }
+
+    if (changed) {
+      await _writePeople(people);
+    }
   }
 
   // Person operations

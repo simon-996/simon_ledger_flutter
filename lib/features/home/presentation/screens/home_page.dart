@@ -418,6 +418,15 @@ class _HomePageState extends ConsumerState<HomePage> {
         : null;
     final people = await personRepository.getAllPeople(ledgerUuid: ledgerScope);
     final nickname = profile.normalizedNickname;
+    final selfName =
+        isCloudMode && user != null && user.nickname.trim().isNotEmpty
+        ? user.nickname.trim()
+        : nickname;
+    final userAvatar = user?.avatar?.trim();
+    final selfAvatar =
+        isCloudMode && userAvatar != null && userAvatar.isNotEmpty
+        ? userAvatar
+        : profile.personAvatar;
     final existing = people.where((person) {
       if (person.isDeleted) {
         return false;
@@ -433,6 +442,14 @@ class _HomePageState extends ConsumerState<HomePage> {
     }).firstOrNull;
 
     if (existing != null) {
+      if (existing.name != selfName || existing.avatar != selfAvatar) {
+        existing
+          ..name = selfName
+          ..avatar = selfAvatar;
+        await personRepository.savePerson(existing, ledgerUuid: ledgerScope);
+        ref.invalidate(personProvider);
+        ref.invalidate(cachedPeopleProvider);
+      }
       return existing.uuid;
     }
 
@@ -440,8 +457,8 @@ class _HomePageState extends ConsumerState<HomePage> {
       ..uuid = isCloudMode
           ? 'self-${DateTime.now().microsecondsSinceEpoch}'
           : 'self'
-      ..name = nickname
-      ..avatar = profile.personAvatar
+      ..name = selfName
+      ..avatar = selfAvatar
       ..linkedUserUuid = user?.uuid;
     await personRepository.savePerson(person, ledgerUuid: ledgerScope);
     ref.invalidate(personProvider);
