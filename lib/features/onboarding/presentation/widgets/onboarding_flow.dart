@@ -95,9 +95,11 @@ class _SimonOnboardingFlowState extends State<SimonOnboardingFlow> {
                       ),
                     ),
                   ),
-                  TextButton(
-                    onPressed: () => _finish(OnboardingAction.done),
-                    child: const Text('跳过'),
+                  AppPressable(
+                    child: TextButton(
+                      onPressed: () => _finish(OnboardingAction.done),
+                      child: const Text('跳过'),
+                    ),
                   ),
                 ],
               ),
@@ -116,27 +118,34 @@ class _SimonOnboardingFlowState extends State<SimonOnboardingFlow> {
               ),
               _OnboardingDots(count: _steps.length, index: _index),
               const SizedBox(height: 20),
-              FilledButton.icon(
-                onPressed: () {
-                  if (isLast) {
-                    _finish(OnboardingAction.createLedger);
-                  } else {
-                    _controller.nextPage(
-                      duration: AppMotion.normal,
-                      curve: AppMotion.emphasized,
-                    );
-                  }
-                },
-                icon: Icon(isLast ? Icons.add_rounded : Icons.arrow_forward),
-                label: Text(isLast ? '创建账本' : '继续'),
+              AppPressable(
+                pressedScale: 0.98,
+                child: FilledButton.icon(
+                  onPressed: () {
+                    if (isLast) {
+                      _finish(OnboardingAction.createLedger);
+                    } else {
+                      _controller.nextPage(
+                        duration: AppMotion.normal,
+                        curve: AppMotion.emphasized,
+                      );
+                    }
+                  },
+                  icon: Icon(isLast ? Icons.add_rounded : Icons.arrow_forward),
+                  label: Text(isLast ? '创建账本' : '继续'),
+                ),
               ),
               const SizedBox(height: 8),
-              TextButton.icon(
-                onPressed: () => _finish(
-                  isLast ? OnboardingAction.account : OnboardingAction.done,
+              AppPressable(
+                child: TextButton.icon(
+                  onPressed: () => _finish(
+                    isLast ? OnboardingAction.account : OnboardingAction.done,
+                  ),
+                  icon: Icon(
+                    isLast ? Icons.login_rounded : Icons.close_rounded,
+                  ),
+                  label: Text(isLast ? '先登录同步' : '先自己看看'),
                 ),
-                icon: Icon(isLast ? Icons.login_rounded : Icons.close_rounded),
-                label: Text(isLast ? '先登录同步' : '先自己看看'),
               ),
             ],
           ),

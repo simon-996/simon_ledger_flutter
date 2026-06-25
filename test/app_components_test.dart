@@ -97,4 +97,34 @@ void main() {
       expect(decoration.border, isNull);
     }
   });
+
+  testWidgets(
+    'AppPressable scales down while pressed and restores on release',
+    (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: Center(child: AppPressable(child: Text('保存'))),
+          ),
+        ),
+      );
+
+      expect(tester.widget<AnimatedScale>(find.byType(AnimatedScale)).scale, 1);
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('保存')),
+      );
+      await tester.pump();
+
+      expect(
+        tester.widget<AnimatedScale>(find.byType(AnimatedScale)).scale,
+        lessThan(1),
+      );
+
+      await gesture.up();
+      await tester.pump();
+
+      expect(tester.widget<AnimatedScale>(find.byType(AnimatedScale)).scale, 1);
+    },
+  );
 }

@@ -18,6 +18,59 @@ class AppMotion {
   static const Curve spring = Curves.easeOutBack;
 }
 
+class AppPressable extends StatefulWidget {
+  const AppPressable({
+    super.key,
+    required this.child,
+    this.enabled = true,
+    this.pressedScale = 0.975,
+    this.duration = AppMotion.micro,
+    this.curve = AppMotion.standard,
+  }) : assert(pressedScale > 0 && pressedScale <= 1);
+
+  final Widget child;
+  final bool enabled;
+  final double pressedScale;
+  final Duration duration;
+  final Curve curve;
+
+  @override
+  State<AppPressable> createState() => _AppPressableState();
+}
+
+class _AppPressableState extends State<AppPressable> {
+  bool _pressed = false;
+
+  @override
+  void didUpdateWidget(covariant AppPressable oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.enabled && _pressed) {
+      _pressed = false;
+    }
+  }
+
+  void _setPressed(bool pressed) {
+    if (!widget.enabled || _pressed == pressed) return;
+    setState(() => _pressed = pressed);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      behavior: HitTestBehavior.deferToChild,
+      onPointerDown: widget.enabled ? (_) => _setPressed(true) : null,
+      onPointerUp: widget.enabled ? (_) => _setPressed(false) : null,
+      onPointerCancel: widget.enabled ? (_) => _setPressed(false) : null,
+      child: AnimatedScale(
+        scale: widget.enabled && _pressed ? widget.pressedScale : 1,
+        duration: widget.duration,
+        curve: widget.curve,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
 enum AppNoticeType { success, info, error }
 
 class AppNotice {
@@ -228,17 +281,21 @@ class _AppNoticeOverlay extends StatelessWidget {
                           ),
                           if (actionLabel != null && onAction != null) ...[
                             const SizedBox(width: 8),
-                            TextButton(
-                              onPressed: onAction,
-                              child: Text(actionLabel!),
+                            AppPressable(
+                              child: TextButton(
+                                onPressed: onAction,
+                                child: Text(actionLabel!),
+                              ),
                             ),
                           ],
                           const SizedBox(width: 2),
-                          IconButton(
-                            tooltip: '关闭',
-                            visualDensity: VisualDensity.compact,
-                            icon: const Icon(Icons.close_rounded, size: 18),
-                            onPressed: onClose,
+                          AppPressable(
+                            child: IconButton(
+                              tooltip: '关闭',
+                              visualDensity: VisualDensity.compact,
+                              icon: const Icon(Icons.close_rounded, size: 18),
+                              onPressed: onClose,
+                            ),
                           ),
                         ],
                       ),
@@ -1584,16 +1641,13 @@ class _AnimatedTapSurface extends StatefulWidget {
 }
 
 class _AnimatedTapSurfaceState extends State<_AnimatedTapSurface> {
-  bool _pressed = false;
-
   @override
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(widget.borderRadius);
 
-    return AnimatedScale(
-      scale: _pressed ? 0.985 : 1,
-      duration: AppMotion.fast,
-      curve: AppMotion.standard,
+    return AppPressable(
+      enabled: widget.onTap != null || widget.onLongPress != null,
+      pressedScale: 0.985,
       child: AnimatedContainer(
         duration: AppMotion.normal,
         curve: AppMotion.standard,
@@ -1612,9 +1666,6 @@ class _AnimatedTapSurfaceState extends State<_AnimatedTapSurface> {
           child: InkWell(
             onTap: widget.onTap,
             onLongPress: widget.onLongPress,
-            onHighlightChanged: (pressed) {
-              if (_pressed != pressed) setState(() => _pressed = pressed);
-            },
             borderRadius: radius,
             child: widget.child,
           ),

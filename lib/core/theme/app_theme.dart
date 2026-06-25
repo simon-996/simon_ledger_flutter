@@ -274,7 +274,7 @@ class AppTheme {
             fontWeight: FontWeight.w800,
             letterSpacing: 0,
           ),
-        ),
+        ).copyWith(overlayColor: _tintedButtonOverlayColor(primaryColor)),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
@@ -283,6 +283,11 @@ class AppTheme {
             fontWeight: FontWeight.w800,
             letterSpacing: 0,
           ),
+        ).copyWith(overlayColor: _tintedButtonOverlayColor(primaryColor)),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: ButtonStyle(
+          overlayColor: _tintedButtonOverlayColor(primaryColor),
         ),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
@@ -352,6 +357,34 @@ class AppTheme {
     );
   }
 
+  static WidgetStateProperty<Color?> _filledButtonOverlayColor() {
+    return WidgetStateProperty.resolveWith((states) {
+      if (states.contains(WidgetState.disabled)) return null;
+      if (states.contains(WidgetState.pressed)) {
+        return onSurfaceColor.withValues(alpha: 0.1);
+      }
+      if (states.contains(WidgetState.hovered) ||
+          states.contains(WidgetState.focused)) {
+        return Colors.white.withValues(alpha: 0.1);
+      }
+      return null;
+    });
+  }
+
+  static WidgetStateProperty<Color?> _tintedButtonOverlayColor(Color color) {
+    return WidgetStateProperty.resolveWith((states) {
+      if (states.contains(WidgetState.disabled)) return null;
+      if (states.contains(WidgetState.pressed)) {
+        return color.withValues(alpha: 0.14);
+      }
+      if (states.contains(WidgetState.hovered) ||
+          states.contains(WidgetState.focused)) {
+        return color.withValues(alpha: 0.08);
+      }
+      return null;
+    });
+  }
+
   static ButtonStyle _filledButtonStyle(Color color) {
     return FilledButton.styleFrom(
       backgroundColor: color,
@@ -368,6 +401,6 @@ class AppTheme {
         fontWeight: FontWeight.w800,
         letterSpacing: 0,
       ),
-    );
+    ).copyWith(overlayColor: _filledButtonOverlayColor());
   }
 }

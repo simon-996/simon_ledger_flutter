@@ -55,6 +55,28 @@ void main() {
     expect(outlinedStyle.backgroundColor, isNull);
   });
 
+  test('AppTheme gives standard buttons visible pressed state layers', () {
+    final theme = AppTheme.lightTheme;
+    const pressed = <WidgetState>{WidgetState.pressed};
+
+    expect(
+      theme.filledButtonTheme.style!.overlayColor!.resolve(pressed),
+      AppTheme.onSurfaceColor.withValues(alpha: 0.1),
+    );
+    expect(
+      theme.outlinedButtonTheme.style!.overlayColor!.resolve(pressed),
+      AppTheme.primaryColor.withValues(alpha: 0.14),
+    );
+    expect(
+      theme.textButtonTheme.style!.overlayColor!.resolve(pressed),
+      AppTheme.primaryColor.withValues(alpha: 0.14),
+    );
+    expect(
+      theme.iconButtonTheme.style!.overlayColor!.resolve(pressed),
+      AppTheme.primaryColor.withValues(alpha: 0.14),
+    );
+  });
+
   test('AppTheme uses calm floating surfaces for modals', () {
     final theme = AppTheme.lightTheme;
     final scheme = theme.colorScheme;

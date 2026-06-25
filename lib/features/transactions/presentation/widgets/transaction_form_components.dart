@@ -765,62 +765,66 @@ class TransactionSaveButton extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final enabled = onPressed != null;
 
-    return AnimatedContainer(
-      duration: AppMotion.fast,
-      curve: AppMotion.standard,
-      height: 54,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: enabled
-            ? [
-                BoxShadow(
-                  color: colorScheme.primary.withValues(alpha: 0.18),
-                  blurRadius: 16,
-                  offset: const Offset(0, 8),
-                ),
-              ]
-            : const [],
-      ),
-      child: FilledButton(
-        onPressed: onPressed,
-        style: FilledButton.styleFrom(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 18),
-          disabledBackgroundColor: colorScheme.surfaceContainerHighest,
-          disabledForegroundColor: colorScheme.onSurfaceVariant,
-          textStyle: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+    return AppPressable(
+      enabled: enabled,
+      pressedScale: 0.98,
+      child: AnimatedContainer(
+        duration: AppMotion.fast,
+        curve: AppMotion.standard,
+        height: 54,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: enabled
+              ? [
+                  BoxShadow(
+                    color: colorScheme.primary.withValues(alpha: 0.18),
+                    blurRadius: 16,
+                    offset: const Offset(0, 8),
+                  ),
+                ]
+              : const [],
         ),
-        child: AnimatedSwitcher(
-          duration: AppMotion.fast,
-          child: loading
-              ? Row(
-                  key: ValueKey('transaction-save-loading-$loadingLabel'),
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: colorScheme.onSurfaceVariant,
+        child: FilledButton(
+          onPressed: onPressed,
+          style: FilledButton.styleFrom(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            disabledBackgroundColor: colorScheme.surfaceContainerHighest,
+            disabledForegroundColor: colorScheme.onSurfaceVariant,
+            textStyle: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          child: AnimatedSwitcher(
+            duration: AppMotion.fast,
+            child: loading
+                ? Row(
+                    key: ValueKey('transaction-save-loading-$loadingLabel'),
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(loadingLabel),
-                  ],
-                )
-              : Row(
-                  key: ValueKey('transaction-save-ready-$readyLabel'),
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.check_rounded, size: 22),
-                    const SizedBox(width: 8),
-                    Text(readyLabel),
-                  ],
-                ),
+                      const SizedBox(width: 10),
+                      Text(loadingLabel),
+                    ],
+                  )
+                : Row(
+                    key: ValueKey('transaction-save-ready-$readyLabel'),
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.check_rounded, size: 22),
+                      const SizedBox(width: 8),
+                      Text(readyLabel),
+                    ],
+                  ),
+          ),
         ),
       ),
     );

@@ -1106,17 +1106,21 @@ class _SubmitButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 52,
-      child: FilledButton.icon(
-        onPressed: onPressed,
-        icon: submitting
-            ? const SizedBox.square(
-                dimension: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Icon(Icons.check_rounded),
-        label: Text(label),
+    return AppPressable(
+      enabled: onPressed != null,
+      pressedScale: 0.98,
+      child: SizedBox(
+        height: 52,
+        child: FilledButton.icon(
+          onPressed: onPressed,
+          icon: submitting
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.check_rounded),
+          label: Text(label),
+        ),
       ),
     );
   }
