@@ -6,7 +6,9 @@ import 'package:simon_ledger_flutter/core/database/database_service.dart';
 import 'package:simon_ledger_flutter/core/di/providers.dart';
 import 'package:simon_ledger_flutter/core/models/ledger.dart';
 import 'package:simon_ledger_flutter/core/models/person.dart';
+import 'package:simon_ledger_flutter/core/models/transaction_record.dart';
 import 'package:simon_ledger_flutter/core/network/token_store.dart';
+import 'package:simon_ledger_flutter/core/repositories/transaction_repository.dart';
 import 'package:simon_ledger_flutter/core/theme/app_theme.dart';
 import 'package:simon_ledger_flutter/core/widgets/app_components.dart';
 import 'package:simon_ledger_flutter/features/transactions/presentation/widgets/bookkeeping_tab.dart';
@@ -143,11 +145,7 @@ void main() {
     (tester) async {
       SharedPreferences.setMockInitialValues({});
       await tester.binding.setSurfaceSize(const Size(390, 844));
-      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
-      addTearDown(() {
-        tester.view.resetViewInsets();
-        tester.binding.setSurfaceSize(null);
-      });
+      addTearDown(() => tester.binding.setSurfaceSize(null));
 
       final database = DatabaseService();
       final ledger = await _saveLedgerFixture(database);
@@ -159,7 +157,16 @@ void main() {
             authTokenProvider.overrideWith((ref) async => null),
           ],
           child: MaterialApp(
-            home: Scaffold(body: BookkeepingTab(ledgers: [ledger])),
+            home: MediaQuery(
+              data: const MediaQueryData(
+                size: Size(390, 844),
+                viewInsets: EdgeInsets.only(bottom: 300),
+              ),
+              child: Scaffold(
+                resizeToAvoidBottomInset: false,
+                body: BookkeepingTab(ledgers: [ledger]),
+              ),
+            ),
           ),
         ),
       );
@@ -169,16 +176,128 @@ void main() {
         const ValueKey('bookkeeping-amount-input'),
       );
       expect(amountInput, findsOneWidget);
-      expect(tester.widget<TextField>(amountInput).autofocus, isTrue);
+      expect(tester.widget<TextField>(amountInput).focusNode?.hasFocus, isTrue);
       expect(tester.testTextInput.isVisible, isTrue);
 
-      final keyboardTop =
-          tester.view.physicalSize.height / tester.view.devicePixelRatio -
-          tester.view.viewInsets.bottom / tester.view.devicePixelRatio;
+      final mediaQuery = MediaQuery.of(
+        tester.element(find.byType(BookkeepingTab)),
+      );
+      final keyboardTop = mediaQuery.size.height - mediaQuery.viewInsets.bottom;
       final saveButtonBottom = tester
           .getBottomLeft(find.byKey(const ValueKey('save-enabled')))
           .dy;
       expect(keyboardTop - saveButtonBottom, lessThanOrEqualTo(24));
+    },
+  );
+
+  testWidgets(
+    'saving transaction keeps keyboard dismissed and success dialog visible',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final database = DatabaseService();
+      final ledger = await _saveLedgerFixture(database);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            databaseProvider.overrideWithValue(database),
+            authTokenProvider.overrideWith((ref) async => null),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.lightTheme,
+            home: MediaQuery(
+              data: const MediaQueryData(
+                size: Size(390, 844),
+                viewInsets: EdgeInsets.only(bottom: 300),
+              ),
+              child: Scaffold(
+                resizeToAvoidBottomInset: false,
+                body: BookkeepingTab(ledgers: [ledger]),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final amountInput = find.byKey(
+        const ValueKey('bookkeeping-amount-input'),
+      );
+      await tester.enterText(amountInput, '12.50');
+      expect(tester.testTextInput.isVisible, isTrue);
+
+      await tester.tap(find.text('保存记账'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 700));
+
+      expect(find.text('支出已记下'), findsOneWidget);
+      expect(tester.testTextInput.isVisible, isFalse);
+      expect(tester.widget<TextField>(amountInput).autofocus, isFalse);
+
+      final mediaQuery = MediaQuery.of(
+        tester.element(find.byType(BookkeepingTab)),
+      );
+      final keyboardTop = mediaQuery.size.height - mediaQuery.viewInsets.bottom;
+      final successCardBottom = tester
+          .getBottomLeft(
+            find.ancestor(of: find.text('支出已记下'), matching: find.byType(Card)),
+          )
+          .dy;
+      expect(successCardBottom, lessThanOrEqualTo(keyboardTop - 16));
+
+      await tester.pump(const Duration(milliseconds: 1500));
+      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets(
+    'locally saved transaction still shows success after post-save failure',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final database = DatabaseService();
+      final ledger = await _saveLedgerFixture(database);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            databaseProvider.overrideWithValue(database),
+            transactionRepositoryProvider.overrideWithValue(
+              _PostSaveFailureTransactionRepository(database),
+            ),
+            authTokenProvider.overrideWith((ref) async => null),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.lightTheme,
+            home: Scaffold(
+              resizeToAvoidBottomInset: false,
+              body: BookkeepingTab(ledgers: [ledger]),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey('bookkeeping-amount-input')),
+        '12.50',
+      );
+      await tester.tap(find.text('保存记账'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 700));
+
+      final transactions = await database.getTransactionsForLedger(ledger.uuid);
+      expect(transactions, hasLength(1));
+      expect(find.text('支出已记下'), findsOneWidget);
+      expect(find.textContaining('失败'), findsNothing);
+
+      await tester.pump(const Duration(milliseconds: 1500));
+      await tester.pumpAndSettle();
     },
   );
 
@@ -309,4 +428,61 @@ Future<Ledger> _saveLedgerFixture(DatabaseService database) async {
 ColorScheme _saveButtonScheme(WidgetTester tester) {
   final saveButtonContext = tester.element(find.text('保存记账'));
   return Theme.of(saveButtonContext).colorScheme;
+}
+
+class _PostSaveFailureTransactionRepository implements TransactionRepository {
+  const _PostSaveFailureTransactionRepository(this._database);
+
+  final DatabaseService _database;
+
+  @override
+  Future<void> saveTransaction(TransactionRecord transaction) async {
+    await _database.saveTransaction(transaction);
+    throw StateError('post-save refresh failed');
+  }
+
+  @override
+  Future<List<TransactionRecord>> getCachedTransactionsForLedger(
+    String ledgerUuid, {
+    bool includeDeleted = false,
+  }) {
+    return _database.getTransactionsForLedger(
+      ledgerUuid,
+      includeDeleted: includeDeleted,
+    );
+  }
+
+  @override
+  Future<List<TransactionRecord>> getTransactionsForLedger(
+    String ledgerUuid, {
+    bool includeDeleted = false,
+  }) {
+    return _database.getTransactionsForLedger(
+      ledgerUuid,
+      includeDeleted: includeDeleted,
+    );
+  }
+
+  @override
+  Future<List<TransactionRecord>> getTransactionsForLedgers(
+    List<String> ledgerUuids, {
+    bool includeDeleted = false,
+  }) {
+    return _database.getTransactionsForLedgers(
+      ledgerUuids,
+      includeDeleted: includeDeleted,
+    );
+  }
+
+  @override
+  Future<void> deleteTransaction(String ledgerUuid, String uuid) {
+    return _database.deleteTransaction(uuid);
+  }
+
+  @override
+  Future<TransactionSyncResult> syncPendingTransactions(
+    String ledgerUuid,
+  ) async {
+    return const TransactionSyncResult(synced: 0);
+  }
 }

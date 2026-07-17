@@ -42,6 +42,8 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
   bool _savingTransaction = false;
   bool _successDialogVisible = false;
   bool _highlightLedgerSelector = false;
+  bool _amountFocusRequestedForEntry = false;
+  double _lastKeyboardBottom = 0;
   int _ledgerSelectorAttentionRequest = 0;
 
   final _amountController = TextEditingController();
@@ -57,7 +59,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
   void initState() {
     super.initState();
     _initDefaults();
-    _focusAmountAfterFrame();
+    _focusAmountOnEntry();
   }
 
   @override
@@ -65,8 +67,9 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     super.didUpdateWidget(oldWidget);
     if (widget.isActive != oldWidget.isActive) {
       if (widget.isActive) {
-        _focusAmountAfterFrame();
+        _focusAmountOnEntry();
       } else {
+        _amountFocusRequestedForEntry = false;
         _amountFocusNode.unfocus();
       }
     }
@@ -89,7 +92,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
       _sanitizeCurrentSelection(currentLedger);
     });
     _persistDraft();
-    _focusAmountAfterFrame();
+    _focusAmountOnEntry();
   }
 
   Ledger? get _selectedLedger {
@@ -250,7 +253,13 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     );
   }
 
-  void _focusAmountAfterFrame() {
+  void _focusAmountOnEntry() {
+    if (_amountFocusRequestedForEntry ||
+        !widget.isActive ||
+        _recordableLedgers.isEmpty) {
+      return;
+    }
+    _amountFocusRequestedForEntry = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !widget.isActive || _recordableLedgers.isEmpty) {
         return;
@@ -275,6 +284,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     String ledgerName,
     int transactionType,
     Iterable<Person> people,
+    double keyboardBottom,
   ) {
     _successDialogVisible = true;
     showGeneralDialog<void>(
@@ -284,14 +294,22 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
       barrierColor: Colors.black.withValues(alpha: 0.38),
       transitionDuration: const Duration(milliseconds: 420),
       pageBuilder: (context, animation, secondaryAnimation) {
-        return Center(
-          child: _BookkeepingSuccessCard(
-            amount: amount,
-            currency: currency,
-            category: category,
-            ledgerName: ledgerName,
-            transactionType: transactionType,
-            people: people.toList(),
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(20, 24, 20, 24 + keyboardBottom),
+            child: Align(
+              alignment: keyboardBottom > 0
+                  ? Alignment.bottomCenter
+                  : Alignment.center,
+              child: _BookkeepingSuccessCard(
+                amount: amount,
+                currency: currency,
+                category: category,
+                ledgerName: ledgerName,
+                transactionType: transactionType,
+                people: people.toList(),
+              ),
+            ),
           ),
         );
       },
@@ -356,11 +374,12 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     final selectedPeople = _selectedPersonIds
         .map((pid) => personOrFallback(personMap, pid))
         .toList();
+    TransactionRecord? savedRecord;
     setState(() => _savingTransaction = true);
     try {
       final profile = await ref.read(localProfileProvider.future);
       final currentUser = ref.read(currentUserProvider).value;
-      final record = TransactionRecord()
+      savedRecord = TransactionRecord()
         ..uuid = DateTime.now().microsecondsSinceEpoch.toString()
         ..ledgerUuid = ledgerId
         ..type = _transactionType
@@ -378,34 +397,55 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
 
       await ref
           .read(transactionProvider(ledgerId).notifier)
-          .addTransaction(record);
+          .addTransaction(savedRecord);
       await _rememberCategory(_transactionType, category);
     } catch (e) {
-      if (!mounted) return;
-      AppNotice.error(
-        context,
-        FriendlyError.message(e, fallback: '保存失败，请稍后重试。'),
-      );
-      return;
+      final record = savedRecord;
+      if (record != null && await _isTransactionSavedLocally(record)) {
+        await _rememberCategory(_transactionType, category);
+        ref.invalidate(transactionProvider(ledgerId));
+        ref.invalidate(ledgerSyncStatusProvider(ledgerId));
+      } else {
+        if (!mounted) return;
+        AppNotice.error(
+          context,
+          FriendlyError.message(e, fallback: '保存失败，请稍后重试。'),
+        );
+        return;
+      }
     } finally {
       if (mounted) {
         setState(() => _savingTransaction = false);
       }
     }
 
-    if (mounted) {
-      _showSuccessAnimation(
-        amount,
-        currency,
-        category,
-        ledger?.name ?? '当前账本',
-        _transactionType,
-        selectedPeople,
-      );
-      _amountController.clear();
-      _noteController.clear();
-      FocusScope.of(context).unfocus();
-    }
+    if (!mounted) return;
+    _showSuccessAnimation(
+      amount,
+      currency,
+      category,
+      ledger?.name ?? '当前账本',
+      _transactionType,
+      selectedPeople,
+      _lastKeyboardBottom,
+    );
+    _lastKeyboardBottom = 0;
+    _amountController.clear();
+    _noteController.clear();
+    FocusScope.of(context).unfocus();
+  }
+
+  Future<bool> _isTransactionSavedLocally(TransactionRecord record) async {
+    final transactions = await ref
+        .read(databaseProvider)
+        .getTransactionsForLedger(record.ledgerUuid, includeDeleted: true);
+    return transactions.any((transaction) {
+      if (transaction.uuid == record.uuid) return true;
+      final operationId = record.clientOperationId;
+      return operationId != null &&
+          operationId.isNotEmpty &&
+          transaction.clientOperationId == operationId;
+    });
   }
 
   Future<void> _rememberCategory(int transactionType, String category) async {
@@ -461,6 +501,9 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
         builder: (context) {
           final colorScheme = Theme.of(context).colorScheme;
           final keyboardBottom = MediaQuery.viewInsetsOf(context).bottom;
+          if (keyboardBottom > 0) {
+            _lastKeyboardBottom = keyboardBottom;
+          }
           final navigationReserve =
               Theme.of(context).navigationBarTheme.height ?? 70;
           final keyboardLift = keyboardBottom > navigationReserve
@@ -520,7 +563,6 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                           },
                           amountController: _amountController,
                           amountFocusNode: _amountFocusNode,
-                          autofocus: widget.isActive,
                           selectedCurrency: _selectedCurrency ?? 'CNY',
                           currencies: currencyOptions,
                           onCurrencyChanged: (currency) {
@@ -927,7 +969,6 @@ class _BookkeepingAmountPanel extends StatelessWidget {
     required this.onTypeChanged,
     required this.amountController,
     required this.amountFocusNode,
-    required this.autofocus,
     required this.selectedCurrency,
     required this.currencies,
     required this.onCurrencyChanged,
@@ -938,7 +979,6 @@ class _BookkeepingAmountPanel extends StatelessWidget {
   final ValueChanged<int> onTypeChanged;
   final TextEditingController amountController;
   final FocusNode amountFocusNode;
-  final bool autofocus;
   final String selectedCurrency;
   final List<String> currencies;
   final ValueChanged<String> onCurrencyChanged;
@@ -982,7 +1022,6 @@ class _BookkeepingAmountPanel extends StatelessWidget {
                   key: const ValueKey('bookkeeping-amount-input'),
                   controller: amountController,
                   focusNode: amountFocusNode,
-                  autofocus: autofocus,
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
@@ -1049,22 +1088,24 @@ class _BookkeepingSuccessCard extends StatelessWidget {
     final hiddenPeopleCount = people.length - visiblePeople.length;
 
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 360),
+      constraints: const BoxConstraints(maxWidth: 344),
       child: Card(
-        margin: const EdgeInsets.symmetric(horizontal: 24),
-        elevation: 18,
-        shadowColor: colorScheme.shadow.withValues(alpha: 0.18),
+        margin: EdgeInsets.zero,
+        elevation: 20,
+        shadowColor: colorScheme.shadow.withValues(alpha: 0.2),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(28),
-          side: BorderSide(color: colorScheme.outlineVariant),
+          borderRadius: BorderRadius.circular(30),
+          side: BorderSide(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.76),
+          ),
         ),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+          padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               _SuccessCheckBadge(color: toneColor),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               Text(
                 isIncome ? '收入已记下' : '支出已记下',
                 style: Theme.of(
@@ -1081,18 +1122,32 @@ class _BookkeepingSuccessCard extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 16),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  '$amountPrefix $currency ${amount.toStringAsFixed(2)}',
-                  style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                    color: toneColor,
-                    fontWeight: FontWeight.w900,
+              const SizedBox(height: 14),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: toneColor.withValues(alpha: 0.09),
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: toneColor.withValues(alpha: 0.14)),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      '$amountPrefix $currency ${amount.toStringAsFixed(2)}',
+                      style: Theme.of(context).textTheme.headlineMedium
+                          ?.copyWith(
+                            color: toneColor,
+                            fontWeight: FontWeight.w900,
+                          ),
+                    ),
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -1108,12 +1163,24 @@ class _BookkeepingSuccessCard extends StatelessWidget {
                     _SuccessInfoChip(label: '+$hiddenPeopleCount 人'),
                 ],
               ),
-              const SizedBox(height: 14),
-              Text(
-                '本机已保存，可以继续记账',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.offline_pin_rounded,
+                    size: 15,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    '本机已保存，可以继续记账',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -1139,11 +1206,11 @@ class _SuccessCheckBadge extends StatelessWidget {
         return Transform.scale(scale: value, child: child);
       },
       child: Container(
-        width: 74,
-        height: 74,
+        width: 62,
+        height: 62,
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(26),
+          borderRadius: BorderRadius.circular(22),
           border: Border.all(color: color.withValues(alpha: 0.18)),
           boxShadow: [
             BoxShadow(
@@ -1155,13 +1222,13 @@ class _SuccessCheckBadge extends StatelessWidget {
         ),
         child: Center(
           child: Container(
-            width: 46,
-            height: 46,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
               color: colorScheme.surface,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(16),
             ),
-            child: Icon(Icons.check_rounded, size: 34, color: color),
+            child: Icon(Icons.check_rounded, size: 30, color: color),
           ),
         ),
       ),
