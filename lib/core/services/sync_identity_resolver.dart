@@ -36,6 +36,27 @@ class SyncIdentityResolver {
     return uuids.map((uuid) => remoteUuidByUuid[uuid] ?? uuid).toList();
   }
 
+  Future<String> resolveLocalPersonUuid(String uuid) async {
+    final people = await _database.getAllPeople(includeDeleted: true);
+    final person = people.where((item) {
+      return item.uuid == uuid || item.syncedRemoteUuid == uuid;
+    }).firstOrNull;
+    return person?.uuid ?? uuid;
+  }
+
+  Future<List<String>> resolveLocalPersonUuids(Iterable<String> uuids) async {
+    final people = await _database.getAllPeople(includeDeleted: true);
+    final localUuidByUuid = <String, String>{};
+    for (final person in people) {
+      localUuidByUuid[person.uuid] = person.uuid;
+      final syncedRemoteUuid = person.syncedRemoteUuid;
+      if (syncedRemoteUuid != null && syncedRemoteUuid.isNotEmpty) {
+        localUuidByUuid[syncedRemoteUuid] = person.uuid;
+      }
+    }
+    return uuids.map((uuid) => localUuidByUuid[uuid] ?? uuid).toList();
+  }
+
   Future<void> recordLedgerMapping({
     required String localUuid,
     required String remoteUuid,
