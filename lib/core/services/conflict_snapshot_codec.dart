@@ -88,7 +88,7 @@ class ConflictSnapshotCodec {
   }
 
   Map<String, Object?> requestData(ConflictRecord record, int version) {
-    if (record.operation != ConflictOperation.update) {
+    if (record.operation == ConflictOperation.delete) {
       return {'version': version};
     }
 

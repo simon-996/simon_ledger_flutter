@@ -183,22 +183,28 @@ void main() {
     );
   });
 
-  test(
-    'delete and restore requests carry only the selected remote version',
-    () {
-      final deleteRecord = _record(
-        operation: ConflictOperation.delete,
-        localSnapshot: const {'name': '不应提交'},
-      );
-      final restoreRecord = _record(
-        operation: ConflictOperation.restore,
-        localSnapshot: const {'name': '不应提交'},
-      );
+  test('delete carries only version while restore resubmits local fields', () {
+    final deleteRecord = _record(
+      operation: ConflictOperation.delete,
+      localSnapshot: const {'name': '不应提交'},
+    );
+    final restoreRecord = _record(
+      operation: ConflictOperation.restore,
+      localSnapshot: const {
+        'name': '恢复后的名称',
+        'baseCurrencyCode': 'CNY',
+        'exchangeRateToCny': 1.0,
+      },
+    );
 
-      expect(codec.requestData(deleteRecord, 8), {'version': 8});
-      expect(codec.requestData(restoreRecord, 9), {'version': 9});
-    },
-  );
+    expect(codec.requestData(deleteRecord, 8), {'version': 8});
+    expect(codec.requestData(restoreRecord, 9), {
+      'name': '恢复后的名称',
+      'baseCurrencyCode': 'CNY',
+      'exchangeRateToCny': 1.0,
+      'version': 9,
+    });
+  });
 
   test(
     'accepting remote profile normalizes avatar and clears pending state',
