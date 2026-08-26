@@ -14,7 +14,7 @@ class TransactionRecord {
 
   String? clientOperationId;
 
-  int? version;
+  int version = 1;
 
   late double amount;
 

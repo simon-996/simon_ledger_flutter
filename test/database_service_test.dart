@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simon_ledger_flutter/core/database/database_service.dart';
@@ -188,6 +190,77 @@ void main() {
         'ledger-newer',
         'ledger-older',
       ]);
+    });
+
+    test('defaults missing optimistic versions to one', () async {
+      SharedPreferences.setMockInitialValues({
+        'local_store.ledgers.v1': jsonEncode([
+          {'uuid': 'ledger-legacy', 'name': '旧账本', 'baseCurrencyCode': 'CNY'},
+        ]),
+        'local_store.people.v1': jsonEncode([
+          {'uuid': 'person-legacy', 'name': '旧参与人'},
+        ]),
+        'local_store.transactions.v1': jsonEncode([
+          {
+            'uuid': 'transaction-legacy',
+            'ledgerUuid': 'ledger-legacy',
+            'amount': 12,
+            'currencyCode': 'CNY',
+            'category': '餐饮',
+            'createdAt': '2026-08-26T08:00:00.000',
+          },
+        ]),
+      });
+
+      final legacyDatabase = DatabaseService();
+      expect((await legacyDatabase.getAllLedgers()).single.version, 1);
+      expect((await legacyDatabase.getAllPeople()).single.version, 1);
+      expect(
+        (await legacyDatabase.getTransactionsForLedger(
+          'ledger-legacy',
+        )).single.version,
+        1,
+      );
+    });
+
+    test('round trips optimistic versions for cached entities', () async {
+      final ledger = Ledger()
+        ..uuid = 'ledger-versioned'
+        ..name = '版本账本'
+        ..baseCurrencyCode = 'CNY'
+        ..version = 5
+        ..members = [
+          const LedgerMemberSummary(
+            uuid: 'member-versioned',
+            nickname: '成员',
+            version: 4,
+          ),
+        ];
+      final person = Person()
+        ..uuid = 'person-versioned'
+        ..name = '版本参与人'
+        ..version = 3;
+      final transaction = TransactionRecord()
+        ..uuid = 'transaction-versioned'
+        ..ledgerUuid = ledger.uuid
+        ..amount = 21
+        ..currencyCode = 'CNY'
+        ..category = '交通'
+        ..note = ''
+        ..createdAt = DateTime(2026, 8, 26)
+        ..version = 6;
+
+      await database.saveLedger(ledger);
+      await database.savePerson(person);
+      await database.saveTransaction(transaction);
+
+      expect((await database.getAllLedgers()).single.version, 5);
+      expect((await database.getAllLedgers()).single.members.single.version, 4);
+      expect((await database.getAllPeople()).single.version, 3);
+      expect(
+        (await database.getTransactionsForLedger(ledger.uuid)).single.version,
+        6,
+      );
     });
   });
 }

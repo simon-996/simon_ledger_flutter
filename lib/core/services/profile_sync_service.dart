@@ -123,6 +123,7 @@ class ProfileSyncService {
       final user = await _authRepository.updateProfile(
         nickname: profile.normalizedNickname,
         avatar: profile.personAvatar,
+        version: profile.remoteVersion,
       );
       final latest = await _localProfileStore.read();
       if (!_isSamePendingOperation(latest, profile)) {
@@ -136,6 +137,7 @@ class ProfileSyncService {
         ),
         pendingSync: false,
         updatedAt: DateTime.now(),
+        remoteVersion: user.version,
       );
       await _localProfileStore.save(synced);
       await _updateLocalSelfPeople(
@@ -185,6 +187,7 @@ class ProfileSyncService {
       avatarIcon: AvatarConfig.normalizeKey(user.avatar ?? current.avatarIcon),
       pendingSync: false,
       updatedAt: DateTime.now(),
+      remoteVersion: user.version,
     );
     await _localProfileStore.save(remoteProfile);
     await _updateLocalSelfPeople(
@@ -286,6 +289,7 @@ class ProfileSyncService {
           nickname: current.normalizedNickname,
           avatar: current.personAvatar,
           role: member.role,
+          version: member.version,
         );
       }).toList();
 

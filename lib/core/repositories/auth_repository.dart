@@ -9,6 +9,7 @@ class AuthUser {
     this.phone,
     this.avatar,
     this.status,
+    this.version = 1,
   });
 
   final String uuid;
@@ -17,6 +18,7 @@ class AuthUser {
   final String? phone;
   final String? avatar;
   final int? status;
+  final int version;
 
   factory AuthUser.fromJson(Object? json) {
     final map = json! as Map<String, dynamic>;
@@ -27,6 +29,7 @@ class AuthUser {
       phone: map['phone']?.toString(),
       avatar: map['avatar']?.toString(),
       status: (map['status'] as num?)?.toInt(),
+      version: (map['version'] as num?)?.toInt() ?? 1,
     );
   }
 }
@@ -67,7 +70,11 @@ abstract class AuthRepository {
 
   Future<AuthUser> me();
 
-  Future<AuthUser> updateProfile({required String nickname, String? avatar});
+  Future<AuthUser> updateProfile({
+    required String nickname,
+    String? avatar,
+    required int version,
+  });
 }
 
 class RemoteAuthRepository implements AuthRepository {
@@ -136,10 +143,14 @@ class RemoteAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<AuthUser> updateProfile({required String nickname, String? avatar}) {
+  Future<AuthUser> updateProfile({
+    required String nickname,
+    String? avatar,
+    required int version,
+  }) {
     return _apiClient.put<AuthUser>(
       '/api/auth/me',
-      data: {'nickname': nickname, 'avatar': avatar},
+      data: {'nickname': nickname, 'avatar': avatar, 'version': version},
       fromJson: AuthUser.fromJson,
     );
   }

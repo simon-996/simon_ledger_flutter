@@ -514,7 +514,11 @@ class _FakeAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<AuthUser> updateProfile({required String nickname, String? avatar}) {
+  Future<AuthUser> updateProfile({
+    required String nickname,
+    String? avatar,
+    required int version,
+  }) {
     throw UnimplementedError();
   }
 

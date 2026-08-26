@@ -352,6 +352,7 @@ class DatabaseService {
   static Person _personFromJson(Map<String, dynamic> json) {
     return Person()
       ..id = (json['id'] as num?)?.toInt() ?? 0
+      ..version = (json['version'] as num?)?.toInt() ?? 1
       ..uuid = json['uuid']?.toString() ?? ''
       ..name = json['name']?.toString() ?? ''
       ..avatar = json['avatar']?.toString() ?? '🧑'
@@ -366,6 +367,7 @@ class DatabaseService {
   static Map<String, dynamic> _personToJson(Person person) {
     return {
       'id': person.id,
+      'version': person.version,
       'uuid': person.uuid,
       'name': person.name,
       'avatar': person.avatar,
@@ -381,6 +383,7 @@ class DatabaseService {
   static Ledger _ledgerFromJson(Map<String, dynamic> json) {
     return Ledger()
       ..id = (json['id'] as num?)?.toInt() ?? 0
+      ..version = (json['version'] as num?)?.toInt() ?? 1
       ..uuid = json['uuid']?.toString() ?? ''
       ..name = json['name']?.toString() ?? ''
       ..baseCurrencyCode = json['baseCurrencyCode']?.toString() ?? 'CNY'
@@ -407,6 +410,7 @@ class DatabaseService {
   static Map<String, dynamic> _ledgerToJson(Ledger ledger) {
     return {
       'id': ledger.id,
+      'version': ledger.version,
       'uuid': ledger.uuid,
       'name': ledger.name,
       'baseCurrencyCode': ledger.baseCurrencyCode,
@@ -439,6 +443,7 @@ class DatabaseService {
       nickname: json['nickname']?.toString(),
       avatar: json['avatar']?.toString(),
       role: json['role']?.toString(),
+      version: (json['version'] as num?)?.toInt() ?? 1,
     );
   }
 
@@ -449,6 +454,7 @@ class DatabaseService {
       'nickname': member.nickname,
       'avatar': member.avatar,
       'role': member.role,
+      'version': member.version,
     };
   }
 
@@ -460,7 +466,7 @@ class DatabaseService {
       ..type = (json['type'] as num?)?.toInt() ?? 0
       ..payerPersonUuid = json['payerPersonUuid']?.toString()
       ..clientOperationId = json['clientOperationId']?.toString()
-      ..version = (json['version'] as num?)?.toInt()
+      ..version = (json['version'] as num?)?.toInt() ?? 1
       ..amount = (json['amount'] as num?)?.toDouble() ?? 0
       ..currencyCode = json['currencyCode']?.toString() ?? 'CNY'
       ..category = json['category']?.toString() ?? ''

@@ -3,6 +3,8 @@ enum LedgerCloudPolicy { localOnly, uploadRequested, cloudManaged }
 class Ledger {
   int id = 0;
 
+  int version = 1;
+
   late String uuid;
 
   late String name;
@@ -97,12 +99,13 @@ class Ledger {
 }
 
 class LedgerMemberSummary {
-  LedgerMemberSummary({
+  const LedgerMemberSummary({
     required this.uuid,
     this.userUuid,
     this.nickname,
     this.avatar,
     this.role,
+    this.version = 1,
   });
 
   final String uuid;
@@ -110,6 +113,7 @@ class LedgerMemberSummary {
   final String? nickname;
   final String? avatar;
   final String? role;
+  final int version;
 
   String get displayName {
     final value = nickname?.trim();

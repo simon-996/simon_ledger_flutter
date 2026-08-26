@@ -247,8 +247,8 @@ class RemoteTransactionRepository implements TransactionRepository {
     final remoteUuid =
         _remoteUuidByOperationId[transaction.clientOperationId] ??
         (_looksLikeRemoteUuid(transaction.uuid) ? transaction.uuid : null);
-    final version = transaction.version ?? _versionByUuid[transaction.uuid];
-    if (remoteUuid == null || version == null) {
+    final version = transaction.version;
+    if (remoteUuid == null) {
       final saved = await _apiClient.post<TransactionRecord>(
         '/api/ledgers/$remoteLedgerUuid/transactions',
         data: data,
@@ -297,8 +297,8 @@ class RemoteTransactionRepository implements TransactionRepository {
     final remoteUuid =
         _remoteUuidByOperationId[transaction.clientOperationId] ??
         (_looksLikeRemoteUuid(transaction.uuid) ? transaction.uuid : null);
-    final version = transaction.version ?? _versionByUuid[transaction.uuid];
-    if (remoteUuid == null || version == null) {
+    final version = transaction.version;
+    if (remoteUuid == null) {
       await _saveDeletedTransaction(transaction);
       return;
     }
@@ -434,7 +434,7 @@ class RemoteTransactionRepository implements TransactionRepository {
       ..type = (map['type'] as num?)?.toInt() ?? 0
       ..payerPersonUuid = map['payerPersonUuid']?.toString()
       ..clientOperationId = clientOperationId
-      ..version = _versionByUuid[uuid]
+      ..version = _versionByUuid[uuid] ?? 1
       ..amount = (map['amount'] as num?)?.toDouble() ?? 0
       ..currencyCode = map['currencyCode'].toString()
       ..category = map['category'].toString()

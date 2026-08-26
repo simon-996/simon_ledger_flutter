@@ -30,12 +30,14 @@ void main() {
             'phone': null,
             'avatar': null,
             'status': 1,
+            'version': 4,
           },
         },
       }, AuthLoginResult.fromJson);
 
       expect(result.data?.token.name, 'simon-ledger');
       expect(result.data?.user.nickname, 'Simon');
+      expect(result.data?.user.version, 4);
     });
   });
 }

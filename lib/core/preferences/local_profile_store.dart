@@ -11,6 +11,7 @@ class LocalProfileStore {
   static const _pendingOperationIdKey = 'local_profile.pending_operation_id.v1';
   static const _syncErrorKey = 'local_profile.sync_error.v1';
   static const _updatedAtKey = 'local_profile.updated_at.v1';
+  static const _remoteVersionKey = 'local_profile.remote_version.v1';
 
   Future<LocalProfile> read() async {
     final prefs = await SharedPreferences.getInstance();
@@ -24,6 +25,7 @@ class LocalProfileStore {
       pendingOperationId: prefs.getString(_pendingOperationIdKey),
       syncError: prefs.getString(_syncErrorKey),
       updatedAt: DateTime.tryParse(prefs.getString(_updatedAtKey) ?? ''),
+      remoteVersion: prefs.getInt(_remoteVersionKey) ?? 1,
     );
   }
 
@@ -53,5 +55,6 @@ class LocalProfileStore {
     } else {
       await prefs.setString(_updatedAtKey, updatedAt.toIso8601String());
     }
+    await prefs.setInt(_remoteVersionKey, profile.remoteVersion);
   }
 }

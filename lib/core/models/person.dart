@@ -1,6 +1,8 @@
 class Person {
   int id = 0;
 
+  int version = 1;
+
   late String uuid; // Original string id
 
   late String name;

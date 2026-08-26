@@ -8,6 +8,7 @@ class LocalProfile {
     this.pendingOperationId,
     this.syncError,
     this.updatedAt,
+    this.remoteVersion = 1,
   });
 
   static const defaultProfile = LocalProfile(
@@ -21,6 +22,7 @@ class LocalProfile {
   final String? pendingOperationId;
   final String? syncError;
   final DateTime? updatedAt;
+  final int remoteVersion;
 
   String get normalizedNickname {
     final value = nickname.trim();
@@ -36,6 +38,7 @@ class LocalProfile {
     Object? pendingOperationId = _sentinel,
     Object? syncError = _sentinel,
     Object? updatedAt = _sentinel,
+    int? remoteVersion,
   }) {
     return LocalProfile(
       nickname: nickname ?? this.nickname,
@@ -50,6 +53,7 @@ class LocalProfile {
       updatedAt: identical(updatedAt, _sentinel)
           ? this.updatedAt
           : updatedAt as DateTime?,
+      remoteVersion: remoteVersion ?? this.remoteVersion,
     );
   }
 }

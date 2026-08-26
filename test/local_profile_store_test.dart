@@ -14,19 +14,25 @@ void main() {
 
       expect(profile.nickname, '我');
       expect(profile.avatarIcon, 'person');
+      expect(profile.remoteVersion, 1);
     });
 
     test('saves a normalized nickname and avatar icon', () async {
       const store = LocalProfileStore();
 
       await store.save(
-        const LocalProfile(nickname: ' Simon ', avatarIcon: 'star'),
+        const LocalProfile(
+          nickname: ' Simon ',
+          avatarIcon: 'star',
+          remoteVersion: 7,
+        ),
       );
 
       final profile = await store.read();
       expect(profile.nickname, 'Simon');
       expect(profile.avatarIcon, 'star');
       expect(profile.personAvatar, '⭐');
+      expect(profile.remoteVersion, 7);
     });
   });
 }
