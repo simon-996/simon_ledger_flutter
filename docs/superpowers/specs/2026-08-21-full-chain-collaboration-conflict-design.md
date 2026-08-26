@@ -1,7 +1,7 @@
 # Simon Ledger 全链路协作、冲突处理与云端统计设计
 
 - 日期：2026-08-21
-- 状态：已完成产品确认，等待书面设计审阅
+- 状态：已完成产品确认与书面审阅，分阶段实施中
 - 涉及仓库：`simon_ledger_flutter`、`simon-ledger-api`
 - 不涉及仓库：`simon-ledger-admin`
 
