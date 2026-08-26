@@ -80,7 +80,7 @@ void main() {
         ..currencyCode = 'CNY'
         ..category = '餐饮'
         ..note = ''
-        ..createdAt = DateTime(2026, 6, 5),
+        ..createdAt = DateTime.now(),
     );
 
     await tester.pumpWidget(
@@ -130,7 +130,7 @@ void main() {
         ..currencyCode = 'CNY'
         ..category = '餐饮'
         ..note = ''
-        ..createdAt = DateTime(2026, 6, 5),
+        ..createdAt = DateTime.now(),
     );
     await database.saveTransaction(
       TransactionRecord()
@@ -141,7 +141,7 @@ void main() {
         ..currencyCode = 'CNY'
         ..category = '工资'
         ..note = ''
-        ..createdAt = DateTime(2026, 6, 5),
+        ..createdAt = DateTime.now(),
     );
 
     await tester.pumpWidget(
