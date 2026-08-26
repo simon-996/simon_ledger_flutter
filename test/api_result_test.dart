@@ -14,6 +14,7 @@ void main() {
       expect(result.code, 400001);
       expect(result.message, '账号或密码错误');
       expect(result.data, isNull);
+      expect(result.rawData, isNull);
     });
 
     test('parses data for successful responses', () {

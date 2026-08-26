@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 
+import '../models/conflict_record.dart';
 import 'api_config.dart';
 import 'api_exception.dart';
 import 'api_result.dart';
@@ -132,11 +133,7 @@ class ApiClient {
           response!.data! as Map<String, dynamic>,
           null,
         );
-        throw ApiException(
-          code: result.code,
-          message: result.message,
-          statusCode: response.statusCode,
-        );
+        throw _apiException(result, response.statusCode);
       }
       throw ApiException(
         code: -1,
@@ -159,11 +156,7 @@ class ApiClient {
           response!.data! as Map<String, dynamic>,
           null,
         );
-        throw ApiException(
-          code: result.code,
-          message: result.message,
-          statusCode: response.statusCode,
-        );
+        throw _apiException(result, response.statusCode);
       }
       throw ApiException(
         code: -1,
@@ -188,11 +181,7 @@ class ApiClient {
 
     final result = ApiResult<T>.fromJson(body, fromJson);
     if (!result.isSuccess) {
-      throw ApiException(
-        code: result.code,
-        message: result.message,
-        statusCode: response.statusCode,
-      );
+      throw _apiException(result, response.statusCode);
     }
 
     return result.data as T;
@@ -210,11 +199,7 @@ class ApiClient {
 
     final result = ApiResult<Object?>.fromJson(body, null);
     if (!result.isSuccess) {
-      throw ApiException(
-        code: result.code,
-        message: result.message,
-        statusCode: response.statusCode,
-      );
+      throw _apiException(result, response.statusCode);
     }
   }
 
@@ -223,5 +208,25 @@ class ApiClient {
       return null;
     }
     return Options(headers: {'Idempotency-Key': idempotencyKey});
+  }
+
+  ApiException _apiException<T>(ApiResult<T> result, int? statusCode) {
+    ApiConflictPayload? conflict;
+    if (result.code == 409001 && statusCode == 409) {
+      try {
+        conflict = ApiConflictPayload.fromJson(result.rawData);
+      } on FormatException {
+        conflict = null;
+      } on TypeError {
+        conflict = null;
+      }
+    }
+    return ApiException(
+      code: result.code,
+      message: result.message,
+      statusCode: statusCode,
+      data: result.rawData,
+      conflict: conflict,
+    );
   }
 }

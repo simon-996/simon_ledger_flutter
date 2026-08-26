@@ -3,11 +3,13 @@ class ApiResult<T> {
     required this.code,
     required this.message,
     required this.data,
+    required this.rawData,
   });
 
   final int code;
   final String message;
   final T? data;
+  final Object? rawData;
 
   bool get isSuccess => code == 0;
 
@@ -23,6 +25,7 @@ class ApiResult<T> {
       data: code == 0
           ? (fromJsonT == null ? data as T? : fromJsonT(data))
           : null,
+      rawData: data,
     );
   }
 }
