@@ -4,12 +4,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simon_ledger_flutter/core/database/database_service.dart';
 import 'package:simon_ledger_flutter/core/models/ledger.dart';
+import 'package:simon_ledger_flutter/core/models/conflict_record.dart';
 import 'package:simon_ledger_flutter/core/models/person.dart';
 import 'package:simon_ledger_flutter/core/models/transaction_record.dart';
 import 'package:simon_ledger_flutter/core/repositories/ledger_repository.dart';
 import 'package:simon_ledger_flutter/core/repositories/person_repository.dart';
 import 'package:simon_ledger_flutter/core/repositories/transaction_repository.dart';
 import 'package:simon_ledger_flutter/core/services/sync_coordinator.dart';
+import 'package:simon_ledger_flutter/core/preferences/local_profile_store.dart';
+import 'package:simon_ledger_flutter/core/services/conflict_coordinator.dart';
+import 'package:simon_ledger_flutter/core/services/conflict_snapshot_codec.dart';
+import 'package:simon_ledger_flutter/core/services/conflict_store.dart';
 import 'package:simon_ledger_flutter/core/services/sync_overview_service.dart';
 
 void main() {
@@ -116,6 +121,47 @@ void main() {
       'tx:1234567890abcdef1234567890abcdef',
     ]);
   });
+
+  test(
+    'retries queued conflict choices before normal pending writes',
+    () async {
+      final calls = <String>[];
+      final database = DatabaseService();
+      await database.saveLedger(
+        Ledger()
+          ..uuid = '1234567890abcdef1234567890abcdef'
+          ..name = 'remote ledger'
+          ..baseCurrencyCode = 'CNY',
+      );
+      await database.saveTransaction(
+        TransactionRecord()
+          ..uuid = 'local-transaction'
+          ..ledgerUuid = '1234567890abcdef1234567890abcdef'
+          ..amount = 12
+          ..currencyCode = 'CNY'
+          ..category = '餐饮'
+          ..note = ''
+          ..createdAt = DateTime(2026)
+          ..pendingSync = true,
+      );
+      final coordinator = SyncCoordinator(
+        ledgerRepository: _LedgerRepository(calls),
+        personRepository: _PersonRepository(calls),
+        transactionRepository: _TransactionRepository(calls),
+        database: database,
+        conflictCoordinator: _RecordingConflictCoordinator(calls),
+      );
+
+      await coordinator.syncAllPending(force: true);
+
+      expect(calls, [
+        'conflicts',
+        'ledger',
+        'people:1234567890abcdef1234567890abcdef',
+        'tx:1234567890abcdef1234567890abcdef',
+      ]);
+    },
+  );
 
   test(
     'reports failed sync when repository returns a transaction error',
@@ -441,5 +487,31 @@ class _TransactionErrorResultRepository extends _TransactionRepository {
     return Future.value(
       TransactionSyncResult(synced: 0, error: Exception('offline')),
     );
+  }
+}
+
+class _RecordingConflictCoordinator extends ConflictCoordinator {
+  _RecordingConflictCoordinator(this.calls)
+    : super(
+        store: ConflictStore(),
+        codec: ConflictSnapshotCodec(
+          database: DatabaseService(),
+          profileStore: const LocalProfileStore(),
+        ),
+        gateway: _UnusedConflictGateway(),
+      );
+
+  final List<String> calls;
+
+  @override
+  Future<void> retryQueuedLocal() async {
+    calls.add('conflicts');
+  }
+}
+
+class _UnusedConflictGateway implements ConflictResolutionGateway {
+  @override
+  Future<ConflictMutationResult> submit(ConflictRecord record) {
+    throw UnimplementedError();
   }
 }

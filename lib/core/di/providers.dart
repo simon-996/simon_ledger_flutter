@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../database/database_service.dart';
+import '../models/conflict_record.dart';
 import '../models/local_profile.dart';
 import '../network/api_client.dart';
 import '../network/token_store.dart';
@@ -10,6 +11,9 @@ import '../repositories/ledger_repository.dart';
 import '../repositories/person_repository.dart';
 import '../repositories/transaction_repository.dart';
 import '../services/cloud_import_service.dart';
+import '../services/conflict_coordinator.dart';
+import '../services/conflict_snapshot_codec.dart';
+import '../services/conflict_store.dart';
 import '../services/profile_sync_service.dart';
 import '../services/sync_coordinator.dart';
 import '../services/sync_identity_resolver.dart';
@@ -45,6 +49,52 @@ final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient(tokenStore: ref.watch(tokenStoreProvider));
 });
 
+final conflictStoreProvider = Provider<ConflictStore>((ref) {
+  return ConflictStore();
+});
+
+final conflictSnapshotCodecProvider = Provider<ConflictSnapshotCodec>((ref) {
+  return ConflictSnapshotCodec(
+    database: ref.watch(databaseProvider),
+    profileStore: ref.watch(localProfileStoreProvider),
+    identityResolver: ref.watch(syncIdentityResolverProvider),
+  );
+});
+
+final conflictResolutionGatewayProvider = Provider<ConflictResolutionGateway>((
+  ref,
+) {
+  return ApiConflictResolutionGateway(
+    apiClient: ref.watch(apiClientProvider),
+    codec: ref.watch(conflictSnapshotCodecProvider),
+    identityResolver: ref.watch(syncIdentityResolverProvider),
+  );
+});
+
+final conflictCoordinatorProvider = Provider<ConflictCoordinator>((ref) {
+  return ConflictCoordinator(
+    store: ref.watch(conflictStoreProvider),
+    codec: ref.watch(conflictSnapshotCodecProvider),
+    gateway: ref.watch(conflictResolutionGatewayProvider),
+  );
+});
+
+final conflictRecordsProvider = FutureProvider<List<ConflictRecord>>((ref) {
+  return ref.watch(conflictStoreProvider).readAll();
+});
+
+final conflictCountProvider = Provider<int>((ref) {
+  return ref.watch(conflictRecordsProvider).value?.length ?? 0;
+});
+
+final ledgerConflictCountProvider = Provider.family<int, String>((
+  ref,
+  ledgerUuid,
+) {
+  final records = ref.watch(conflictRecordsProvider).value ?? const [];
+  return records.where((record) => record.ledgerUuid == ledgerUuid).length;
+});
+
 final authTokenProvider = FutureProvider<AuthToken?>((ref) {
   return ref.watch(tokenStoreProvider).read();
 });
@@ -64,6 +114,8 @@ final ledgerRepositoryProvider = Provider<LedgerRepository>((ref) {
       database: ref.watch(databaseProvider),
       tokenStore: ref.watch(tokenStoreProvider),
       identityResolver: ref.watch(syncIdentityResolverProvider),
+      conflictCoordinator: ref.watch(conflictCoordinatorProvider),
+      conflictCodec: ref.watch(conflictSnapshotCodecProvider),
     );
   }
   return LocalLedgerRepository(ref.watch(databaseProvider));
@@ -84,6 +136,8 @@ final personRepositoryProvider = Provider<PersonRepository>((ref) {
       ledgerRepository: ref.watch(ledgerRepositoryProvider),
       database: ref.watch(databaseProvider),
       identityResolver: ref.watch(syncIdentityResolverProvider),
+      conflictCoordinator: ref.watch(conflictCoordinatorProvider),
+      conflictCodec: ref.watch(conflictSnapshotCodecProvider),
     );
   }
   return LocalPersonRepository(ref.watch(databaseProvider));
@@ -96,6 +150,8 @@ final transactionRepositoryProvider = Provider<TransactionRepository>((ref) {
       apiClient: ref.watch(apiClientProvider),
       database: ref.watch(databaseProvider),
       identityResolver: ref.watch(syncIdentityResolverProvider),
+      conflictCoordinator: ref.watch(conflictCoordinatorProvider),
+      conflictCodec: ref.watch(conflictSnapshotCodecProvider),
     );
   }
   return LocalTransactionRepository(ref.watch(databaseProvider));
@@ -108,11 +164,15 @@ final syncCoordinatorProvider = Provider<SyncCoordinator>((ref) {
     transactionRepository: ref.watch(transactionRepositoryProvider),
     database: ref.watch(databaseProvider),
     syncOverviewService: ref.watch(syncOverviewServiceProvider),
+    conflictCoordinator: ref.watch(conflictCoordinatorProvider),
   );
 });
 
 final syncOverviewServiceProvider = Provider<SyncOverviewService>((ref) {
-  return SyncOverviewService(ref.watch(databaseProvider));
+  return SyncOverviewService(
+    ref.watch(databaseProvider),
+    conflictStore: ref.watch(conflictStoreProvider),
+  );
 });
 
 final syncOverviewProvider = FutureProvider<SyncOverview>((ref) {
@@ -132,5 +192,7 @@ final profileSyncServiceProvider = Provider<ProfileSyncService>((ref) {
     tokenStore: ref.watch(tokenStoreProvider),
     authRepository: ref.watch(authRepositoryProvider),
     database: ref.watch(databaseProvider),
+    conflictCoordinator: ref.watch(conflictCoordinatorProvider),
+    conflictCodec: ref.watch(conflictSnapshotCodecProvider),
   );
 });

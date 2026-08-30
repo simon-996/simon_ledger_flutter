@@ -1,6 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../database/database_service.dart';
+import 'conflict_store.dart';
 
 enum SyncFailureType { ledger, person, transaction }
 
@@ -23,6 +24,8 @@ class SyncOverview {
     required this.transactionPendingCount,
     required this.failedCount,
     required this.localOnlyLedgerCount,
+    this.conflictCount = 0,
+    this.conflictsByLedger = const {},
     List<SyncFailureItem>? failures,
     this.lastSuccessfulSyncAt,
   }) : _failures = failures;
@@ -32,6 +35,8 @@ class SyncOverview {
   final int transactionPendingCount;
   final int failedCount;
   final int localOnlyLedgerCount;
+  final int conflictCount;
+  final Map<String, int> conflictsByLedger;
   final List<SyncFailureItem>? _failures;
   final DateTime? lastSuccessfulSyncAt;
 
@@ -42,11 +47,13 @@ class SyncOverview {
 }
 
 class SyncOverviewService {
-  const SyncOverviewService(this._database);
+  const SyncOverviewService(this._database, {ConflictStore? conflictStore})
+    : _conflictStore = conflictStore;
 
   static const _lastSuccessfulSyncAtKey = 'sync.last_successful_at.v1';
 
   final DatabaseService _database;
+  final ConflictStore? _conflictStore;
 
   Future<SyncOverview> read() async {
     final ledgers = await _database.getAllLedgers(includeDeleted: true);
@@ -55,6 +62,17 @@ class SyncOverviewService {
       ledgers.map((ledger) => ledger.uuid).toList(),
       includeDeleted: true,
     );
+    final conflicts = await (_conflictStore ?? ConflictStore()).readAll();
+    final conflictsByLedger = <String, int>{};
+    for (final conflict in conflicts) {
+      final ledgerUuid = conflict.ledgerUuid;
+      if (ledgerUuid == null || ledgerUuid.isEmpty) continue;
+      conflictsByLedger.update(
+        ledgerUuid,
+        (count) => count + 1,
+        ifAbsent: () => 1,
+      );
+    }
     final syncableLedgerUuids = {
       for (final ledger in ledgers)
         if (ledger.shouldUploadToCloud || ledger.isCloudManaged) ledger.uuid,
@@ -107,6 +125,8 @@ class SyncOverviewService {
           .where((ledger) => ledger.isLocalOnly)
           .length,
       failedCount: failures.length,
+      conflictCount: conflicts.length,
+      conflictsByLedger: conflictsByLedger,
       failures: failures,
       lastSuccessfulSyncAt: DateTime.tryParse(
         prefs.getString(_lastSuccessfulSyncAtKey) ?? '',

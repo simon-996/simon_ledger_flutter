@@ -2,9 +2,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simon_ledger_flutter/core/database/database_service.dart';
 import 'package:simon_ledger_flutter/core/models/ledger.dart';
+import 'package:simon_ledger_flutter/core/models/conflict_record.dart';
 import 'package:simon_ledger_flutter/core/models/person.dart';
 import 'package:simon_ledger_flutter/core/models/transaction_record.dart';
 import 'package:simon_ledger_flutter/core/services/sync_overview_service.dart';
+import 'package:simon_ledger_flutter/core/services/conflict_store.dart';
 
 void main() {
   test('SyncOverview treats a missing failure list as empty', () {
@@ -72,4 +74,66 @@ void main() {
 
     expect(overview.lastSuccessfulSyncAt, timestamp);
   });
+
+  test(
+    'SyncOverview reports conflicts separately from pending failures',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final database = DatabaseService();
+      final conflicts = ConflictStore();
+      await database.saveLedger(
+        Ledger()
+          ..uuid = 'ledger-1'
+          ..name = '共享账本'
+          ..baseCurrencyCode = 'CNY'
+          ..cloudPolicy = LedgerCloudPolicy.cloudManaged,
+      );
+      await database.saveTransaction(
+        TransactionRecord()
+          ..uuid = 'pending-transaction'
+          ..ledgerUuid = 'ledger-1'
+          ..amount = 20
+          ..currencyCode = 'CNY'
+          ..category = '餐饮'
+          ..note = ''
+          ..createdAt = DateTime(2026, 8, 30)
+          ..pendingSync = true,
+      );
+      await conflicts.upsert(_conflict('transaction-1', 'ledger-1'));
+      await conflicts.upsert(
+        _conflict('profile-1', null, entityType: ConflictEntityType.profile),
+      );
+
+      final overview = await SyncOverviewService(
+        database,
+        conflictStore: conflicts,
+      ).read();
+
+      expect(overview.conflictCount, 2);
+      expect(overview.conflictsByLedger['ledger-1'], 1);
+      expect(overview.pendingCount, 1);
+      expect(overview.failedCount, 0);
+    },
+  );
+}
+
+ConflictRecord _conflict(
+  String remoteUuid,
+  String? ledgerUuid, {
+  ConflictEntityType entityType = ConflictEntityType.transaction,
+}) {
+  return ConflictRecord(
+    id: 'conflict-$remoteUuid',
+    entityType: entityType,
+    ledgerUuid: ledgerUuid,
+    localUuid: remoteUuid,
+    remoteUuid: remoteUuid,
+    operation: ConflictOperation.update,
+    baseVersion: 1,
+    remoteVersion: 2,
+    localSnapshot: const {},
+    remoteSnapshot: const {},
+    remoteDeleted: false,
+    detectedAt: DateTime(2026, 8, 30),
+  );
 }

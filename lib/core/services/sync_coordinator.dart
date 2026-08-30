@@ -2,6 +2,7 @@ import '../database/database_service.dart';
 import '../repositories/ledger_repository.dart';
 import '../repositories/person_repository.dart';
 import '../repositories/transaction_repository.dart';
+import 'conflict_coordinator.dart';
 import 'sync_overview_service.dart';
 
 class SyncAllPendingResult {
@@ -51,6 +52,7 @@ class SyncCoordinator {
     required TransactionRepository transactionRepository,
     required DatabaseService database,
     SyncOverviewService? syncOverviewService,
+    ConflictCoordinator? conflictCoordinator,
     Duration retryDelay = const Duration(seconds: 30),
     DateTime Function()? now,
   }) : _ledgerRepository = ledgerRepository,
@@ -59,6 +61,7 @@ class SyncCoordinator {
        _database = database,
        _syncOverviewService =
            syncOverviewService ?? SyncOverviewService(database),
+       _conflictCoordinator = conflictCoordinator,
        _retryDelay = retryDelay,
        _now = now ?? DateTime.now;
 
@@ -67,6 +70,7 @@ class SyncCoordinator {
   final TransactionRepository _transactionRepository;
   final DatabaseService _database;
   final SyncOverviewService _syncOverviewService;
+  final ConflictCoordinator? _conflictCoordinator;
   final Duration _retryDelay;
   final DateTime Function() _now;
   final Map<String, Future<TransactionSyncResult>> _ledgerSyncs = {};
@@ -104,6 +108,7 @@ class SyncCoordinator {
   }
 
   Future<SyncAllPendingResult> _syncAllPendingNow({required bool force}) async {
+    await _conflictCoordinator?.retryQueuedLocal();
     final ledgers = await _database.getAllLedgers(includeDeleted: true);
     final people = await _database.getAllPeople(includeDeleted: true);
     final transactions = await _database.getTransactionsForLedgers(
