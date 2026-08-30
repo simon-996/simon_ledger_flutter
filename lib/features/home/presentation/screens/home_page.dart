@@ -6,9 +6,12 @@ import '../../../../core/models/person.dart';
 import '../../../../core/network/friendly_error.dart';
 import '../../../../core/preferences/last_selected_ledger_preference.dart';
 import '../../../../core/preferences/onboarding_preference.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../auth/presentation/widgets/account_tab.dart';
+import '../../../conflicts/presentation/screens/conflict_center_page.dart';
+import '../../../conflicts/presentation/widgets/conflict_entry_widgets.dart';
 import '../../../transactions/presentation/widgets/bookkeeping_tab.dart';
 import '../../../ledgers/presentation/widgets/ledger_list_tab.dart';
 import '../../../ledgers/presentation/widgets/create_ledger_sheet.dart';
@@ -49,80 +52,100 @@ class _HomePageState extends ConsumerState<HomePage> {
     final isAccountTab = _currentIndex == 3;
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
     final hideNavigationForKeyboard = keyboardVisible && _currentIndex != 0;
+    final conflictCount = ref.watch(conflictCountProvider);
     final showLedgerFab =
         _currentIndex == 1 &&
         !hideNavigationForKeyboard &&
         ledgersAsyncValue.value?.isNotEmpty == true;
 
+    final pageContent = isAccountTab
+        ? const AccountTab()
+        : ledgersAsyncValue.when(
+            loading: () => const AppLoadingState(
+              title: '正在加载账本',
+              message: '同步账本、人员和本地缓存状态',
+              icon: Icons.book_outlined,
+            ),
+            error: (err, stack) => AppEmptyState(
+              icon: Icons.error_outline_rounded,
+              title: '加载账本失败',
+              message: FriendlyError.message(
+                err,
+                fallback: '暂时无法加载账本，请检查网络后重试。',
+              ),
+            ),
+            data: (ledgers) {
+              _maybeShowOnboarding(ledgers);
+              return AppAnimatedIndexedStack(
+                index: _currentIndex,
+                children: [
+                  BookkeepingTab(
+                    ledgers: ledgers,
+                    isActive: _currentIndex == 0,
+                  ),
+                  ledgerStatsAsyncValue.when(
+                    loading: () => LedgerListTab(
+                      ledgers: ledgers,
+                      ledgerStats: const {},
+                      onTap: _openLedger,
+                      onEdit: _editLedger,
+                      onShare: _shareLedger,
+                      onDelete: _deleteLedger,
+                      onCreate: _openCreateLedger,
+                      onSync: _syncLedger,
+                      autoSyncEnabled: _currentIndex == 1,
+                    ),
+                    error: (err, stack) => LedgerListTab(
+                      ledgers: ledgers,
+                      ledgerStats: const {},
+                      onTap: _openLedger,
+                      onEdit: _editLedger,
+                      onShare: _shareLedger,
+                      onDelete: _deleteLedger,
+                      onCreate: _openCreateLedger,
+                      onSync: _syncLedger,
+                      autoSyncEnabled: _currentIndex == 1,
+                    ),
+                    data: (stats) => LedgerListTab(
+                      ledgers: ledgers,
+                      ledgerStats: stats,
+                      onTap: _openLedger,
+                      onEdit: _editLedger,
+                      onShare: _shareLedger,
+                      onDelete: _deleteLedger,
+                      onCreate: _openCreateLedger,
+                      onSync: _syncLedger,
+                      autoSyncEnabled: _currentIndex == 1,
+                    ),
+                  ),
+                  StatisticsTab(ledgers: ledgers),
+                ],
+              );
+            },
+          );
+
     return Scaffold(
       resizeToAvoidBottomInset: false,
       body: SafeArea(
         top: true,
-        child: isAccountTab
-            ? const AccountTab()
-            : ledgersAsyncValue.when(
-                loading: () => const AppLoadingState(
-                  title: '正在加载账本',
-                  message: '同步账本、人员和本地缓存状态',
-                  icon: Icons.book_outlined,
+        child: Column(
+          children: [
+            if (conflictCount > 0)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppTheme.pagePadding,
+                  10,
+                  AppTheme.pagePadding,
+                  2,
                 ),
-                error: (err, stack) => AppEmptyState(
-                  icon: Icons.error_outline_rounded,
-                  title: '加载账本失败',
-                  message: FriendlyError.message(
-                    err,
-                    fallback: '暂时无法加载账本，请检查网络后重试。',
-                  ),
+                child: ConflictNoticeBanner(
+                  count: conflictCount,
+                  onTap: _openConflictCenter,
                 ),
-                data: (ledgers) {
-                  _maybeShowOnboarding(ledgers);
-                  return AppAnimatedIndexedStack(
-                    index: _currentIndex,
-                    children: [
-                      BookkeepingTab(
-                        ledgers: ledgers,
-                        isActive: _currentIndex == 0,
-                      ),
-                      ledgerStatsAsyncValue.when(
-                        loading: () => LedgerListTab(
-                          ledgers: ledgers,
-                          ledgerStats: const {},
-                          onTap: _openLedger,
-                          onEdit: _editLedger,
-                          onShare: _shareLedger,
-                          onDelete: _deleteLedger,
-                          onCreate: _openCreateLedger,
-                          onSync: _syncLedger,
-                          autoSyncEnabled: _currentIndex == 1,
-                        ),
-                        error: (err, stack) => LedgerListTab(
-                          ledgers: ledgers,
-                          ledgerStats: const {},
-                          onTap: _openLedger,
-                          onEdit: _editLedger,
-                          onShare: _shareLedger,
-                          onDelete: _deleteLedger,
-                          onCreate: _openCreateLedger,
-                          onSync: _syncLedger,
-                          autoSyncEnabled: _currentIndex == 1,
-                        ),
-                        data: (stats) => LedgerListTab(
-                          ledgers: ledgers,
-                          ledgerStats: stats,
-                          onTap: _openLedger,
-                          onEdit: _editLedger,
-                          onShare: _shareLedger,
-                          onDelete: _deleteLedger,
-                          onCreate: _openCreateLedger,
-                          onSync: _syncLedger,
-                          autoSyncEnabled: _currentIndex == 1,
-                        ),
-                      ),
-                      StatisticsTab(ledgers: ledgers),
-                    ],
-                  );
-                },
               ),
+            Expanded(child: pageContent),
+          ],
+        ),
       ),
       floatingActionButton: AnimatedSwitcher(
         duration: AppMotion.normal,
@@ -360,6 +383,14 @@ class _HomePageState extends ConsumerState<HomePage> {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => LedgerDashboardPage(ledger: ledger)),
     );
+  }
+
+  Future<void> _openConflictCenter() async {
+    await Navigator.of(
+      context,
+    ).push<void>(MaterialPageRoute(builder: (_) => const ConflictCenterPage()));
+    ref.invalidate(conflictRecordsProvider);
+    ref.invalidate(syncOverviewProvider);
   }
 
   Future<void> _syncLedger(Ledger ledger) async {

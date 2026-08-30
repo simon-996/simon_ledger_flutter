@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simon_ledger_flutter/core/database/database_service.dart';
 import 'package:simon_ledger_flutter/core/di/providers.dart';
+import 'package:simon_ledger_flutter/core/models/conflict_record.dart';
 import 'package:simon_ledger_flutter/core/models/ledger.dart';
 import 'package:simon_ledger_flutter/features/home/presentation/screens/home_page.dart';
 
@@ -90,5 +91,46 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('home-navigation-bar')), findsNothing);
+  });
+
+  testWidgets('home shows a compact conflict notice that opens the center', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final database = DatabaseService();
+    final record = ConflictRecord(
+      id: 'profile-conflict',
+      entityType: ConflictEntityType.profile,
+      ledgerUuid: null,
+      localUuid: 'profile-local',
+      remoteUuid: 'profile-remote',
+      operation: ConflictOperation.update,
+      baseVersion: 1,
+      remoteVersion: 2,
+      localSnapshot: const {'nickname': '本地昵称'},
+      remoteSnapshot: const {'nickname': '云端昵称'},
+      remoteDeleted: false,
+      detectedAt: DateTime.utc(2026, 8, 30),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          authTokenProvider.overrideWith((ref) async => null),
+          conflictRecordsProvider.overrideWith((ref) async => [record]),
+          conflictLedgerNamesProvider.overrideWith((ref) async => const {}),
+        ],
+        child: const MaterialApp(home: HomePage(initialIndex: 3)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('有 1 项数据需要确认'), findsOneWidget);
+    await tester.tap(find.text('有 1 项数据需要确认'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('数据冲突'), findsOneWidget);
+    expect(find.text('账户资料'), findsWidgets);
   });
 }

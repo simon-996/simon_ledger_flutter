@@ -13,6 +13,7 @@ import '../../../../core/services/sync_overview_service.dart';
 import '../../../../core/services/invite_link_service.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
+import '../../../conflicts/presentation/screens/conflict_center_page.dart';
 import '../../../ledgers/presentation/providers/ledger_provider.dart';
 import '../../../ledgers/presentation/providers/ledger_stats_provider.dart';
 import '../../../ledgers/presentation/widgets/ledger_invite_widgets.dart';
@@ -208,6 +209,7 @@ class _SyncCenterCardState extends ConsumerState<_SyncCenterCard> {
             syncing: _syncing,
             onRefresh: _refreshOverview,
             onSync: _retry,
+            onOpenConflicts: _openConflicts,
           );
         },
       ),
@@ -257,6 +259,14 @@ class _SyncCenterCardState extends ConsumerState<_SyncCenterCard> {
   void _refreshOverview() {
     ref.invalidate(syncOverviewProvider);
   }
+
+  Future<void> _openConflicts() async {
+    await Navigator.of(
+      context,
+    ).push<void>(MaterialPageRoute(builder: (_) => const ConflictCenterPage()));
+    ref.invalidate(conflictRecordsProvider);
+    ref.invalidate(syncOverviewProvider);
+  }
 }
 
 class AccountSyncCenterContent extends StatelessWidget {
@@ -266,12 +276,14 @@ class AccountSyncCenterContent extends StatelessWidget {
     required this.syncing,
     required this.onRefresh,
     required this.onSync,
+    this.onOpenConflicts,
   });
 
   final SyncOverview overview;
   final bool syncing;
   final VoidCallback onRefresh;
   final VoidCallback onSync;
+  final VoidCallback? onOpenConflicts;
 
   @override
   Widget build(BuildContext context) {
@@ -383,6 +395,13 @@ class AccountSyncCenterContent extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (overview.conflictCount > 0) ...[
+                  const SizedBox(height: 10),
+                  _ConflictCenterAction(
+                    count: overview.conflictCount,
+                    onTap: syncing ? null : onOpenConflicts,
+                  ),
+                ],
                 if (overview.failures.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Align(
@@ -464,6 +483,62 @@ class AccountSyncCenterContent extends StatelessWidget {
       SyncFailureType.person => Icons.person_outline_rounded,
       SyncFailureType.transaction => Icons.receipt_long_outlined,
     };
+  }
+}
+
+class _ConflictCenterAction extends StatelessWidget {
+  const _ConflictCenterAction({required this.count, required this.onTap});
+
+  final int count;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final radius = BorderRadius.circular(14);
+    return Material(
+      color: colorScheme.tertiaryContainer.withValues(alpha: 0.42),
+      borderRadius: radius,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: radius,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              Icon(
+                Icons.compare_arrows_rounded,
+                size: 20,
+                color: colorScheme.onTertiaryContainer,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '数据冲突 $count',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onTertiaryContainer,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Text(
+                '逐项处理',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: colorScheme.onTertiaryContainer,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 19,
+                color: colorScheme.onTertiaryContainer,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

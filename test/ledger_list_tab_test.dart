@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simon_ledger_flutter/core/database/database_service.dart';
 import 'package:simon_ledger_flutter/core/di/providers.dart';
+import 'package:simon_ledger_flutter/core/models/conflict_record.dart';
 import 'package:simon_ledger_flutter/core/models/ledger.dart';
 import 'package:simon_ledger_flutter/core/models/person.dart';
 import 'package:simon_ledger_flutter/core/models/transaction_record.dart';
@@ -774,5 +775,62 @@ void main() {
     final dialogTop = tester.getTopLeft(find.byType(Dialog)).dy;
     final titleTop = tester.getTopLeft(find.text('删除账本')).dy;
     expect(titleTop - dialogTop, greaterThanOrEqualTo(20));
+  });
+
+  testWidgets('ledger card keeps conflict count separate from sync status', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final database = DatabaseService();
+    final ledger = Ledger()
+      ..uuid = 'conflict-ledger'
+      ..name = '家庭账本'
+      ..baseCurrencyCode = 'CNY';
+    await database.saveLedger(ledger);
+    final record = ConflictRecord(
+      id: 'transaction-conflict',
+      entityType: ConflictEntityType.transaction,
+      ledgerUuid: ledger.uuid,
+      localUuid: 'transaction-local',
+      remoteUuid: 'transaction-remote',
+      operation: ConflictOperation.update,
+      baseVersion: 1,
+      remoteVersion: 2,
+      localSnapshot: const {'category': '早餐'},
+      remoteSnapshot: const {'category': '午餐'},
+      remoteDeleted: false,
+      detectedAt: DateTime.utc(2026, 8, 30),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          authTokenProvider.overrideWith(
+            (ref) async => const AuthToken(name: 'satoken', value: 'token'),
+          ),
+          conflictRecordsProvider.overrideWith((ref) async => [record]),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: LedgerListTab(
+              ledgers: [ledger],
+              ledgerStats: const {},
+              onTap: (_) {},
+              onEdit: (_) {},
+              onShare: (_) async {},
+              onDelete: (_) async {},
+              onCreate: () {},
+              onSync: (_) async {},
+              autoSyncEnabled: false,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('本机'), findsOneWidget);
+    expect(find.text('冲突 1 项'), findsOneWidget);
   });
 }

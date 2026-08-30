@@ -83,6 +83,18 @@ final conflictRecordsProvider = FutureProvider<List<ConflictRecord>>((ref) {
   return ref.watch(conflictStoreProvider).readAll();
 });
 
+final conflictLedgerNamesProvider = FutureProvider<Map<String, String>>((
+  ref,
+) async {
+  final ledgers = await ref
+      .watch(databaseProvider)
+      .getAllLedgers(includeDeleted: true);
+  return {
+    for (final ledger in ledgers) ledger.uuid: ledger.name,
+    for (final ledger in ledgers) ledger.remoteSyncUuid: ledger.name,
+  };
+});
+
 final conflictCountProvider = Provider<int>((ref) {
   return ref.watch(conflictRecordsProvider).value?.length ?? 0;
 });

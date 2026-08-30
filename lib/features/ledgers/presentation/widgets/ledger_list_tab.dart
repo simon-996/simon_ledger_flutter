@@ -10,6 +10,7 @@ import '../../../../core/network/friendly_error.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
+import '../../../conflicts/presentation/widgets/conflict_entry_widgets.dart';
 import '../../../transactions/presentation/providers/transaction_provider.dart';
 import '../providers/ledger_provider.dart';
 import '../providers/ledger_stats_provider.dart';
@@ -175,6 +176,9 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
             widget.ledgerStats[ledger.uuid] ??
             {'expense': 0.0, 'income': 0.0, 'balance': 0.0};
         final syncStatus = ref.watch(ledgerSyncStatusProvider(ledger.uuid));
+        final conflictCount = ref.watch(
+          ledgerConflictCountProvider(ledger.uuid),
+        );
         final operation = _ledgerOperations[ledger.uuid];
         final isBusy = operation != null;
         final delayMs = (index < 6 ? index : 6) * 45;
@@ -196,6 +200,7 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
               isCloudMode: isCloudMode,
               index: index,
               syncStatus: syncStatus,
+              conflictCount: conflictCount,
               operation: operation,
               onTap: () => widget.onTap(ledger),
               onEdit: () => widget.onEdit(ledger),
@@ -656,6 +661,7 @@ class _LedgerCard extends StatelessWidget {
     required this.isCloudMode,
     required this.index,
     required this.syncStatus,
+    required this.conflictCount,
     required this.operation,
     required this.onTap,
     required this.onEdit,
@@ -675,6 +681,7 @@ class _LedgerCard extends StatelessWidget {
   final bool isCloudMode;
   final int index;
   final AsyncValue<LedgerSyncStatus> syncStatus;
+  final int conflictCount;
   final _LedgerCardOperation? operation;
   final VoidCallback onTap;
   final VoidCallback onEdit;
@@ -817,6 +824,9 @@ class _LedgerCard extends StatelessWidget {
                                             text: '已同步',
                                             tooltip: '账本数据已同步至云端',
                                           ),
+                                        LedgerConflictChip(
+                                          count: conflictCount,
+                                        ),
                                       ],
                                     ),
                                   ],

@@ -146,6 +146,40 @@ void main() {
     expect(find.text('尚无成功同步记录'), findsOneWidget);
   });
 
+  testWidgets('sync center exposes conflicts as a separate action', (
+    tester,
+  ) async {
+    var openCalls = 0;
+    const conflictOverview = SyncOverview(
+      ledgerPendingCount: 0,
+      personPendingCount: 0,
+      transactionPendingCount: 0,
+      failedCount: 0,
+      localOnlyLedgerCount: 0,
+      conflictCount: 2,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AccountSyncCenterContent(
+            overview: conflictOverview,
+            syncing: false,
+            onRefresh: () {},
+            onSync: () {},
+            onOpenConflicts: () => openCalls += 1,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('数据冲突 2'), findsOneWidget);
+    expect(find.text('逐项处理'), findsOneWidget);
+    expect(find.text('暂无待同步'), findsOneWidget);
+
+    await tester.tap(find.text('逐项处理'));
+    expect(openCalls, 1);
+  });
+
   testWidgets('sync center shows friendly failure details', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
