@@ -49,6 +49,7 @@ lib/core/di              # Riverpod Provider
 lib/core/repositories    # 本地/远端 Repository
 lib/core/services        # 同步、导入、邀请、资料同步
 lib/features             # 页面和业务组件
+lib/features/conflicts   # 冲突入口、分组列表、字段对比和逐项处理
 ```
 
 本地存储键：
@@ -57,6 +58,7 @@ lib/features             # 页面和业务组件
 local_store.people.v1
 local_store.ledgers.v1
 local_store.transactions.v1
+local_store.conflicts.v1
 ```
 
 重要原则：
@@ -64,7 +66,19 @@ local_store.transactions.v1
 - 写操作优先保存本地。
 - 登录态通过 Provider 决定使用本地仓库还是远端仓库。
 - 本地 UUID 与远端 UUID 的映射只能通过 `SyncIdentityResolver` 处理。
+- HTTP 409 / `409001` 是需要用户选择的数据冲突，不等于普通同步失败；冲突实体停止自动重试，但不能阻塞其他实体。
+- “使用云端”离线可直接应用持久化快照；“保留本机”离线时进入 `queuedLocal`，联网后由 `SyncCoordinator` 优先重试。
 - 平台差异集中在 `core/common`，业务层不要直接依赖 `dart:io` 或浏览器 API。
+
+冲突链路核心文件：
+
+```text
+lib/core/models/conflict_record.dart
+lib/core/services/conflict_store.dart
+lib/core/services/conflict_snapshot_codec.dart
+lib/core/services/conflict_coordinator.dart
+lib/features/conflicts/presentation/screens
+```
 
 常用检查：
 
@@ -155,7 +169,7 @@ fix: preserve pending sync state
 ## 当前维护重点
 
 - 继续补齐离线同步组合场景测试。
-- 完善冲突恢复体验。
+- 在真实多设备环境继续验证冲突恢复、重复冲突和离线选择。
 - 后台管理接入独立 `/api/admin/*` 接口。
 - 数据量增长后评估把本地 JSON 存储迁移到结构化本地数据库。
 - 真实多用户环境继续验证邀请、权限、同步和统计口径。
