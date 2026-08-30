@@ -165,10 +165,7 @@ class _SimonLedgerAppState extends ConsumerState<SimonLedgerApp>
       if (mounted && _shouldShowSyncErrorNotice()) {
         AppNotice.error(
           context,
-          FriendlyError.message(
-            error,
-            fallback: '部分数据仍保存在本机，网络恢复后会继续同步。',
-          ),
+          FriendlyError.message(error, fallback: '部分数据仍保存在本机，网络恢复后会继续同步。'),
           actionLabel: '重试',
           onAction: () => _syncPending(),
         );
