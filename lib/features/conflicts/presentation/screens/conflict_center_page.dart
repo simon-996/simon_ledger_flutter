@@ -6,6 +6,7 @@ import '../../../../core/models/conflict_record.dart';
 import '../../../../core/network/friendly_error.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
+import 'conflict_detail_page.dart';
 
 class ConflictCenterPage extends ConsumerWidget {
   const ConflictCenterPage({super.key, this.onRecordTap});
@@ -52,7 +53,20 @@ class ConflictCenterPage extends ConsumerWidget {
           return ConflictCenterContent(
             records: records,
             ledgerNames: names,
-            onRecordTap: onRecordTap,
+            onRecordTap:
+                onRecordTap ??
+                (record) {
+                  Navigator.of(context)
+                      .push<void>(
+                        MaterialPageRoute(
+                          builder: (_) => ConflictDetailPage(record: record),
+                        ),
+                      )
+                      .then((_) {
+                        ref.invalidate(conflictRecordsProvider);
+                        ref.invalidate(syncOverviewProvider);
+                      });
+                },
           );
         },
       ),
@@ -209,53 +223,56 @@ class _ConflictRecordTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-      onTap: onTap,
-      leading: Container(
-        width: 38,
-        height: 38,
-        decoration: BoxDecoration(
-          color: colorScheme.tertiaryContainer.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(12),
+    return Material(
+      color: Colors.transparent,
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        onTap: onTap,
+        leading: Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: colorScheme.tertiaryContainer.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            _entityIcon(record.entityType),
+            size: 20,
+            color: colorScheme.onTertiaryContainer,
+          ),
         ),
-        child: Icon(
-          _entityIcon(record.entityType),
-          size: 20,
-          color: colorScheme.onTertiaryContainer,
+        title: Text(
+          _recordTitle(record),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(
+            context,
+          ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
         ),
-      ),
-      title: Text(
-        _recordTitle(record),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: Theme.of(
-          context,
-        ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
-      ),
-      subtitle: Text(
-        '${_operationLabel(record.operation)} · ${_detectedAtLabel(record.detectedAt)}',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            _stateLabel(record.state),
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: record.state == ConflictState.failed
-                  ? colorScheme.error
-                  : colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w700,
+        subtitle: Text(
+          '${_operationLabel(record.operation)} · ${_detectedAtLabel(record.detectedAt)}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _stateLabel(record.state),
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: record.state == ConflictState.failed
+                    ? colorScheme.error
+                    : colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-          const SizedBox(width: 2),
-          Icon(
-            Icons.chevron_right_rounded,
-            color: colorScheme.onSurfaceVariant.withValues(alpha: 0.54),
-          ),
-        ],
+            const SizedBox(width: 2),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.54),
+            ),
+          ],
+        ),
       ),
     );
   }

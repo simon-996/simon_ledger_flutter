@@ -357,6 +357,48 @@ void main() {
       expect(api.data, {'version': 7});
     },
   );
+
+  test(
+    'API gateway restores a locally kept record when remote is deleted',
+    () async {
+      final api = _RecordingApiClient()
+        ..response = {
+          'uuid': 'ledger-remote',
+          'name': '本机名称',
+          'baseCurrencyCode': 'CNY',
+          'exchangeRateToCny': 1.0,
+          'version': 5,
+          'deleted': false,
+        };
+      final apiGateway = ApiConflictResolutionGateway(
+        apiClient: api,
+        codec: codec,
+        identityResolver: SyncIdentityResolver(database),
+      );
+
+      await apiGateway.submit(
+        _record(
+          entityType: ConflictEntityType.ledger,
+          ledgerUuid: 'ledger-remote',
+          localUuid: 'ledger-remote',
+          remoteUuid: 'ledger-remote',
+          operation: ConflictOperation.update,
+          remoteVersion: 4,
+          remoteDeleted: true,
+          localSnapshot: const {
+            'name': '本机名称',
+            'baseCurrencyCode': 'CNY',
+            'exchangeRateToCny': 1.0,
+          },
+        ),
+      );
+
+      expect(api.method, 'POST');
+      expect(api.path, '/api/ledgers/ledger-remote/restore');
+      expect(api.data, containsPair('version', 4));
+      expect(api.idempotencyKey, contains('restore'));
+    },
+  );
 }
 
 Future<void> _captureProfile(
@@ -421,6 +463,7 @@ ConflictRecord _record({
   required String localUuid,
   required String remoteUuid,
   ConflictOperation operation = ConflictOperation.update,
+  bool remoteDeleted = false,
   required int remoteVersion,
   required Map<String, Object?> localSnapshot,
 }) {
@@ -435,7 +478,7 @@ ConflictRecord _record({
     remoteVersion: remoteVersion,
     localSnapshot: localSnapshot,
     remoteSnapshot: const {},
-    remoteDeleted: false,
+    remoteDeleted: remoteDeleted,
     detectedAt: DateTime(2026, 8, 26),
   );
 }

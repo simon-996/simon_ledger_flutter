@@ -42,19 +42,20 @@ class ApiConflictResolutionGateway implements ConflictResolutionGateway {
     if (version == null || version < 1) {
       throw StateError('云端记录缺少可提交版本');
     }
+    final operation = _effectiveOperation(record);
     if (record.entityType == ConflictEntityType.profile &&
-        record.operation != ConflictOperation.update) {
+        operation != ConflictOperation.update) {
       throw StateError('个人资料不支持删除或恢复冲突');
     }
 
     final remoteLedgerUuid = await _remoteLedgerUuid(record);
-    final path = _requestPath(record, remoteLedgerUuid);
+    final path = _requestPath(record, remoteLedgerUuid, operation);
     final data = await _requestData(record, version);
-    final idempotencyKey =
-        'resolve-${record.id}-${record.operation.name}-$version';
-    ConflictMutationResult parse(Object? json) => _parseMutation(json, record);
+    final idempotencyKey = 'resolve-${record.id}-${operation.name}-$version';
+    ConflictMutationResult parse(Object? json) =>
+        _parseMutation(json, operation);
 
-    return switch (record.operation) {
+    return switch (operation) {
       ConflictOperation.update => _apiClient.put<ConflictMutationResult>(
         path,
         data: data,
@@ -113,7 +114,20 @@ class ApiConflictResolutionGateway implements ConflictResolutionGateway {
     return _identityResolver.resolveLedgerUuid(ledgerUuid);
   }
 
-  String _requestPath(ConflictRecord record, String? remoteLedgerUuid) {
+  ConflictOperation _effectiveOperation(ConflictRecord record) {
+    if (record.operation == ConflictOperation.delete) {
+      return ConflictOperation.delete;
+    }
+    return record.operation == ConflictOperation.restore || record.remoteDeleted
+        ? ConflictOperation.restore
+        : ConflictOperation.update;
+  }
+
+  String _requestPath(
+    ConflictRecord record,
+    String? remoteLedgerUuid,
+    ConflictOperation operation,
+  ) {
     final String basePath;
     switch (record.entityType) {
       case ConflictEntityType.profile:
@@ -121,7 +135,7 @@ class ApiConflictResolutionGateway implements ConflictResolutionGateway {
       case ConflictEntityType.ledger:
         basePath = '/api/ledgers/${record.remoteUuid}';
       case ConflictEntityType.member:
-        if (record.operation == ConflictOperation.delete &&
+        if (operation == ConflictOperation.delete &&
             record.localSnapshot['leaveLedger'] == true) {
           return '/api/ledgers/$remoteLedgerUuid/leave';
         }
@@ -134,17 +148,20 @@ class ApiConflictResolutionGateway implements ConflictResolutionGateway {
             '/api/ledgers/$remoteLedgerUuid/transactions/${record.remoteUuid}';
     }
 
-    if (record.operation == ConflictOperation.restore) {
+    if (operation == ConflictOperation.restore) {
       return '$basePath/restore';
     }
     if (record.entityType == ConflictEntityType.member &&
-        record.operation == ConflictOperation.update) {
+        operation == ConflictOperation.update) {
       return '$basePath/role';
     }
     return basePath;
   }
 
-  ConflictMutationResult _parseMutation(Object? json, ConflictRecord record) {
+  ConflictMutationResult _parseMutation(
+    Object? json,
+    ConflictOperation operation,
+  ) {
     if (json is! Map<dynamic, dynamic>) {
       throw const FormatException('冲突解决响应格式不正确');
     }
@@ -157,8 +174,7 @@ class ApiConflictResolutionGateway implements ConflictResolutionGateway {
     return ConflictMutationResult(
       version: version,
       deleted:
-          snapshot['deleted'] == true ||
-          record.operation == ConflictOperation.delete,
+          snapshot['deleted'] == true || operation == ConflictOperation.delete,
       snapshot: snapshot,
     );
   }
