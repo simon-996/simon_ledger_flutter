@@ -79,7 +79,12 @@ final conflictCoordinatorProvider = Provider<ConflictCoordinator>((ref) {
   );
 });
 
+final conflictStoreRevisionProvider = StreamProvider<int>((ref) {
+  return ref.watch(conflictStoreProvider).watchChanges();
+});
+
 final conflictRecordsProvider = FutureProvider<List<ConflictRecord>>((ref) {
+  ref.watch(conflictStoreRevisionProvider);
   return ref.watch(conflictStoreProvider).readAll();
 });
 

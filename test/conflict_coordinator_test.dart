@@ -229,6 +229,48 @@ void main() {
   });
 
   test(
+    'keeping a local delete already deleted remotely resolves without API',
+    () async {
+      await database.savePerson(
+        Person()
+          ..uuid = 'person-local'
+          ..name = '本机参与人'
+          ..isDeleted = true
+          ..version = 2,
+      );
+      await coordinator.capture(
+        error: _conflictError(
+          entityType: ConflictEntityType.person,
+          entityUuid: 'person-remote',
+          remoteVersion: 4,
+          remoteDeleted: true,
+          remoteSnapshot: const {
+            'uuid': 'person-remote',
+            'name': '云端参与人',
+            'avatar': '🐶',
+            'version': 4,
+          },
+        ),
+        operation: ConflictOperation.delete,
+        ledgerUuid: 'ledger-local',
+        localUuid: 'person-local',
+        localSnapshot: const {'name': '本机参与人', 'version': 2},
+      );
+
+      final outcome = await coordinator.keepLocal(
+        (await store.readAll()).single.id,
+      );
+
+      expect(outcome, ConflictResolutionOutcome.resolved);
+      expect(gateway.submitted, isEmpty);
+      expect(await store.readAll(), isEmpty);
+      final saved = (await database.getAllPeople(includeDeleted: true)).single;
+      expect(saved.isDeleted, isTrue);
+      expect(saved.version, 4);
+    },
+  );
+
+  test(
     'API gateway maps local transaction identities and update route',
     () async {
       await database.saveLedger(
@@ -436,6 +478,7 @@ ApiException _conflictError({
   String entityUuid = 'transaction-remote',
   int submittedVersion = 2,
   int remoteVersion = 3,
+  bool remoteDeleted = false,
   Map<String, Object?> remoteSnapshot = const {
     'uuid': 'transaction-remote',
     'amount': 28.5,
@@ -451,7 +494,7 @@ ApiException _conflictError({
       entityUuid: entityUuid,
       submittedVersion: submittedVersion,
       remoteVersion: remoteVersion,
-      remoteDeleted: false,
+      remoteDeleted: remoteDeleted,
       remoteSnapshot: remoteSnapshot,
     ),
   );

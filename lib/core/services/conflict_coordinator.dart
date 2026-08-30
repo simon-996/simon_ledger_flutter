@@ -242,6 +242,21 @@ class ConflictCoordinator {
   Future<ConflictResolutionOutcome> keepLocal(String id) async {
     final record = await _store.findById(id);
     if (record == null) return ConflictResolutionOutcome.failed;
+    if (record.operation == ConflictOperation.delete && record.remoteDeleted) {
+      await _store.updateState(id, ConflictState.resolving);
+      try {
+        await _codec.applyRemote(record);
+        await _store.remove(id);
+        return ConflictResolutionOutcome.resolved;
+      } catch (error) {
+        await _store.updateState(
+          id,
+          ConflictState.failed,
+          error: _message(error),
+        );
+        return ConflictResolutionOutcome.failed;
+      }
+    }
     if (record.remoteVersion == null) {
       await _store.updateState(
         id,

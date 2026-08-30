@@ -8,6 +8,15 @@ import '../models/conflict_record.dart';
 class ConflictStore {
   static const storageKey = 'local_store.conflicts.v1';
   static Future<void> _tail = Future<void>.value();
+  static final StreamController<int> _changes = StreamController<int>.broadcast(
+    sync: true,
+  );
+  static int _revision = 0;
+
+  Stream<int> watchChanges() async* {
+    yield _revision;
+    yield* _changes.stream;
+  }
 
   Future<List<ConflictRecord>> readAll() {
     return _exclusive(_readUnsafe);
@@ -112,5 +121,7 @@ class ConflictStore {
       storageKey,
       jsonEncode(records.map((record) => record.toJson()).toList()),
     );
+    _revision += 1;
+    _changes.add(_revision);
   }
 }

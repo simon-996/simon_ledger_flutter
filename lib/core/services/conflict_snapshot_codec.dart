@@ -249,11 +249,20 @@ class ConflictSnapshotCodec {
       return member.uuid == record.localUuid ||
           member.uuid == record.remoteUuid;
     });
+    final isLeaveConflict = record.localSnapshot['leaveLedger'] == true;
     if (record.remoteDeleted) {
       if (index != -1) {
         ledger.members = List<LedgerMemberSummary>.from(ledger.members)
           ..removeAt(index);
         ledger.memberCount = ledger.members.length;
+      }
+      if (isLeaveConflict) {
+        ledger
+          ..isDeleted = true
+          ..pendingSync = false
+          ..syncError = null;
+      }
+      if (index != -1 || isLeaveConflict) {
         await _database.saveLedger(ledger);
       }
       return;
@@ -283,6 +292,13 @@ class ConflictSnapshotCodec {
             ? members.length
             : ledger.memberCount,
       );
+    if (isLeaveConflict) {
+      ledger
+        ..role = member.role
+        ..isDeleted = false
+        ..pendingSync = false
+        ..syncError = null;
+    }
     await _database.saveLedger(ledger);
   }
 

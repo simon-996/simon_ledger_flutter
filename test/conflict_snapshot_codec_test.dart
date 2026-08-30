@@ -337,6 +337,57 @@ void main() {
     expect(members.last.version, 3);
   });
 
+  test(
+    'accepting an active remote membership restores a locally hidden ledger',
+    () async {
+      await database.saveLedger(
+        Ledger()
+          ..uuid = 'ledger-local'
+          ..syncedRemoteUuid = 'ledger-remote'
+          ..name = '共享账本'
+          ..baseCurrencyCode = 'CNY'
+          ..role = 'editor'
+          ..isDeleted = true
+          ..members = const [
+            LedgerMemberSummary(
+              uuid: 'member-self',
+              nickname: '本人',
+              role: 'editor',
+              version: 2,
+            ),
+          ],
+      );
+
+      await codec.applyRemote(
+        _record(
+          entityType: ConflictEntityType.member,
+          ledgerUuid: 'ledger-local',
+          localUuid: 'member-self',
+          remoteUuid: 'member-self',
+          operation: ConflictOperation.delete,
+          localSnapshot: const {
+            'uuid': 'member-self',
+            'role': 'editor',
+            'version': 2,
+            'leaveLedger': true,
+          },
+          remoteVersion: 3,
+          remoteSnapshot: const {
+            'uuid': 'member-self',
+            'nickname': '本人',
+            'role': 'editor',
+            'version': 3,
+          },
+        ),
+      );
+
+      final visible = await database.getAllLedgers();
+      expect(visible, hasLength(1));
+      expect(visible.single.isDeleted, isFalse);
+      expect(visible.single.members.single.version, 3);
+    },
+  );
+
   test('accepting remote person preserves the local person uuid', () async {
     await database.savePerson(
       Person()
