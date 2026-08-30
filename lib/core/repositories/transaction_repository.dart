@@ -1,8 +1,12 @@
 import 'dart:async';
 
 import '../database/database_service.dart';
+import '../models/conflict_record.dart';
 import '../models/transaction_record.dart';
 import '../network/api_client.dart';
+import '../network/api_exception.dart';
+import '../services/conflict_coordinator.dart';
+import '../services/conflict_snapshot_codec.dart';
 import '../services/sync_identity_resolver.dart';
 
 abstract class TransactionRepository {
@@ -96,15 +100,21 @@ class RemoteTransactionRepository implements TransactionRepository {
     required ApiClient apiClient,
     required DatabaseService database,
     SyncIdentityResolver? identityResolver,
+    ConflictCoordinator? conflictCoordinator,
+    ConflictSnapshotCodec? conflictCodec,
   }) : _apiClient = apiClient,
        _db = database,
-       _identityResolver = identityResolver ?? SyncIdentityResolver(database);
+       _identityResolver = identityResolver ?? SyncIdentityResolver(database),
+       _conflictCoordinator = conflictCoordinator,
+       _conflictCodec = conflictCodec;
 
   static const int _pageSize = 100;
 
   final ApiClient _apiClient;
   final DatabaseService _db;
   final SyncIdentityResolver _identityResolver;
+  final ConflictCoordinator? _conflictCoordinator;
+  final ConflictSnapshotCodec? _conflictCodec;
 
   @override
   Future<List<TransactionRecord>> getCachedTransactionsForLedger(
@@ -209,6 +219,16 @@ class RemoteTransactionRepository implements TransactionRepository {
         }
         synced += 1;
       } catch (error) {
+        final operation = transaction.isDeleted
+            ? ConflictOperation.delete
+            : ConflictOperation.update;
+        if (await _captureTransactionConflict(error, transaction, operation)) {
+          transaction
+            ..pendingSync = false
+            ..syncError = null;
+          await _db.saveTransaction(transaction);
+          continue;
+        }
         firstError ??= error;
         transaction
           ..pendingSync = true
@@ -244,9 +264,9 @@ class RemoteTransactionRepository implements TransactionRepository {
       'personUuids': remotePersonUuids,
     };
 
-    final remoteUuid =
-        _remoteUuidByOperationId[transaction.clientOperationId] ??
-        (_looksLikeRemoteUuid(transaction.uuid) ? transaction.uuid : null);
+    final remoteUuid = _looksLikeRemoteUuid(transaction.uuid)
+        ? transaction.uuid
+        : null;
     final version = transaction.version;
     if (remoteUuid == null) {
       final saved = await _apiClient.post<TransactionRecord>(
@@ -294,9 +314,9 @@ class RemoteTransactionRepository implements TransactionRepository {
     final remoteLedgerUuid = await _identityResolver.resolveLedgerUuid(
       transaction.ledgerUuid,
     );
-    final remoteUuid =
-        _remoteUuidByOperationId[transaction.clientOperationId] ??
-        (_looksLikeRemoteUuid(transaction.uuid) ? transaction.uuid : null);
+    final remoteUuid = _looksLikeRemoteUuid(transaction.uuid)
+        ? transaction.uuid
+        : null;
     final version = transaction.version;
     if (remoteUuid == null) {
       await _saveDeletedTransaction(transaction);
@@ -308,11 +328,31 @@ class RemoteTransactionRepository implements TransactionRepository {
       data: {'version': version},
       idempotencyKey: 'delete-transaction-$remoteUuid-$version',
     );
+    transaction.version = version + 1;
     await _saveDeletedTransaction(transaction);
   }
 
-  static final Map<String, int> _versionByUuid = {};
-  static final Map<String, String> _remoteUuidByOperationId = {};
+  Future<bool> _captureTransactionConflict(
+    Object error,
+    TransactionRecord transaction,
+    ConflictOperation operation,
+  ) async {
+    final coordinator = _conflictCoordinator;
+    final codec = _conflictCodec;
+    if (coordinator == null ||
+        codec == null ||
+        error is! ApiException ||
+        !error.isConflict) {
+      return false;
+    }
+    return coordinator.capture(
+      error: error,
+      operation: operation,
+      ledgerUuid: transaction.ledgerUuid,
+      localUuid: transaction.uuid,
+      localSnapshot: codec.transactionSnapshot(transaction),
+    );
+  }
 
   static bool _looksLikeRemoteUuid(String uuid) {
     return RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(uuid);
@@ -423,18 +463,14 @@ class RemoteTransactionRepository implements TransactionRepository {
   static TransactionRecord _transactionFromJson(Object? json) {
     final map = json! as Map<String, dynamic>;
     final uuid = map['uuid'].toString();
-    _versionByUuid[uuid] = (map['version'] as num?)?.toInt() ?? 1;
     final clientOperationId = map['clientOperationId']?.toString();
-    if (clientOperationId != null && clientOperationId.isNotEmpty) {
-      _remoteUuidByOperationId[clientOperationId] = uuid;
-    }
     return TransactionRecord()
       ..uuid = uuid
       ..ledgerUuid = map['ledgerUuid'].toString()
       ..type = (map['type'] as num?)?.toInt() ?? 0
       ..payerPersonUuid = map['payerPersonUuid']?.toString()
       ..clientOperationId = clientOperationId
-      ..version = _versionByUuid[uuid] ?? 1
+      ..version = (map['version'] as num?)?.toInt() ?? 1
       ..amount = (map['amount'] as num?)?.toDouble() ?? 0
       ..currencyCode = map['currencyCode'].toString()
       ..category = map['category'].toString()

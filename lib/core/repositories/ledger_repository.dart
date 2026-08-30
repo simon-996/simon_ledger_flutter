@@ -1,10 +1,14 @@
 import 'dart:async';
 
 import '../database/database_service.dart';
+import '../models/conflict_record.dart';
 import '../models/ledger.dart';
 import '../models/person.dart';
 import '../network/api_client.dart';
+import '../network/api_exception.dart';
 import '../network/token_store.dart';
+import '../services/conflict_coordinator.dart';
+import '../services/conflict_snapshot_codec.dart';
 import '../services/sync_identity_resolver.dart';
 
 class CreatedLedgerWithPeople {
@@ -90,15 +94,21 @@ class RemoteLedgerRepository implements LedgerRepository {
     required DatabaseService database,
     TokenStore? tokenStore,
     SyncIdentityResolver? identityResolver,
+    ConflictCoordinator? conflictCoordinator,
+    ConflictSnapshotCodec? conflictCodec,
   }) : _apiClient = apiClient,
        _db = database,
        _tokenStore = tokenStore,
-       _identityResolver = identityResolver ?? SyncIdentityResolver(database);
+       _identityResolver = identityResolver ?? SyncIdentityResolver(database),
+       _conflictCoordinator = conflictCoordinator,
+       _conflictCodec = conflictCodec;
 
   final ApiClient _apiClient;
   final DatabaseService _db;
   final TokenStore? _tokenStore;
   final SyncIdentityResolver _identityResolver;
+  final ConflictCoordinator? _conflictCoordinator;
+  final ConflictSnapshotCodec? _conflictCodec;
   static final Map<String, Future<void>> _pendingLocalLedgerUploads = {};
 
   @override
@@ -229,20 +239,35 @@ class RemoteLedgerRepository implements LedgerRepository {
       'name': ledger.name,
       'baseCurrencyCode': ledger.baseCurrencyCode,
       'exchangeRateToCny': ledger.exchangeRateToCNY,
+      'version': ledger.version,
     };
     try {
-      await _apiClient.put<Ledger>(
+      final saved = await _apiClient.put<Ledger>(
         '/api/ledgers/${ledger.remoteSyncUuid}',
         data: data,
-        idempotencyKey: _operationKey('update-ledger', ledger.remoteSyncUuid),
+        idempotencyKey:
+            'update-ledger-${ledger.remoteSyncUuid}-${ledger.version}',
         fromJson: _ledgerFromJson,
       );
       await _db.saveLedger(
         ledger
+          ..version = saved.version
           ..pendingSync = false
           ..syncError = null,
       );
     } catch (error) {
+      if (await _captureLedgerConflict(
+        error,
+        ledger,
+        ConflictOperation.update,
+      )) {
+        await _db.saveLedger(
+          ledger
+            ..pendingSync = false
+            ..syncError = null,
+        );
+        return;
+      }
       await _db.saveLedger(ledger..syncError = error.toString());
     }
   }
@@ -491,10 +516,6 @@ class RemoteLedgerRepository implements LedgerRepository {
     return RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(uuid);
   }
 
-  String _operationKey(String prefix, String uuid) {
-    return '$prefix-$uuid-${DateTime.now().microsecondsSinceEpoch}';
-  }
-
   @override
   Future<void> deleteLedger(String uuid) async {
     final currentLedgers = await _db.getAllLedgers(includeDeleted: true);
@@ -542,21 +563,99 @@ class RemoteLedgerRepository implements LedgerRepository {
       );
       return;
     }
-    if (_shouldLeaveRemoteLedger(ledger)) {
-      await _apiClient.postVoid(
-        '/api/ledgers/${ledger.remoteSyncUuid}/leave',
-        idempotencyKey: 'leave-ledger-${ledger.remoteSyncUuid}',
-      );
-    } else {
-      await _apiClient.deleteVoid(
-        '/api/ledgers/${ledger.remoteSyncUuid}',
-        idempotencyKey: 'delete-ledger-${ledger.remoteSyncUuid}',
-      );
+    final isLeave = _shouldLeaveRemoteLedger(ledger);
+    final version = await _accessMutationVersion(ledger, isLeave: isLeave);
+    try {
+      if (isLeave) {
+        await _apiClient.postVoid(
+          '/api/ledgers/${ledger.remoteSyncUuid}/leave',
+          data: {'version': version},
+          idempotencyKey: 'leave-ledger-${ledger.remoteSyncUuid}-$version',
+        );
+      } else {
+        await _apiClient.deleteVoid(
+          '/api/ledgers/${ledger.remoteSyncUuid}',
+          data: {'version': version},
+          idempotencyKey: 'delete-ledger-${ledger.remoteSyncUuid}-$version',
+        );
+        ledger.version = version + 1;
+      }
+    } catch (error) {
+      if (await _captureLedgerConflict(
+        error,
+        ledger,
+        ConflictOperation.delete,
+        isLeave: isLeave,
+      )) {
+        await _db.saveLedger(
+          ledger
+            ..pendingSync = false
+            ..syncError = null,
+        );
+        return;
+      }
+      rethrow;
     }
     await _db.saveLedger(
       ledger
         ..pendingSync = false
         ..syncError = null,
+    );
+  }
+
+  Future<int> _accessMutationVersion(
+    Ledger ledger, {
+    required bool isLeave,
+  }) async {
+    if (!isLeave) return ledger.version;
+    final accountUuid = await _tokenStore?.readAccountUuid();
+    final member = ledger.members.where((item) {
+      return accountUuid != null && item.userUuid == accountUuid;
+    }).firstOrNull;
+    return member?.version ?? ledger.version;
+  }
+
+  Future<bool> _captureLedgerConflict(
+    Object error,
+    Ledger ledger,
+    ConflictOperation operation, {
+    bool isLeave = false,
+  }) async {
+    final coordinator = _conflictCoordinator;
+    final codec = _conflictCodec;
+    if (coordinator == null ||
+        codec == null ||
+        error is! ApiException ||
+        !error.isConflict) {
+      return false;
+    }
+    final payload = error.conflict!;
+    if (payload.entityType == ConflictEntityType.member) {
+      final member = ledger.members.where((item) {
+        return item.uuid == payload.entityUuid;
+      }).firstOrNull;
+      final snapshot = member == null
+          ? <String, Object?>{
+              'uuid': payload.entityUuid,
+              'role': ledger.role,
+              'version': payload.submittedVersion,
+            }
+          : codec.memberSnapshot(member);
+      if (isLeave) snapshot['leaveLedger'] = true;
+      return coordinator.capture(
+        error: error,
+        operation: operation,
+        ledgerUuid: ledger.uuid,
+        localUuid: payload.entityUuid,
+        localSnapshot: snapshot,
+      );
+    }
+    return coordinator.capture(
+      error: error,
+      operation: operation,
+      ledgerUuid: ledger.uuid,
+      localUuid: ledger.uuid,
+      localSnapshot: codec.ledgerSnapshot(ledger),
     );
   }
 
@@ -575,6 +674,7 @@ class RemoteLedgerRepository implements LedgerRepository {
     final map = json! as Map<String, dynamic>;
     return Ledger()
       ..uuid = map['uuid'].toString()
+      ..version = (map['version'] as num?)?.toInt() ?? 1
       ..name = map['name'].toString()
       ..baseCurrencyCode = map['baseCurrencyCode'].toString()
       ..exchangeRateToCNY =
@@ -599,6 +699,7 @@ class RemoteLedgerRepository implements LedgerRepository {
     final map = json! as Map<String, dynamic>;
     return Person()
       ..uuid = map['uuid'].toString()
+      ..version = (map['version'] as num?)?.toInt() ?? 1
       ..name = map['name'].toString()
       ..avatar = map['avatar']?.toString() ?? ''
       ..linkedUserUuid = map['linkedUserUuid']?.toString();
@@ -624,6 +725,7 @@ class RemoteLedgerRepository implements LedgerRepository {
       nickname: map['nickname']?.toString(),
       avatar: map['avatar']?.toString(),
       role: map['role']?.toString(),
+      version: (map['version'] as num?)?.toInt() ?? 1,
     );
   }
 

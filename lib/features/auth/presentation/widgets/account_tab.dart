@@ -977,6 +977,8 @@ class _UnifiedProfileCardState extends ConsumerState<_UnifiedProfileCard> {
         AppNotice.info(context, '暂无需要同步的资料');
       case ProfileSyncStatus.stale:
         break;
+      case ProfileSyncStatus.conflict:
+        AppNotice.info(context, '检测到账户资料冲突，请到同步中心逐项处理');
     }
   }
 }

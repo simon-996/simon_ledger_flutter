@@ -121,6 +121,10 @@ class ApiConflictResolutionGateway implements ConflictResolutionGateway {
       case ConflictEntityType.ledger:
         basePath = '/api/ledgers/${record.remoteUuid}';
       case ConflictEntityType.member:
+        if (record.operation == ConflictOperation.delete &&
+            record.localSnapshot['leaveLedger'] == true) {
+          return '/api/ledgers/$remoteLedgerUuid/leave';
+        }
         basePath =
             '/api/ledgers/$remoteLedgerUuid/members/${record.remoteUuid}';
       case ConflictEntityType.person:

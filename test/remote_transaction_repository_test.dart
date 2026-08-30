@@ -2,11 +2,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simon_ledger_flutter/core/database/database_service.dart';
 import 'package:simon_ledger_flutter/core/models/ledger.dart';
+import 'package:simon_ledger_flutter/core/models/conflict_record.dart';
 import 'package:simon_ledger_flutter/core/models/person.dart';
 import 'package:simon_ledger_flutter/core/models/transaction_record.dart';
 import 'package:simon_ledger_flutter/core/network/api_client.dart';
+import 'package:simon_ledger_flutter/core/network/api_exception.dart';
 import 'package:simon_ledger_flutter/core/network/token_store.dart';
 import 'package:simon_ledger_flutter/core/repositories/transaction_repository.dart';
+import 'package:simon_ledger_flutter/core/preferences/local_profile_store.dart';
+import 'package:simon_ledger_flutter/core/services/conflict_coordinator.dart';
+import 'package:simon_ledger_flutter/core/services/conflict_snapshot_codec.dart';
+import 'package:simon_ledger_flutter/core/services/conflict_store.dart';
 
 void main() {
   group('RemoteTransactionRepository', () {
@@ -188,6 +194,68 @@ void main() {
       expect(transaction.pendingSync, isFalse);
       expect(apiClient.postPaths, isEmpty);
     });
+
+    test('one conflict does not block later pending transactions', () async {
+      SharedPreferences.setMockInitialValues({});
+      final database = DatabaseService();
+      final conflictStore = ConflictStore();
+      final codec = ConflictSnapshotCodec(
+        database: database,
+        profileStore: const LocalProfileStore(),
+      );
+      final apiClient = _ConflictThenSuccessApiClient();
+      final repository = RemoteTransactionRepository(
+        apiClient: apiClient,
+        database: database,
+        conflictCoordinator: ConflictCoordinator(
+          store: conflictStore,
+          codec: codec,
+          gateway: _UnusedGateway(),
+        ),
+        conflictCodec: codec,
+      );
+      await database.saveTransaction(
+        _transaction()
+          ..uuid = _conflictingTransactionUuid
+          ..clientOperationId = 'conflict-operation'
+          ..version = 2
+          ..createdAt = DateTime(2026, 8, 26, 12)
+          ..pendingSync = true,
+      );
+      await database.saveTransaction(
+        _transaction()
+          ..uuid = _successfulTransactionUuid
+          ..clientOperationId = 'success-operation'
+          ..version = 1
+          ..createdAt = DateTime(2026, 8, 26, 11)
+          ..pendingSync = true,
+      );
+
+      final result = await repository.syncPendingTransactions('ledger-1');
+
+      expect(result.synced, 1);
+      expect(result.error, isNull);
+      expect(apiClient.putPaths, [
+        '/api/ledgers/ledger-1/transactions/$_conflictingTransactionUuid',
+        '/api/ledgers/ledger-1/transactions/$_successfulTransactionUuid',
+      ]);
+      final conflict = (await conflictStore.readAll()).single;
+      expect(conflict.remoteUuid, _conflictingTransactionUuid);
+      final cached = await database.getTransactionsForLedger(
+        'ledger-1',
+        includeDeleted: true,
+      );
+      final conflicted = cached.singleWhere(
+        (item) => item.uuid == _conflictingTransactionUuid,
+      );
+      expect(conflicted.pendingSync, isFalse);
+      expect(conflicted.syncError, isNull);
+      final successful = cached.singleWhere(
+        (item) => item.uuid == _successfulTransactionUuid,
+      );
+      expect(successful.pendingSync, isFalse);
+      expect(successful.version, 2);
+    });
   });
 }
 
@@ -314,5 +382,63 @@ class _MappedTransactionApiClient extends ApiClient {
       'happenedAt': '2026-05-22T12:00:00',
       'version': 1,
     });
+  }
+}
+
+const _conflictingTransactionUuid = '11111111111111111111111111111111';
+const _successfulTransactionUuid = '22222222222222222222222222222222';
+
+class _ConflictThenSuccessApiClient extends ApiClient {
+  _ConflictThenSuccessApiClient() : super(tokenStore: TokenStore());
+
+  final putPaths = <String>[];
+
+  @override
+  Future<T> put<T>(
+    String path, {
+    Object? data,
+    String? idempotencyKey,
+    T Function(Object? json)? fromJson,
+  }) async {
+    putPaths.add(path);
+    final uuid = path.split('/').last;
+    if (uuid == _conflictingTransactionUuid) {
+      throw const ApiException(
+        code: 409001,
+        statusCode: 409,
+        message: '流水已被修改',
+        conflict: ApiConflictPayload(
+          entityType: ConflictEntityType.transaction,
+          entityUuid: _conflictingTransactionUuid,
+          submittedVersion: 2,
+          remoteVersion: 3,
+          remoteDeleted: false,
+          remoteSnapshot: {
+            'uuid': _conflictingTransactionUuid,
+            'ledgerUuid': 'ledger-1',
+            'type': 0,
+            'amount': 30.0,
+            'currencyCode': 'CNY',
+            'category': '餐饮',
+            'note': '云端修改',
+            'happenedAt': '2026-08-26T12:00:00.000',
+            'personUuids': ['person-1'],
+            'version': 3,
+          },
+        ),
+      );
+    }
+    return fromJson!({
+      ..._transactionJson(uuid),
+      'clientOperationId': 'success-operation',
+      'version': 2,
+    });
+  }
+}
+
+class _UnusedGateway implements ConflictResolutionGateway {
+  @override
+  Future<ConflictMutationResult> submit(ConflictRecord record) {
+    throw UnimplementedError();
   }
 }

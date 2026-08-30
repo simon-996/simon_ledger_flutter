@@ -5,11 +5,15 @@ import '../database/database_service.dart';
 import '../models/ledger.dart';
 import '../models/local_profile.dart';
 import '../models/person.dart';
+import '../models/conflict_record.dart';
+import '../network/api_exception.dart';
 import '../network/token_store.dart';
 import '../preferences/local_profile_store.dart';
 import '../repositories/auth_repository.dart';
+import 'conflict_coordinator.dart';
+import 'conflict_snapshot_codec.dart';
 
-enum ProfileSyncStatus { localOnly, queued, synced, skipped, stale }
+enum ProfileSyncStatus { localOnly, queued, synced, skipped, stale, conflict }
 
 class ProfileSyncResult {
   const ProfileSyncResult({required this.status, this.error});
@@ -24,15 +28,21 @@ class ProfileSyncService {
     required TokenStore tokenStore,
     required AuthRepository authRepository,
     required DatabaseService database,
+    ConflictCoordinator? conflictCoordinator,
+    ConflictSnapshotCodec? conflictCodec,
   }) : _localProfileStore = localProfileStore,
        _tokenStore = tokenStore,
        _authRepository = authRepository,
-       _database = database;
+       _database = database,
+       _conflictCoordinator = conflictCoordinator,
+       _conflictCodec = conflictCodec;
 
   final LocalProfileStore _localProfileStore;
   final TokenStore _tokenStore;
   final AuthRepository _authRepository;
   final DatabaseService _database;
+  final ConflictCoordinator? _conflictCoordinator;
+  final ConflictSnapshotCodec? _conflictCodec;
   Future<ProfileSyncResult>? _runningSync;
 
   Future<ProfileSyncResult> saveProfile(
@@ -152,6 +162,20 @@ class ProfileSyncService {
         return const ProfileSyncResult(status: ProfileSyncStatus.stale);
       }
 
+      if (await _captureConflict(error, profile)) {
+        await _localProfileStore.save(
+          latest.copyWith(
+            pendingSync: false,
+            pendingOperationId: null,
+            syncError: null,
+          ),
+        );
+        return ProfileSyncResult(
+          status: ProfileSyncStatus.conflict,
+          error: error,
+        );
+      }
+
       final failed = latest.copyWith(
         pendingSync: true,
         syncError: error.toString(),
@@ -159,6 +183,25 @@ class ProfileSyncService {
       await _localProfileStore.save(failed);
       return ProfileSyncResult(status: ProfileSyncStatus.queued, error: error);
     }
+  }
+
+  Future<bool> _captureConflict(Object error, LocalProfile profile) async {
+    final coordinator = _conflictCoordinator;
+    final codec = _conflictCodec;
+    if (coordinator == null ||
+        codec == null ||
+        error is! ApiException ||
+        !error.isConflict) {
+      return false;
+    }
+    final accountUuid =
+        await _tokenStore.readAccountUuid() ?? error.conflict!.entityUuid;
+    return coordinator.capture(
+      error: error,
+      operation: ConflictOperation.update,
+      localUuid: accountUuid,
+      localSnapshot: codec.profileSnapshot(profile, accountUuid: accountUuid),
+    );
   }
 
   bool _isSamePendingOperation(LocalProfile latest, LocalProfile syncing) {

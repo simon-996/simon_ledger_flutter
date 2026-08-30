@@ -1,9 +1,13 @@
 import 'dart:async';
 
 import '../database/database_service.dart';
+import '../models/conflict_record.dart';
 import '../models/ledger.dart';
 import '../models/person.dart';
 import '../network/api_client.dart';
+import '../network/api_exception.dart';
+import '../services/conflict_coordinator.dart';
+import '../services/conflict_snapshot_codec.dart';
 import '../services/sync_identity_resolver.dart';
 import 'ledger_repository.dart';
 
@@ -66,15 +70,21 @@ class RemotePersonRepository implements PersonRepository {
     required LedgerRepository ledgerRepository,
     required DatabaseService database,
     SyncIdentityResolver? identityResolver,
+    ConflictCoordinator? conflictCoordinator,
+    ConflictSnapshotCodec? conflictCodec,
   }) : _apiClient = apiClient,
        _ledgerRepository = ledgerRepository,
        _db = database,
-       _identityResolver = identityResolver ?? SyncIdentityResolver(database);
+       _identityResolver = identityResolver ?? SyncIdentityResolver(database),
+       _conflictCoordinator = conflictCoordinator,
+       _conflictCodec = conflictCodec;
 
   final ApiClient _apiClient;
   final LedgerRepository _ledgerRepository;
   final DatabaseService _db;
   final SyncIdentityResolver _identityResolver;
+  final ConflictCoordinator? _conflictCoordinator;
+  final ConflictSnapshotCodec? _conflictCodec;
 
   @override
   Future<List<Person>> getCachedPeople({
@@ -297,14 +307,15 @@ class RemotePersonRepository implements PersonRepository {
       if (_looksLikeRemoteUuid(remotePersonUuid)) {
         final saved = await _apiClient.put<Person>(
           '/api/ledgers/$remoteLedgerUuid/people/$remotePersonUuid',
-          data: data,
-          idempotencyKey: _operationKey('update-person', remotePersonUuid),
+          data: {...data, 'version': person.version},
+          idempotencyKey: 'update-person-$remotePersonUuid-${person.version}',
           fromJson: _personFromJson,
         );
         person
           ..name = saved.name
           ..avatar = saved.avatar
           ..linkedUserUuid = saved.linkedUserUuid
+          ..version = saved.version
           ..pendingSync = false
           ..syncError = null
           ..pendingLedgerUuid = null;
@@ -328,6 +339,7 @@ class RemotePersonRepository implements PersonRepository {
         ..name = saved.name
         ..avatar = saved.avatar
         ..linkedUserUuid = saved.linkedUserUuid
+        ..version = saved.version
         ..pendingSync = false
         ..syncError = null
         ..pendingLedgerUuid = null;
@@ -337,6 +349,20 @@ class RemotePersonRepository implements PersonRepository {
         newUuid: saved.uuid,
       );
     } catch (error) {
+      if (await _capturePersonConflict(
+        error,
+        person,
+        ledgerUuid,
+        ConflictOperation.update,
+      )) {
+        await _savePersonLocally(
+          person
+            ..pendingSync = false
+            ..syncError = null
+            ..pendingLedgerUuid = null,
+        );
+        return;
+      }
       await _savePersonLocally(person..syncError = error.toString());
     }
   }
@@ -428,15 +454,57 @@ class RemotePersonRepository implements PersonRepository {
         !_looksLikeRemoteUuid(remotePersonUuid)) {
       return;
     }
-    await _apiClient.deleteVoid(
-      '/api/ledgers/$remoteLedgerUuid/people/$remotePersonUuid',
-      idempotencyKey: 'delete-person-$remotePersonUuid',
-    );
+    try {
+      await _apiClient.deleteVoid(
+        '/api/ledgers/$remoteLedgerUuid/people/$remotePersonUuid',
+        data: {'version': person.version},
+        idempotencyKey: 'delete-person-$remotePersonUuid-${person.version}',
+      );
+      person.version += 1;
+    } catch (error) {
+      if (await _capturePersonConflict(
+        error,
+        person,
+        ledgerUuid,
+        ConflictOperation.delete,
+      )) {
+        person
+          ..pendingSync = false
+          ..syncError = null
+          ..pendingLedgerUuid = null;
+        await _savePersonLocally(person);
+        return;
+      }
+      rethrow;
+    }
     person
       ..pendingSync = false
       ..syncError = null
       ..pendingLedgerUuid = null;
     await _savePersonLocally(person);
+  }
+
+  Future<bool> _capturePersonConflict(
+    Object error,
+    Person person,
+    String ledgerUuid,
+    ConflictOperation operation,
+  ) async {
+    final coordinator = _conflictCoordinator;
+    final codec = _conflictCodec;
+    if (coordinator == null ||
+        codec == null ||
+        error is! ApiException ||
+        !error.isConflict) {
+      return false;
+    }
+    return coordinator.capture(
+      error: error,
+      operation: operation,
+      ledgerUuid: ledgerUuid,
+      localUuid: person.uuid,
+      localSnapshot: codec.personSnapshot(person),
+    );
   }
 
   bool _looksLikeRemoteUuid(String uuid) {
@@ -466,14 +534,11 @@ class RemotePersonRepository implements PersonRepository {
     await _db.saveLedger(ledger);
   }
 
-  String _operationKey(String prefix, String uuid) {
-    return '$prefix-$uuid-${DateTime.now().microsecondsSinceEpoch}';
-  }
-
   static Person _personFromJson(Object? json) {
     final map = json! as Map<String, dynamic>;
     return Person()
       ..uuid = map['uuid'].toString()
+      ..version = (map['version'] as num?)?.toInt() ?? 1
       ..name = map['name'].toString()
       ..avatar = map['avatar']?.toString() ?? ''
       ..linkedUserUuid = map['linkedUserUuid']?.toString();
