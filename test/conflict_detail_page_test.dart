@@ -32,6 +32,39 @@ void main() {
     expect(find.text('备注'), findsOneWidget);
   });
 
+  testWidgets('person relations show names instead of raw UUIDs', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ConflictDetailContent(
+            record: _transactionRecord(
+              remoteSnapshot: const {
+                'type': 0,
+                'amount': 25,
+                'currencyCode': 'CNY',
+                'category': '餐饮',
+                'happenedAt': '2026-08-30T08:00:00.000',
+                'payerPersonUuid': 'person-2',
+                'personUuids': ['person-2'],
+                'note': '早餐',
+              },
+            ),
+            identityLabels: const {'person-1': '🐱 小明'},
+            showIdentical: true,
+            onToggleIdentical: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('🐱 小明'), findsWidgets);
+    expect(find.text('参与人信息不可用'), findsWidgets);
+    expect(find.textContaining('person-1'), findsNothing);
+    expect(find.textContaining('person-2'), findsNothing);
+  });
+
   testWidgets('destructive choices use explicit confirmation labels', (
     tester,
   ) async {
@@ -83,6 +116,7 @@ void main() {
           keepCalls += 1;
           return ConflictResolutionOutcome.queued;
         },
+        loadNext: () async => null,
       ),
     );
 
@@ -97,14 +131,25 @@ void main() {
     await tester.pump();
   });
 
-  testWidgets('resolved choice advances back to the remaining list', (
+  testWidgets('resolved choice opens the next conflict before closing', (
     tester,
   ) async {
+    final handled = <String>[];
+    var nextLoadCount = 0;
     await _pumpLauncher(
       tester,
       ConflictDetailPage(
         record: _transactionRecord(),
-        keepLocal: (id) async => ConflictResolutionOutcome.resolved,
+        keepLocal: (id) async {
+          handled.add(id);
+          return ConflictResolutionOutcome.resolved;
+        },
+        loadNext: () async {
+          nextLoadCount += 1;
+          return nextLoadCount == 1
+              ? _transactionRecord(id: 'second-conflict', localAmount: 88)
+              : null;
+        },
       ),
     );
 
@@ -113,8 +158,15 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '保留本机版本'));
     await tester.pumpAndSettle();
 
+    expect(find.byType(ConflictDetailPage), findsOneWidget);
+    expect(find.text('88'), findsOneWidget);
+    expect(find.text('冲突已关闭'), findsNothing);
+
+    await tester.tap(find.widgetWithText(FilledButton, '保留本机版本'));
+    await tester.pumpAndSettle();
+
+    expect(handled, ['transaction-conflict', 'second-conflict']);
     expect(find.text('冲突已关闭'), findsOneWidget);
-    expect(find.text('金额'), findsNothing);
     AppNotice.dismiss();
     await tester.pump();
   });
@@ -189,12 +241,14 @@ Future<void> _pumpLauncher(
 Widget _scope(Widget child) => ProviderScope(child: child);
 
 ConflictRecord _transactionRecord({
+  String id = 'transaction-conflict',
+  num localAmount = 20,
   ConflictOperation operation = ConflictOperation.update,
   bool remoteDeleted = false,
   Map<String, Object?>? remoteSnapshot,
 }) {
   return ConflictRecord(
-    id: 'transaction-conflict',
+    id: id,
     accountUuid: 'account-a',
     entityType: ConflictEntityType.transaction,
     ledgerUuid: 'ledger-1',
@@ -203,9 +257,9 @@ ConflictRecord _transactionRecord({
     operation: operation,
     baseVersion: 2,
     remoteVersion: 3,
-    localSnapshot: const {
+    localSnapshot: {
       'type': 0,
-      'amount': 20,
+      'amount': localAmount,
       'currencyCode': 'CNY',
       'category': '餐饮',
       'happenedAt': '2026-08-30T08:00:00.000',

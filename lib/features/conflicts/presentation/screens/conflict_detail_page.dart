@@ -7,11 +7,13 @@ import '../../../../core/network/friendly_error.dart';
 import '../../../../core/services/conflict_coordinator.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
+import '../../../people_pool/presentation/providers/person_provider.dart';
 
 typedef KeepLocalConflict =
     Future<ConflictResolutionOutcome> Function(String id);
 typedef UseRemoteConflict = Future<void> Function(String id);
 typedef LoadLatestConflict = Future<ConflictRecord?> Function(String id);
+typedef LoadNextConflict = Future<ConflictRecord?> Function();
 
 class ConflictDetailPage extends ConsumerStatefulWidget {
   const ConflictDetailPage({
@@ -20,12 +22,14 @@ class ConflictDetailPage extends ConsumerStatefulWidget {
     this.keepLocal,
     this.useRemote,
     this.loadLatest,
+    this.loadNext,
   });
 
   final ConflictRecord record;
   final KeepLocalConflict? keepLocal;
   final UseRemoteConflict? useRemote;
   final LoadLatestConflict? loadLatest;
+  final LoadNextConflict? loadNext;
 
   @override
   ConsumerState<ConflictDetailPage> createState() => _ConflictDetailPageState();
@@ -54,10 +58,23 @@ class _ConflictDetailPageState extends ConsumerState<ConflictDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final people = ref.watch(cachedPeopleProvider).value ?? const [];
+    final identityLabels = <String, String>{};
+    for (final person in people) {
+      if (person.isDeleted) continue;
+      final label = '${person.avatar} ${person.name}'.trim();
+      identityLabels[person.uuid] = label;
+      identityLabels[person.remoteSyncUuid] = label;
+      final linkedUserUuid = person.linkedUserUuid?.trim();
+      if (linkedUserUuid != null && linkedUserUuid.isNotEmpty) {
+        identityLabels[linkedUserUuid] = label;
+      }
+    }
     return Scaffold(
       appBar: AppBar(title: Text('${_entityLabel(_record.entityType)}冲突')),
       body: ConflictDetailContent(
         record: _record,
+        identityLabels: identityLabels,
         showIdentical: _showIdentical,
         onToggleIdentical: () {
           setState(() => _showIdentical = !_showIdentical);
@@ -90,7 +107,7 @@ class _ConflictDetailPageState extends ConsumerState<ConflictDetailPage> {
       _invalidateConflictState();
       if (!mounted) return;
       AppNotice.success(context, '已使用云端版本');
-      Navigator.of(context).pop(true);
+      await _advanceOrClose();
     } catch (error) {
       if (!mounted) return;
       await _reloadLatest();
@@ -136,10 +153,10 @@ class _ConflictDetailPageState extends ConsumerState<ConflictDetailPage> {
     switch (outcome) {
       case ConflictResolutionOutcome.resolved:
         AppNotice.success(context, '已保留本机版本');
-        Navigator.of(context).pop(true);
+        await _advanceOrClose();
       case ConflictResolutionOutcome.queued:
         AppNotice.info(context, '已记录本机选择，联网后会自动提交');
-        Navigator.of(context).pop(true);
+        await _advanceOrClose();
       case ConflictResolutionOutcome.requiresReview:
         await _reloadLatest();
         if (!mounted) return;
@@ -222,6 +239,39 @@ class _ConflictDetailPageState extends ConsumerState<ConflictDetailPage> {
     }
   }
 
+  Future<void> _advanceOrClose() async {
+    final next = await (widget.loadNext ?? _loadNextFromStore)();
+    if (!mounted) return;
+    if (next == null) {
+      Navigator.of(context).pop(true);
+      return;
+    }
+    setState(() {
+      _record = next;
+      _showIdentical = false;
+      _busy = false;
+    });
+  }
+
+  Future<ConflictRecord?> _loadNextFromStore() async {
+    final accountUuid = await ref.read(tokenStoreProvider).readAccountUuid();
+    if (accountUuid == null || accountUuid.isEmpty) return null;
+    final records = await ref
+        .read(conflictStoreProvider)
+        .readAll(accountUuid: accountUuid);
+    final candidates =
+        records
+            .where(
+              (record) =>
+                  record.id != _record.id &&
+                  record.state != ConflictState.queuedLocal &&
+                  record.state != ConflictState.resolving,
+            )
+            .toList()
+          ..sort((left, right) => left.detectedAt.compareTo(right.detectedAt));
+    return candidates.firstOrNull;
+  }
+
   void _invalidateConflictState() {
     ref.invalidate(conflictRecordsProvider);
     ref.invalidate(syncOverviewProvider);
@@ -232,17 +282,19 @@ class ConflictDetailContent extends StatelessWidget {
   const ConflictDetailContent({
     super.key,
     required this.record,
+    this.identityLabels = const {},
     required this.showIdentical,
     required this.onToggleIdentical,
   });
 
   final ConflictRecord record;
+  final Map<String, String> identityLabels;
   final bool showIdentical;
   final VoidCallback onToggleIdentical;
 
   @override
   Widget build(BuildContext context) {
-    final comparisons = _comparisons(record);
+    final comparisons = _comparisons(record, identityLabels);
     final changed = comparisons.where((field) => !field.identical).toList();
     final identical = comparisons.where((field) => field.identical).toList();
 
@@ -585,16 +637,20 @@ class _DestructiveConfirmation {
   final String actionLabel;
 }
 
-List<_FieldComparison> _comparisons(ConflictRecord record) {
+List<_FieldComparison> _comparisons(
+  ConflictRecord record,
+  Map<String, String> identityLabels,
+) {
   return [
     for (final descriptor in _descriptors(record.entityType))
-      _comparison(record, descriptor),
+      _comparison(record, descriptor, identityLabels),
   ];
 }
 
 _FieldComparison _comparison(
   ConflictRecord record,
   _FieldDescriptor descriptor,
+  Map<String, String> identityLabels,
 ) {
   final Object? localRaw;
   final Object? remoteRaw;
@@ -607,8 +663,8 @@ _FieldComparison _comparison(
   }
   return _FieldComparison(
     label: descriptor.label,
-    localValue: _displayValue(descriptor.key, localRaw),
-    remoteValue: _displayValue(descriptor.key, remoteRaw),
+    localValue: _displayValue(descriptor.key, localRaw, identityLabels),
+    remoteValue: _displayValue(descriptor.key, remoteRaw, identityLabels),
     identical: _canonical(localRaw) == _canonical(remoteRaw),
   );
 }
@@ -660,9 +716,23 @@ String _canonical(Object? value) {
   return value.toString().trim();
 }
 
-String _displayValue(String key, Object? value) {
+String _displayValue(
+  String key,
+  Object? value,
+  Map<String, String> identityLabels,
+) {
   if (key == 'deleted') return value == true ? '已删除' : '保留';
   if (value == null || value.toString().trim().isEmpty) return '未设置';
+  if (key == 'payerPersonUuid' || key == 'linkedUserUuid') {
+    return identityLabels[value.toString()] ??
+        (key == 'linkedUserUuid' ? '账号信息不可用' : '参与人信息不可用');
+  }
+  if (key == 'personUuids' && value is Iterable<dynamic>) {
+    final labels = value
+        .map((item) => identityLabels[item.toString()] ?? '参与人信息不可用')
+        .toList();
+    return labels.isEmpty ? '无' : labels.join('、');
+  }
   if (key == 'type') {
     return switch (value.toString()) {
       '0' => '支出',
