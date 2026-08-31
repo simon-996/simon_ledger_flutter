@@ -82,6 +82,7 @@ ConflictRecord _record({
 }) {
   return ConflictRecord(
     id: id,
+    accountUuid: 'account-a',
     entityType: type,
     ledgerUuid: ledgerUuid,
     localUuid: '$id-local',

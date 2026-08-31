@@ -122,6 +122,8 @@ class _AccountActionsSection extends ConsumerWidget {
       await ref.read(tokenStoreProvider).clear();
     }
     ref.invalidate(authTokenProvider);
+    ref.invalidate(authAccountUuidProvider);
+    ref.invalidate(conflictRecordsProvider);
     ref.invalidate(currentUserProvider);
     ref.invalidate(ledgerProvider);
     ref.invalidate(ledgerStatsProvider);
@@ -1887,6 +1889,8 @@ class _AuthPanelState extends ConsumerState<_AuthPanel> {
       await _showFirstAuthWelcomePrompt(isRegister: _isRegister);
 
       ref.invalidate(authTokenProvider);
+      ref.invalidate(authAccountUuidProvider);
+      ref.invalidate(conflictRecordsProvider);
       ref.invalidate(currentUserProvider);
       ref.invalidate(ledgerProvider);
       ref.invalidate(ledgerStatsProvider);

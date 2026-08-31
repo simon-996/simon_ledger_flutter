@@ -1,6 +1,7 @@
 import '../models/conflict_record.dart';
 import '../network/api_client.dart';
 import '../network/api_exception.dart';
+import '../network/token_store.dart';
 import 'conflict_snapshot_codec.dart';
 import 'conflict_store.dart';
 import 'sync_identity_resolver.dart';
@@ -185,13 +186,16 @@ class ConflictCoordinator {
     required ConflictStore store,
     required ConflictSnapshotCodec codec,
     required ConflictResolutionGateway gateway,
+    required TokenStore tokenStore,
   }) : _store = store,
        _codec = codec,
-       _gateway = gateway;
+       _gateway = gateway,
+       _tokenStore = tokenStore;
 
   final ConflictStore _store;
   final ConflictSnapshotCodec _codec;
   final ConflictResolutionGateway _gateway;
+  final TokenStore _tokenStore;
 
   Future<bool> capture({
     required ApiException error,
@@ -202,10 +206,13 @@ class ConflictCoordinator {
   }) async {
     final payload = error.conflict;
     if (!error.isConflict || payload == null) return false;
+    final accountUuid = await _activeAccountUuid();
+    if (accountUuid == null) return false;
 
     await _store.upsert(
       ConflictRecord(
         id: _newId(payload),
+        accountUuid: accountUuid,
         entityType: payload.entityType,
         ledgerUuid: ledgerUuid,
         localUuid: localUuid,
@@ -223,15 +230,19 @@ class ConflictCoordinator {
   }
 
   Future<void> useRemote(String id) async {
-    final record = await _store.findById(id);
-    if (record == null) return;
-    await _store.updateState(id, ConflictState.resolving);
+    final accountUuid = await _requireActiveAccountUuid();
+    final record = await _store.findById(id, accountUuid: accountUuid);
+    if (record == null) {
+      throw StateError('当前账号无法处理这条冲突');
+    }
+    await _store.updateState(id, accountUuid, ConflictState.resolving);
     try {
       await _codec.applyRemote(record);
-      await _store.remove(id);
+      await _store.remove(id, accountUuid: accountUuid);
     } catch (error) {
       await _store.updateState(
         id,
+        accountUuid,
         ConflictState.failed,
         error: _message(error),
       );
@@ -240,17 +251,21 @@ class ConflictCoordinator {
   }
 
   Future<ConflictResolutionOutcome> keepLocal(String id) async {
-    final record = await _store.findById(id);
-    if (record == null) return ConflictResolutionOutcome.failed;
+    final accountUuid = await _requireActiveAccountUuid();
+    final record = await _store.findById(id, accountUuid: accountUuid);
+    if (record == null) {
+      throw StateError('当前账号无法处理这条冲突');
+    }
     if (record.operation == ConflictOperation.delete && record.remoteDeleted) {
-      await _store.updateState(id, ConflictState.resolving);
+      await _store.updateState(id, accountUuid, ConflictState.resolving);
       try {
         await _codec.applyRemote(record);
-        await _store.remove(id);
+        await _store.remove(id, accountUuid: accountUuid);
         return ConflictResolutionOutcome.resolved;
       } catch (error) {
         await _store.updateState(
           id,
+          accountUuid,
           ConflictState.failed,
           error: _message(error),
         );
@@ -260,13 +275,14 @@ class ConflictCoordinator {
     if (record.remoteVersion == null) {
       await _store.updateState(
         id,
+        accountUuid,
         ConflictState.failed,
         error: '云端版本不可用，请刷新后重试',
       );
       return ConflictResolutionOutcome.failed;
     }
 
-    await _store.updateState(id, ConflictState.resolving);
+    await _store.updateState(id, accountUuid, ConflictState.resolving);
     try {
       final result = await _gateway.submit(record);
       if (record.operation == ConflictOperation.delete ||
@@ -281,7 +297,7 @@ class ConflictCoordinator {
           ),
         );
       }
-      await _store.remove(id);
+      await _store.remove(id, accountUuid: accountUuid);
       return ConflictResolutionOutcome.resolved;
     } catch (error) {
       if (error is ApiException && error.isConflict) {
@@ -291,6 +307,7 @@ class ConflictCoordinator {
       if (_isNetworkFailure(error)) {
         await _store.updateState(
           id,
+          accountUuid,
           ConflictState.queuedLocal,
           error: '网络不可用，将在联网后重试',
         );
@@ -298,6 +315,7 @@ class ConflictCoordinator {
       }
       await _store.updateState(
         id,
+        accountUuid,
         ConflictState.failed,
         error: _message(error),
       );
@@ -306,7 +324,9 @@ class ConflictCoordinator {
   }
 
   Future<void> retryQueuedLocal() async {
-    final records = await _store.readAll();
+    final accountUuid = await _activeAccountUuid();
+    if (accountUuid == null) return;
+    final records = await _store.readAll(accountUuid: accountUuid);
     for (final record in records) {
       if (record.state == ConflictState.queuedLocal) {
         await keepLocal(record.id);
@@ -347,5 +367,18 @@ class ConflictCoordinator {
   static String _newId(ApiConflictPayload payload) {
     return '${payload.entityType.name}-${payload.entityUuid}-'
         '${DateTime.now().microsecondsSinceEpoch}';
+  }
+
+  Future<String?> _activeAccountUuid() async {
+    final value = (await _tokenStore.readAccountUuid())?.trim();
+    return value == null || value.isEmpty ? null : value;
+  }
+
+  Future<String> _requireActiveAccountUuid() async {
+    final accountUuid = await _activeAccountUuid();
+    if (accountUuid == null) {
+      throw StateError('请先登录后再处理冲突');
+    }
+    return accountUuid;
   }
 }

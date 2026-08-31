@@ -195,6 +195,7 @@ ConflictRecord _transactionRecord({
 }) {
   return ConflictRecord(
     id: 'transaction-conflict',
+    accountUuid: 'account-a',
     entityType: ConflictEntityType.transaction,
     ledgerUuid: 'ledger-1',
     localUuid: 'transaction-local',

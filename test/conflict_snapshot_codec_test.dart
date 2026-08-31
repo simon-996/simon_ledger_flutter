@@ -570,6 +570,7 @@ ConflictRecord _record({
 }) {
   return ConflictRecord(
     id: 'conflict-1',
+    accountUuid: 'account-a',
     entityType: entityType,
     ledgerUuid: ledgerUuid,
     localUuid: localUuid,

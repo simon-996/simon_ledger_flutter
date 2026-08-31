@@ -58,6 +58,62 @@ void main() {
       ),
     );
   });
+
+  test('rejects incomplete or incorrectly typed conflict payloads', () async {
+    final valid = Map<String, Object?>.from(
+      _conflictBody['data']! as Map<String, Object?>,
+    );
+    final invalidPayloads = <Map<String, Object?>>[
+      {...valid}..remove('remoteVersion'),
+      {...valid, 'remoteVersion': 0},
+      {...valid}..remove('remoteSnapshot'),
+      {...valid, 'remoteSnapshot': 'not-a-map'},
+      {...valid, 'remoteDeleted': 'false'},
+      {
+        ...valid,
+        'entityType': 'profile',
+        'entityUuid': 'user-1',
+        'remoteSnapshot': {'uuid': 'user-1', 'version': 3},
+      },
+      {
+        ...valid,
+        'remoteSnapshot': {
+          'uuid': 'transaction-1',
+          'ledgerUuid': 'ledger-1',
+          'type': 0,
+          'amount': 28.5,
+          'currencyCode': 'CNY',
+          'category': '餐饮',
+          'happenedAt': '2026-08-30T08:00:00Z',
+          'version': 3,
+        },
+      },
+    ];
+
+    for (final payload in invalidPayloads) {
+      final client = ApiClient(
+        tokenStore: TokenStore(),
+        dio: Dio()
+          ..httpClientAdapter = _JsonAdapter({
+            'code': 409001,
+            'message': '数据已被其他设备修改',
+            'data': payload,
+          }),
+      );
+
+      await expectLater(
+        client.put<Object?>('/api/auth/me', data: {'version': 1}),
+        throwsA(
+          isA<ApiException>().having(
+            (error) => error.isConflict,
+            'isConflict',
+            isFalse,
+          ),
+        ),
+        reason: 'payload should be rejected: $payload',
+      );
+    }
+  });
 }
 
 const _conflictBody = <String, Object?>{
@@ -69,7 +125,19 @@ const _conflictBody = <String, Object?>{
     'submittedVersion': 2,
     'remoteVersion': 3,
     'remoteDeleted': false,
-    'remoteSnapshot': {'uuid': 'transaction-1', 'amount': 28.5, 'version': 3},
+    'remoteSnapshot': {
+      'uuid': 'transaction-1',
+      'ledgerUuid': 'ledger-1',
+      'type': 0,
+      'payerPersonUuid': 'person-1',
+      'amount': 28.5,
+      'currencyCode': 'CNY',
+      'category': '餐饮',
+      'note': '早餐',
+      'happenedAt': '2026-08-30T08:00:00Z',
+      'personUuids': ['person-1'],
+      'version': 3,
+    },
   },
 };
 

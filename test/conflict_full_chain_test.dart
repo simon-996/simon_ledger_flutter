@@ -26,6 +26,8 @@ void main() {
     'one entity conflict does not block another and remote can apply offline after restart',
     () async {
       SharedPreferences.setMockInitialValues({});
+      final tokenStore = TokenStore();
+      await tokenStore.saveAccountUuid('account-a');
       final database = DatabaseService();
       final ledger = Ledger()
         ..uuid = _ledgerUuid
@@ -65,6 +67,7 @@ void main() {
         store: store,
         codec: codec,
         gateway: _OfflineGateway(),
+        tokenStore: tokenStore,
       );
       final api = _PersonConflictTransactionSuccessApiClient();
       final personRepository = RemotePersonRepository(
@@ -109,6 +112,7 @@ void main() {
         store: reopenedStore,
         codec: codec,
         gateway: _OfflineGateway(),
+        tokenStore: tokenStore,
       );
       await restartedCoordinator.useRemote(persistedConflict.id);
 

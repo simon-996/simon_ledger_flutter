@@ -7,31 +7,43 @@ import '../models/conflict_record.dart';
 
 class ConflictStore {
   static const storageKey = 'local_store.conflicts.v1';
-  static Future<void> _tail = Future<void>.value();
-  static final StreamController<int> _changes = StreamController<int>.broadcast(
+  static const quarantineKey = 'local_store.conflicts.quarantine.v1';
+  Future<void> _tail = Future<void>.value();
+  final StreamController<int> _changes = StreamController<int>.broadcast(
     sync: true,
   );
-  static int _revision = 0;
+  int _revision = 0;
 
   Stream<int> watchChanges() async* {
     yield _revision;
     yield* _changes.stream;
   }
 
-  Future<List<ConflictRecord>> readAll() {
-    return _exclusive(_readUnsafe);
+  Future<List<ConflictRecord>> readAll({String? accountUuid}) {
+    return _exclusive(() async {
+      final stored = await _readUnsafe();
+      if (accountUuid == null) return stored.records;
+      return stored.records
+          .where((record) => record.accountUuid == accountUuid)
+          .toList();
+    });
   }
 
-  Future<ConflictRecord?> findById(String id) async {
-    final records = await readAll();
+  Future<ConflictRecord?> findById(
+    String id, {
+    required String accountUuid,
+  }) async {
+    final records = await readAll(accountUuid: accountUuid);
     return records.where((record) => record.id == id).firstOrNull;
   }
 
   Future<ConflictRecord> upsert(ConflictRecord incoming) {
     return _exclusive(() async {
-      final records = await _readUnsafe();
+      final stored = await _readUnsafe();
+      final records = List<ConflictRecord>.from(stored.records);
       final index = records.indexWhere(
         (record) =>
+            record.accountUuid == incoming.accountUuid &&
             record.entityType == incoming.entityType &&
             record.remoteUuid == incoming.remoteUuid,
       );
@@ -49,32 +61,39 @@ class ConflictStore {
         );
         records[index] = saved;
       }
-      await _writeUnsafe(records);
+      await _writeUnsafe(records, invalidEntries: stored.invalidEntries);
       return saved;
     });
   }
 
   Future<ConflictRecord?> updateState(
     String id,
+    String accountUuid,
     ConflictState state, {
     String? error,
   }) {
     return _exclusive(() async {
-      final records = await _readUnsafe();
-      final index = records.indexWhere((record) => record.id == id);
+      final stored = await _readUnsafe();
+      final records = List<ConflictRecord>.from(stored.records);
+      final index = records.indexWhere(
+        (record) => record.id == id && record.accountUuid == accountUuid,
+      );
       if (index == -1) return null;
       final updated = records[index].copyWith(state: state, error: error);
       records[index] = updated;
-      await _writeUnsafe(records);
+      await _writeUnsafe(records, invalidEntries: stored.invalidEntries);
       return updated;
     });
   }
 
-  Future<void> remove(String id) {
+  Future<void> remove(String id, {required String accountUuid}) {
     return _exclusive(() async {
-      final records = await _readUnsafe();
-      records.removeWhere((record) => record.id == id);
-      await _writeUnsafe(records);
+      final stored = await _readUnsafe();
+      final records = List<ConflictRecord>.from(stored.records)
+        ..removeWhere(
+          (record) => record.id == id && record.accountUuid == accountUuid,
+        );
+      await _writeUnsafe(records, invalidEntries: stored.invalidEntries);
     });
   }
 
@@ -90,38 +109,70 @@ class ConflictStore {
     return completer.future;
   }
 
-  Future<List<ConflictRecord>> _readUnsafe() async {
+  Future<_StoredConflicts> _readUnsafe() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(storageKey);
-    if (raw == null || raw.isEmpty) return [];
+    if (raw == null || raw.isEmpty) return const _StoredConflicts();
     try {
       final decoded = jsonDecode(raw);
-      if (decoded is! List<dynamic>) return [];
-      final records = decoded
-          .whereType<Map<dynamic, dynamic>>()
-          .map(
-            (value) => ConflictRecord.fromJson(value.cast<String, dynamic>()),
-          )
-          .toList();
+      if (decoded is! List<dynamic>) {
+        await prefs.setString(quarantineKey, raw);
+        return const _StoredConflicts();
+      }
+      final records = <ConflictRecord>[];
+      final invalidEntries = <Object?>[];
+      for (final value in decoded) {
+        try {
+          if (value is! Map<dynamic, dynamic>) {
+            throw const FormatException('冲突记录格式不正确');
+          }
+          records.add(ConflictRecord.fromJson(value.cast<String, dynamic>()));
+        } on FormatException {
+          invalidEntries.add(value);
+        } on TypeError {
+          invalidEntries.add(value);
+        }
+      }
       records.sort(
         (left, right) => left.detectedAt.compareTo(right.detectedAt),
       );
-      return records;
+      if (invalidEntries.isNotEmpty) {
+        await prefs.setString(quarantineKey, jsonEncode(invalidEntries));
+      }
+      return _StoredConflicts(records: records, invalidEntries: invalidEntries);
     } on FormatException {
-      return [];
+      await prefs.setString(quarantineKey, raw);
+      return const _StoredConflicts();
     } on TypeError {
-      return [];
+      await prefs.setString(quarantineKey, raw);
+      return const _StoredConflicts();
     }
   }
 
-  Future<void> _writeUnsafe(List<ConflictRecord> records) async {
+  Future<void> _writeUnsafe(
+    List<ConflictRecord> records, {
+    List<Object?> invalidEntries = const [],
+  }) async {
     records.sort((left, right) => left.detectedAt.compareTo(right.detectedAt));
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
       storageKey,
-      jsonEncode(records.map((record) => record.toJson()).toList()),
+      jsonEncode([
+        ...records.map((record) => record.toJson()),
+        ...invalidEntries,
+      ]),
     );
     _revision += 1;
     _changes.add(_revision);
   }
+}
+
+class _StoredConflicts {
+  const _StoredConflicts({
+    this.records = const [],
+    this.invalidEntries = const [],
+  });
+
+  final List<ConflictRecord> records;
+  final List<Object?> invalidEntries;
 }

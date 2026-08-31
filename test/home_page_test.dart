@@ -100,6 +100,7 @@ void main() {
     final database = DatabaseService();
     final record = ConflictRecord(
       id: 'profile-conflict',
+      accountUuid: 'account-a',
       entityType: ConflictEntityType.profile,
       ledgerUuid: null,
       localUuid: 'profile-local',

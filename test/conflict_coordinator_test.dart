@@ -21,9 +21,12 @@ void main() {
   late ConflictSnapshotCodec codec;
   late _FakeGateway gateway;
   late ConflictCoordinator coordinator;
+  late TokenStore tokenStore;
 
-  setUp(() {
+  setUp(() async {
     SharedPreferences.setMockInitialValues({});
+    tokenStore = TokenStore();
+    await tokenStore.saveAccountUuid('account-a');
     database = DatabaseService();
     profileStore = const LocalProfileStore();
     store = ConflictStore();
@@ -36,6 +39,28 @@ void main() {
       store: store,
       codec: codec,
       gateway: gateway,
+      tokenStore: tokenStore,
+    );
+  });
+
+  test('rejects resolution after switching to another account', () async {
+    await coordinator.capture(
+      error: _conflictError(remoteVersion: 4),
+      operation: ConflictOperation.update,
+      ledgerUuid: 'ledger-local',
+      localUuid: 'transaction-local',
+      localSnapshot: const {'amount': 20.0, 'version': 2},
+    );
+    final record = (await store.readAll(accountUuid: 'account-a')).single;
+    await tokenStore.saveAccountUuid('account-b');
+
+    await expectLater(
+      coordinator.useRemote(record.id),
+      throwsA(isA<StateError>()),
+    );
+    expect(
+      (await store.readAll(accountUuid: 'account-a')).map((item) => item.id),
+      contains(record.id),
     );
   });
 
@@ -512,6 +537,7 @@ ConflictRecord _record({
 }) {
   return ConflictRecord(
     id: 'conflict-1',
+    accountUuid: 'account-a',
     entityType: entityType,
     ledgerUuid: ledgerUuid,
     localUuid: localUuid,

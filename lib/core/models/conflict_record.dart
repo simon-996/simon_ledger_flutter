@@ -27,7 +27,7 @@ class ApiConflictPayload {
   final ConflictEntityType entityType;
   final String entityUuid;
   final int submittedVersion;
-  final int? remoteVersion;
+  final int remoteVersion;
   final bool remoteDeleted;
   final Map<String, Object?> remoteSnapshot;
 
@@ -38,26 +38,122 @@ class ApiConflictPayload {
     final map = json.cast<String, dynamic>();
     final entityUuid = map['entityUuid']?.toString().trim() ?? '';
     final submittedVersion = (map['submittedVersion'] as num?)?.toInt();
+    final remoteVersion = (map['remoteVersion'] as num?)?.toInt();
     if (entityUuid.isEmpty || submittedVersion == null) {
       throw const FormatException('冲突响应缺少实体标识或提交版本');
     }
+    if (submittedVersion < 1 || remoteVersion == null || remoteVersion < 1) {
+      throw const FormatException('冲突响应版本不正确');
+    }
+    if (map['remoteDeleted'] is! bool) {
+      throw const FormatException('冲突响应删除状态不正确');
+    }
     final snapshot = map['remoteSnapshot'];
+    if (snapshot is! Map<dynamic, dynamic>) {
+      throw const FormatException('冲突响应缺少云端快照');
+    }
+    final entityType = ConflictEntityTypeParsing.parse(map['entityType']);
+    final remoteSnapshot = snapshot.cast<String, Object?>();
+    _validateRemoteSnapshot(
+      entityType: entityType,
+      entityUuid: entityUuid,
+      remoteVersion: remoteVersion,
+      snapshot: remoteSnapshot,
+    );
     return ApiConflictPayload(
-      entityType: ConflictEntityTypeParsing.parse(map['entityType']),
+      entityType: entityType,
       entityUuid: entityUuid,
       submittedVersion: submittedVersion,
-      remoteVersion: (map['remoteVersion'] as num?)?.toInt(),
-      remoteDeleted: map['remoteDeleted'] == true,
-      remoteSnapshot: snapshot is Map<dynamic, dynamic>
-          ? snapshot.cast<String, Object?>()
-          : const {},
+      remoteVersion: remoteVersion,
+      remoteDeleted: map['remoteDeleted'] as bool,
+      remoteSnapshot: remoteSnapshot,
     );
+  }
+
+  static void _validateRemoteSnapshot({
+    required ConflictEntityType entityType,
+    required String entityUuid,
+    required int remoteVersion,
+    required Map<String, Object?> snapshot,
+  }) {
+    if (_text(snapshot['uuid']) != entityUuid ||
+        _requireInteger(snapshot, 'version') != remoteVersion) {
+      throw const FormatException('冲突快照标识或版本不一致');
+    }
+    switch (entityType) {
+      case ConflictEntityType.profile:
+        _requireText(snapshot, 'nickname');
+      case ConflictEntityType.ledger:
+        _requireText(snapshot, 'name');
+        _requireText(snapshot, 'baseCurrencyCode');
+        _requireNumber(snapshot, 'exchangeRateToCny');
+        _requireInteger(snapshot, 'memberCount');
+        _requireList(snapshot, 'members');
+      case ConflictEntityType.member:
+        _requireText(snapshot, 'role');
+        _requireInteger(snapshot, 'status');
+      case ConflictEntityType.person:
+        _requireText(snapshot, 'ledgerUuid');
+        _requireText(snapshot, 'name');
+        if (snapshot['avatar'] is! String) {
+          throw const FormatException('冲突人员快照缺少 avatar');
+        }
+      case ConflictEntityType.transaction:
+        _requireText(snapshot, 'ledgerUuid');
+        _requireInteger(snapshot, 'type');
+        _requireNumber(snapshot, 'amount');
+        _requireText(snapshot, 'currencyCode');
+        if (snapshot['category'] is! String) {
+          throw const FormatException('冲突流水快照缺少 category');
+        }
+        final happenedAt = _text(snapshot['happenedAt']);
+        if (happenedAt == null || DateTime.tryParse(happenedAt) == null) {
+          throw const FormatException('冲突流水快照时间不正确');
+        }
+        final people = _requireList(snapshot, 'personUuids');
+        if (people.any((value) => value is! String)) {
+          throw const FormatException('冲突流水人员格式不正确');
+        }
+    }
+  }
+
+  static String _requireText(Map<String, Object?> value, String key) {
+    final text = _text(value[key]);
+    if (text == null) throw FormatException('冲突快照缺少 $key');
+    return text;
+  }
+
+  static num _requireNumber(Map<String, Object?> value, String key) {
+    final number = value[key];
+    if (number is! num) throw FormatException('冲突快照缺少 $key');
+    return number;
+  }
+
+  static int _requireInteger(Map<String, Object?> value, String key) {
+    final number = value[key];
+    if (number is! num || number.toInt() != number) {
+      throw FormatException('冲突快照缺少 $key');
+    }
+    return number.toInt();
+  }
+
+  static List<dynamic> _requireList(Map<String, Object?> value, String key) {
+    final list = value[key];
+    if (list is! List<dynamic>) throw FormatException('冲突快照缺少 $key');
+    return list;
+  }
+
+  static String? _text(Object? value) {
+    if (value is! String) return null;
+    final text = value.trim();
+    return text.isEmpty ? null : text;
   }
 }
 
 class ConflictRecord {
   const ConflictRecord({
     required this.id,
+    required this.accountUuid,
     required this.entityType,
     required this.ledgerUuid,
     required this.localUuid,
@@ -74,6 +170,7 @@ class ConflictRecord {
   });
 
   final String id;
+  final String accountUuid;
   final ConflictEntityType entityType;
   final String? ledgerUuid;
   final String localUuid;
@@ -90,6 +187,7 @@ class ConflictRecord {
 
   ConflictRecord copyWith({
     String? id,
+    String? accountUuid,
     ConflictEntityType? entityType,
     Object? ledgerUuid = _unset,
     String? localUuid,
@@ -106,6 +204,7 @@ class ConflictRecord {
   }) {
     return ConflictRecord(
       id: id ?? this.id,
+      accountUuid: accountUuid ?? this.accountUuid,
       entityType: entityType ?? this.entityType,
       ledgerUuid: identical(ledgerUuid, _unset)
           ? this.ledgerUuid
@@ -129,6 +228,7 @@ class ConflictRecord {
   Map<String, Object?> toJson() {
     return {
       'id': id,
+      'accountUuid': accountUuid,
       'entityType': entityType.name,
       'ledgerUuid': ledgerUuid,
       'localUuid': localUuid,
@@ -153,6 +253,7 @@ class ConflictRecord {
     }
     return ConflictRecord(
       id: _requiredText(json, 'id'),
+      accountUuid: _requiredText(json, 'accountUuid'),
       entityType: ConflictEntityTypeParsing.parse(json['entityType']),
       ledgerUuid: _optionalText(json['ledgerUuid']),
       localUuid: _requiredText(json, 'localUuid'),

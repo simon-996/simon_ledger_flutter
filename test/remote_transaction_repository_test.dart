@@ -197,6 +197,8 @@ void main() {
 
     test('one conflict does not block later pending transactions', () async {
       SharedPreferences.setMockInitialValues({});
+      final tokenStore = TokenStore();
+      await tokenStore.saveAccountUuid('account-a');
       final database = DatabaseService();
       final conflictStore = ConflictStore();
       final codec = ConflictSnapshotCodec(
@@ -211,6 +213,7 @@ void main() {
           store: conflictStore,
           codec: codec,
           gateway: _UnusedGateway(),
+          tokenStore: tokenStore,
         ),
         conflictCodec: codec,
       );

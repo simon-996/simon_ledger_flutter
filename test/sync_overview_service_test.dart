@@ -5,6 +5,7 @@ import 'package:simon_ledger_flutter/core/models/ledger.dart';
 import 'package:simon_ledger_flutter/core/models/conflict_record.dart';
 import 'package:simon_ledger_flutter/core/models/person.dart';
 import 'package:simon_ledger_flutter/core/models/transaction_record.dart';
+import 'package:simon_ledger_flutter/core/network/token_store.dart';
 import 'package:simon_ledger_flutter/core/services/sync_overview_service.dart';
 import 'package:simon_ledger_flutter/core/services/conflict_store.dart';
 
@@ -81,6 +82,8 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       final database = DatabaseService();
       final conflicts = ConflictStore();
+      final tokenStore = TokenStore();
+      await tokenStore.saveAccountUuid('account-a');
       await database.saveLedger(
         Ledger()
           ..uuid = 'ledger-1'
@@ -103,10 +106,18 @@ void main() {
       await conflicts.upsert(
         _conflict('profile-1', null, entityType: ConflictEntityType.profile),
       );
+      await conflicts.upsert(
+        _conflict(
+          'account-b-transaction',
+          'ledger-1',
+          accountUuid: 'account-b',
+        ),
+      );
 
       final overview = await SyncOverviewService(
         database,
         conflictStore: conflicts,
+        tokenStore: tokenStore,
       ).read();
 
       expect(overview.conflictCount, 2);
@@ -121,9 +132,11 @@ ConflictRecord _conflict(
   String remoteUuid,
   String? ledgerUuid, {
   ConflictEntityType entityType = ConflictEntityType.transaction,
+  String accountUuid = 'account-a',
 }) {
   return ConflictRecord(
     id: 'conflict-$remoteUuid',
+    accountUuid: accountUuid,
     entityType: entityType,
     ledgerUuid: ledgerUuid,
     localUuid: remoteUuid,

@@ -789,6 +789,7 @@ void main() {
     await database.saveLedger(ledger);
     final record = ConflictRecord(
       id: 'transaction-conflict',
+      accountUuid: 'account-a',
       entityType: ConflictEntityType.transaction,
       ledgerUuid: ledger.uuid,
       localUuid: 'transaction-local',

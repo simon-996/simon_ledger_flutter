@@ -7,6 +7,7 @@ import 'package:simon_ledger_flutter/core/models/ledger.dart';
 import 'package:simon_ledger_flutter/core/models/conflict_record.dart';
 import 'package:simon_ledger_flutter/core/models/person.dart';
 import 'package:simon_ledger_flutter/core/models/transaction_record.dart';
+import 'package:simon_ledger_flutter/core/network/token_store.dart';
 import 'package:simon_ledger_flutter/core/repositories/ledger_repository.dart';
 import 'package:simon_ledger_flutter/core/repositories/person_repository.dart';
 import 'package:simon_ledger_flutter/core/repositories/transaction_repository.dart';
@@ -499,6 +500,7 @@ class _RecordingConflictCoordinator extends ConflictCoordinator {
           profileStore: const LocalProfileStore(),
         ),
         gateway: _UnusedConflictGateway(),
+        tokenStore: TokenStore(),
       );
 
   final List<String> calls;

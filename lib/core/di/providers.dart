@@ -76,6 +76,7 @@ final conflictCoordinatorProvider = Provider<ConflictCoordinator>((ref) {
     store: ref.watch(conflictStoreProvider),
     codec: ref.watch(conflictSnapshotCodecProvider),
     gateway: ref.watch(conflictResolutionGatewayProvider),
+    tokenStore: ref.watch(tokenStoreProvider),
   );
 });
 
@@ -83,9 +84,25 @@ final conflictStoreRevisionProvider = StreamProvider<int>((ref) {
   return ref.watch(conflictStoreProvider).watchChanges();
 });
 
-final conflictRecordsProvider = FutureProvider<List<ConflictRecord>>((ref) {
-  ref.watch(conflictStoreRevisionProvider);
-  return ref.watch(conflictStoreProvider).readAll();
+final authAccountUuidProvider = FutureProvider<String?>((ref) async {
+  final token = await ref.watch(authTokenProvider.future);
+  if (token == null || !token.isValid) return null;
+  return ref.watch(tokenStoreProvider).readAccountUuid();
+});
+
+final conflictRecordsProvider = FutureProvider<List<ConflictRecord>>((
+  ref,
+) async {
+  ref.listen<AsyncValue<int>>(conflictStoreRevisionProvider, (previous, next) {
+    if (previous?.hasValue == true &&
+        next.hasValue &&
+        previous?.value != next.value) {
+      ref.invalidateSelf();
+    }
+  });
+  final accountUuid = await ref.watch(authAccountUuidProvider.future);
+  if (accountUuid == null || accountUuid.isEmpty) return const [];
+  return ref.watch(conflictStoreProvider).readAll(accountUuid: accountUuid);
 });
 
 final conflictLedgerNamesProvider = FutureProvider<Map<String, String>>((
@@ -189,6 +206,7 @@ final syncOverviewServiceProvider = Provider<SyncOverviewService>((ref) {
   return SyncOverviewService(
     ref.watch(databaseProvider),
     conflictStore: ref.watch(conflictStoreProvider),
+    tokenStore: ref.watch(tokenStoreProvider),
   );
 });
 

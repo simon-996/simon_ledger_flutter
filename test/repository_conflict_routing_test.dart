@@ -18,8 +18,9 @@ const _ledgerUuid = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const _personUuid = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 
 void main() {
-  setUp(() {
+  setUp(() async {
     SharedPreferences.setMockInitialValues({});
+    await TokenStore().saveAccountUuid('account-a');
   });
 
   test('ledger update conflict is removed from automatic retry', () async {
@@ -111,6 +112,7 @@ ConflictCoordinator _coordinator(
     store: store,
     codec: codec,
     gateway: _UnusedGateway(),
+    tokenStore: TokenStore(),
   );
 }
 

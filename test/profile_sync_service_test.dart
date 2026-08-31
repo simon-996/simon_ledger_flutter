@@ -100,6 +100,7 @@ void main() {
         store: conflictStore,
         codec: codec,
         gateway: _UnusedGateway(),
+        tokenStore: tokenStore,
       );
       final service = ProfileSyncService(
         localProfileStore: profileStore,

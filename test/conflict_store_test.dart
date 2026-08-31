@@ -64,12 +64,30 @@ void main() {
     },
   );
 
+  test('scopes records and de-duplication to the owning account', () async {
+    final store = ConflictStore();
+    await store.upsert(
+      _conflict(id: 'account-a-conflict', accountUuid: 'account-a'),
+    );
+    await store.upsert(
+      _conflict(id: 'account-b-conflict', accountUuid: 'account-b'),
+    );
+
+    final accountA = await store.readAll(accountUuid: 'account-a');
+    final accountB = await store.readAll(accountUuid: 'account-b');
+
+    expect(accountA.map((record) => record.id), ['account-a-conflict']);
+    expect(accountB.map((record) => record.id), ['account-b-conflict']);
+    expect(await store.readAll(), hasLength(2));
+  });
+
   test('updates state and removes a resolved record', () async {
     final store = ConflictStore();
     await store.upsert(_conflict());
 
     await store.updateState(
       'conflict-1',
+      'account-a',
       ConflictState.queuedLocal,
       error: '等待联网提交',
     );
@@ -77,7 +95,7 @@ void main() {
     expect(queued.state, ConflictState.queuedLocal);
     expect(queued.error, '等待联网提交');
 
-    await store.remove('conflict-1');
+    await store.remove('conflict-1', accountUuid: 'account-a');
     expect(await store.readAll(), isEmpty);
   });
 
@@ -88,10 +106,39 @@ void main() {
 
     expect(await ConflictStore().readAll(), isEmpty);
   });
+
+  test('retains valid records when one persisted entry is malformed', () async {
+    final valid = _conflict(id: 'valid-1');
+    SharedPreferences.setMockInitialValues({
+      ConflictStore.storageKey: jsonEncode([
+        valid.toJson(),
+        {'id': 'broken-only'},
+      ]),
+    });
+    final store = ConflictStore();
+
+    expect((await store.readAll()).map((record) => record.id), ['valid-1']);
+
+    await store.upsert(_conflict(id: 'valid-2', remoteUuid: 'transaction-2'));
+
+    expect((await store.readAll()).map((record) => record.id), [
+      'valid-1',
+      'valid-2',
+    ]);
+    final prefs = await SharedPreferences.getInstance();
+    final persisted =
+        jsonDecode(prefs.getString(ConflictStore.storageKey)!) as List<dynamic>;
+    expect(persisted, hasLength(3));
+    expect(
+      persisted.whereType<Map>().any((item) => item['id'] == 'broken-only'),
+      isTrue,
+    );
+  });
 }
 
 ConflictRecord _conflict({
   String id = 'conflict-1',
+  String accountUuid = 'account-a',
   String remoteUuid = 'transaction-1',
   int remoteVersion = 2,
   DateTime? detectedAt,
@@ -99,6 +146,7 @@ ConflictRecord _conflict({
 }) {
   return ConflictRecord(
     id: id,
+    accountUuid: accountUuid,
     entityType: ConflictEntityType.transaction,
     ledgerUuid: 'ledger-1',
     localUuid: 'local-transaction-1',

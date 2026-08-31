@@ -209,7 +209,13 @@ class _ConflictDetailPageState extends ConsumerState<ConflictDetailPage> {
   Future<void> _reloadLatest() async {
     final load =
         widget.loadLatest ??
-        (id) => ref.read(conflictStoreProvider).findById(id);
+        (id) async {
+          final accountUuid = await ref.read(authAccountUuidProvider.future);
+          if (accountUuid == null || accountUuid.isEmpty) return null;
+          return ref
+              .read(conflictStoreProvider)
+              .findById(id, accountUuid: accountUuid);
+        };
     final latest = await load(_record.id);
     if (latest != null && mounted) {
       setState(() => _record = latest);

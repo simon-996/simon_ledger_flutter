@@ -1,6 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../database/database_service.dart';
+import '../network/token_store.dart';
 import 'conflict_store.dart';
 
 enum SyncFailureType { ledger, person, transaction }
@@ -47,13 +48,18 @@ class SyncOverview {
 }
 
 class SyncOverviewService {
-  const SyncOverviewService(this._database, {ConflictStore? conflictStore})
-    : _conflictStore = conflictStore;
+  const SyncOverviewService(
+    this._database, {
+    ConflictStore? conflictStore,
+    TokenStore? tokenStore,
+  }) : _conflictStore = conflictStore,
+       _tokenStore = tokenStore;
 
   static const _lastSuccessfulSyncAtKey = 'sync.last_successful_at.v1';
 
   final DatabaseService _database;
   final ConflictStore? _conflictStore;
+  final TokenStore? _tokenStore;
 
   Future<SyncOverview> read() async {
     final ledgers = await _database.getAllLedgers(includeDeleted: true);
@@ -62,7 +68,12 @@ class SyncOverviewService {
       ledgers.map((ledger) => ledger.uuid).toList(),
       includeDeleted: true,
     );
-    final conflicts = await (_conflictStore ?? ConflictStore()).readAll();
+    final accountUuid = await _tokenStore?.readAccountUuid();
+    final conflicts = accountUuid == null || accountUuid.isEmpty
+        ? const []
+        : await (_conflictStore ?? ConflictStore()).readAll(
+            accountUuid: accountUuid,
+          );
     final conflictsByLedger = <String, int>{};
     for (final conflict in conflicts) {
       final ledgerUuid = conflict.ledgerUuid;
