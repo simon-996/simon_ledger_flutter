@@ -15,6 +15,7 @@ import '../services/conflict_coordinator.dart';
 import '../services/conflict_snapshot_codec.dart';
 import '../services/conflict_store.dart';
 import '../services/profile_sync_service.dart';
+import '../services/profile_projection_service.dart';
 import '../services/sync_coordinator.dart';
 import '../services/sync_identity_resolver.dart';
 import '../services/sync_overview_service.dart';
@@ -45,6 +46,12 @@ final syncIdentityResolverProvider = Provider<SyncIdentityResolver>((ref) {
   return SyncIdentityResolver(ref.watch(databaseProvider));
 });
 
+final profileProjectionServiceProvider = Provider<ProfileProjectionService>((
+  ref,
+) {
+  return ProfileProjectionService(ref.watch(databaseProvider));
+});
+
 final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient(tokenStore: ref.watch(tokenStoreProvider));
 });
@@ -58,6 +65,7 @@ final conflictSnapshotCodecProvider = Provider<ConflictSnapshotCodec>((ref) {
     database: ref.watch(databaseProvider),
     profileStore: ref.watch(localProfileStoreProvider),
     identityResolver: ref.watch(syncIdentityResolverProvider),
+    profileProjection: ref.watch(profileProjectionServiceProvider),
   );
 });
 
@@ -229,5 +237,6 @@ final profileSyncServiceProvider = Provider<ProfileSyncService>((ref) {
     database: ref.watch(databaseProvider),
     conflictCoordinator: ref.watch(conflictCoordinatorProvider),
     conflictCodec: ref.watch(conflictSnapshotCodecProvider),
+    profileProjection: ref.watch(profileProjectionServiceProvider),
   );
 });

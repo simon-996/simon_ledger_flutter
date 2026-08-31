@@ -12,6 +12,7 @@ import 'core/network/friendly_error.dart';
 import 'core/services/invite_link_service.dart';
 import 'core/theme/app_theme.dart';
 import 'core/widgets/app_components.dart';
+import 'features/auth/presentation/providers/auth_provider.dart';
 import 'features/home/presentation/screens/home_page.dart';
 import 'features/ledgers/presentation/providers/ledger_provider.dart';
 import 'features/ledgers/presentation/providers/ledger_stats_provider.dart';
@@ -156,7 +157,10 @@ class _SimonLedgerAppState extends ConsumerState<SimonLedgerApp>
         );
       }
       if (!result.changed) return;
+      ref.invalidate(localProfileProvider);
+      ref.invalidate(currentUserProvider);
       ref.invalidate(ledgerProvider);
+      ref.invalidate(cachedPeopleProvider);
       ref.invalidate(personProvider);
       ref.invalidate(transactionProvider);
       ref.invalidate(ledgerStatsProvider);

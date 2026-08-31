@@ -7,19 +7,24 @@ import '../models/person.dart';
 import '../models/transaction_record.dart';
 import '../preferences/local_profile_store.dart';
 import 'sync_identity_resolver.dart';
+import 'profile_projection_service.dart';
 
 class ConflictSnapshotCodec {
   ConflictSnapshotCodec({
     required DatabaseService database,
     required LocalProfileStore profileStore,
     SyncIdentityResolver? identityResolver,
+    ProfileProjectionService? profileProjection,
   }) : _database = database,
        _profileStore = profileStore,
-       _identityResolver = identityResolver ?? SyncIdentityResolver(database);
+       _identityResolver = identityResolver ?? SyncIdentityResolver(database),
+       _profileProjection =
+           profileProjection ?? ProfileProjectionService(database);
 
   final DatabaseService _database;
   final LocalProfileStore _profileStore;
   final SyncIdentityResolver _identityResolver;
+  final ProfileProjectionService _profileProjection;
 
   Map<String, Object?> profileSnapshot(
     LocalProfile value, {
@@ -193,16 +198,20 @@ class ConflictSnapshotCodec {
     final current = await _profileStore.read();
     final snapshot = record.remoteSnapshot;
     final avatar = _text(snapshot['avatar'], current.personAvatar);
-    await _profileStore.save(
-      current.copyWith(
-        nickname: _text(snapshot['nickname'], current.nickname),
-        avatarIcon: AvatarConfig.normalizeKey(avatar),
-        remoteVersion: _version(record, snapshot, current.remoteVersion),
-        pendingSync: false,
-        pendingOperationId: null,
-        syncError: null,
-        updatedAt: null,
-      ),
+    final resolved = current.copyWith(
+      nickname: _text(snapshot['nickname'], current.nickname),
+      avatarIcon: AvatarConfig.normalizeKey(avatar),
+      remoteVersion: _version(record, snapshot, current.remoteVersion),
+      pendingSync: false,
+      pendingOperationId: null,
+      syncError: null,
+      updatedAt: null,
+    );
+    await _profileStore.save(resolved);
+    await _profileProjection.apply(
+      previous: current,
+      current: resolved,
+      linkedUserUuid: record.accountUuid,
     );
   }
 

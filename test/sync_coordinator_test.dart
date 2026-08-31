@@ -164,6 +164,32 @@ void main() {
     },
   );
 
+  test('reports a resolved queued conflict as a sync change', () async {
+    final calls = <String>[];
+    final coordinator = SyncCoordinator(
+      ledgerRepository: _LedgerRepository(calls),
+      personRepository: _PersonRepository(calls),
+      transactionRepository: _TransactionRepository(calls),
+      database: DatabaseService(),
+      conflictCoordinator: _RecordingConflictCoordinator(
+        calls,
+        result: const ConflictRetrySummary(
+          attemptedCount: 1,
+          resolvedCount: 1,
+          affectedEntityTypes: {ConflictEntityType.profile},
+        ),
+      ),
+    );
+
+    final result = await coordinator.syncAllPendingResult(force: true);
+
+    expect(result.changed, isTrue);
+    expect(result.attemptedCount, 1);
+    expect(result.syncedCount, 1);
+    expect(result.conflictRetry.resolvedCount, 1);
+    expect(calls, ['conflicts']);
+  });
+
   test(
     'reports failed sync when repository returns a transaction error',
     () async {
@@ -492,22 +518,26 @@ class _TransactionErrorResultRepository extends _TransactionRepository {
 }
 
 class _RecordingConflictCoordinator extends ConflictCoordinator {
-  _RecordingConflictCoordinator(this.calls)
-    : super(
-        store: ConflictStore(),
-        codec: ConflictSnapshotCodec(
-          database: DatabaseService(),
-          profileStore: const LocalProfileStore(),
-        ),
-        gateway: _UnusedConflictGateway(),
-        tokenStore: TokenStore(),
-      );
+  _RecordingConflictCoordinator(
+    this.calls, {
+    this.result = const ConflictRetrySummary(),
+  }) : super(
+         store: ConflictStore(),
+         codec: ConflictSnapshotCodec(
+           database: DatabaseService(),
+           profileStore: const LocalProfileStore(),
+         ),
+         gateway: _UnusedConflictGateway(),
+         tokenStore: TokenStore(),
+       );
 
   final List<String> calls;
+  final ConflictRetrySummary result;
 
   @override
-  Future<void> retryQueuedLocal() async {
+  Future<ConflictRetrySummary> retryQueuedLocal() async {
     calls.add('conflicts');
+    return result;
   }
 }
 

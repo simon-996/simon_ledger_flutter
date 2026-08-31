@@ -148,6 +148,29 @@ void main() {
         remoteVersion: 2,
       ),
     );
+    await database.savePerson(
+      Person()
+        ..uuid = 'self'
+        ..linkedUserUuid = 'account-a'
+        ..name = '旧昵称'
+        ..avatar = '🐱',
+    );
+    await database.saveLedger(
+      Ledger()
+        ..uuid = 'ledger-local'
+        ..name = '共享账本'
+        ..baseCurrencyCode = 'CNY'
+        ..members = const [
+          LedgerMemberSummary(
+            uuid: 'member-self',
+            userUuid: 'account-a',
+            nickname: '旧昵称',
+            avatar: '🐱',
+            role: 'editor',
+            version: 2,
+          ),
+        ],
+    );
     await _captureProfile(coordinator, remoteVersion: 4);
     gateway.nextResult = const ConflictMutationResult(
       version: 5,
@@ -168,6 +191,12 @@ void main() {
     expect(gateway.submitted, hasLength(1));
     expect(gateway.submitted.single.remoteVersion, 4);
     expect((await profileStore.read()).remoteVersion, 5);
+    final self = (await database.getAllPeople()).single;
+    expect(self.name, '本机昵称');
+    expect(self.avatar, '⭐');
+    final member = (await database.getAllLedgers()).single.members.single;
+    expect(member.nickname, '本机昵称');
+    expect(member.avatar, '⭐');
     expect(await store.readAll(), isEmpty);
   });
 
@@ -198,9 +227,12 @@ void main() {
           'version': 3,
         },
       );
-    await coordinator.retryQueuedLocal();
+    final retry = await coordinator.retryQueuedLocal();
 
     expect(gateway.submitted, hasLength(2));
+    expect(retry.attemptedCount, 1);
+    expect(retry.resolvedCount, 1);
+    expect(retry.affectedEntityTypes, {ConflictEntityType.profile});
     expect(await store.readAll(), isEmpty);
     expect((await profileStore.read()).remoteVersion, 3);
   });

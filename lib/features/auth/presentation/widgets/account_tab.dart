@@ -249,8 +249,11 @@ class _SyncCenterCardState extends ConsumerState<_SyncCenterCard> {
         FriendlyError.message(error, fallback: '同步失败，请稍后重试。'),
       );
     } finally {
+      ref.invalidate(localProfileProvider);
+      ref.invalidate(currentUserProvider);
       ref.invalidate(syncOverviewProvider);
       ref.invalidate(ledgerProvider);
+      ref.invalidate(cachedPeopleProvider);
       ref.invalidate(personProvider);
       ref.invalidate(transactionProvider);
       ref.invalidate(ledgerStatsProvider);

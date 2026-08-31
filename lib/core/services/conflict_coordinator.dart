@@ -8,6 +8,26 @@ import 'sync_identity_resolver.dart';
 
 enum ConflictResolutionOutcome { resolved, queued, requiresReview, failed }
 
+class ConflictRetrySummary {
+  const ConflictRetrySummary({
+    this.attemptedCount = 0,
+    this.resolvedCount = 0,
+    this.requiresReviewCount = 0,
+    this.queuedCount = 0,
+    this.failedCount = 0,
+    this.affectedEntityTypes = const {},
+  });
+
+  final int attemptedCount;
+  final int resolvedCount;
+  final int requiresReviewCount;
+  final int queuedCount;
+  final int failedCount;
+  final Set<ConflictEntityType> affectedEntityTypes;
+
+  bool get changed => attemptedCount > 0;
+}
+
 class ConflictMutationResult {
   const ConflictMutationResult({
     required this.version,
@@ -323,15 +343,40 @@ class ConflictCoordinator {
     }
   }
 
-  Future<void> retryQueuedLocal() async {
+  Future<ConflictRetrySummary> retryQueuedLocal() async {
     final accountUuid = await _activeAccountUuid();
-    if (accountUuid == null) return;
+    if (accountUuid == null) return const ConflictRetrySummary();
     final records = await _store.readAll(accountUuid: accountUuid);
+    var attemptedCount = 0;
+    var resolvedCount = 0;
+    var requiresReviewCount = 0;
+    var queuedCount = 0;
+    var failedCount = 0;
+    final affectedEntityTypes = <ConflictEntityType>{};
     for (final record in records) {
-      if (record.state == ConflictState.queuedLocal) {
-        await keepLocal(record.id);
+      if (record.state != ConflictState.queuedLocal) continue;
+      attemptedCount += 1;
+      final outcome = await keepLocal(record.id);
+      switch (outcome) {
+        case ConflictResolutionOutcome.resolved:
+          resolvedCount += 1;
+          affectedEntityTypes.add(record.entityType);
+        case ConflictResolutionOutcome.requiresReview:
+          requiresReviewCount += 1;
+        case ConflictResolutionOutcome.queued:
+          queuedCount += 1;
+        case ConflictResolutionOutcome.failed:
+          failedCount += 1;
       }
     }
+    return ConflictRetrySummary(
+      attemptedCount: attemptedCount,
+      resolvedCount: resolvedCount,
+      requiresReviewCount: requiresReviewCount,
+      queuedCount: queuedCount,
+      failedCount: failedCount,
+      affectedEntityTypes: Set.unmodifiable(affectedEntityTypes),
+    );
   }
 
   Future<void> _refreshConflict(

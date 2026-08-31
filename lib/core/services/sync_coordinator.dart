@@ -10,6 +10,7 @@ class SyncAllPendingResult {
     required this.attemptedCount,
     required this.syncedCount,
     required this.failedCount,
+    this.conflictRetry = const ConflictRetrySummary(),
     this.error,
   });
 
@@ -17,16 +18,18 @@ class SyncAllPendingResult {
     : attemptedCount = 0,
       syncedCount = 0,
       failedCount = 0,
+      conflictRetry = const ConflictRetrySummary(),
       error = null;
 
   final int attemptedCount;
   final int syncedCount;
   final int failedCount;
+  final ConflictRetrySummary conflictRetry;
   final Object? error;
 
   bool get attempted => attemptedCount > 0;
 
-  bool get changed => attempted;
+  bool get changed => attempted || conflictRetry.changed;
 
   bool get hasError => failedCount > 0 || error != null;
 }
@@ -108,7 +111,9 @@ class SyncCoordinator {
   }
 
   Future<SyncAllPendingResult> _syncAllPendingNow({required bool force}) async {
-    await _conflictCoordinator?.retryQueuedLocal();
+    final conflictRetry =
+        await _conflictCoordinator?.retryQueuedLocal() ??
+        const ConflictRetrySummary();
     final ledgers = await _database.getAllLedgers(includeDeleted: true);
     final people = await _database.getAllPeople(includeDeleted: true);
     final transactions = await _database.getTransactionsForLedgers(
@@ -133,7 +138,14 @@ class SyncCoordinator {
             syncableLedgerUuids.contains(transaction.ledgerUuid))
           transaction.ledgerUuid,
     };
-    if (ledgerUuids.isEmpty) return const SyncAllPendingResult.none();
+    if (ledgerUuids.isEmpty) {
+      return SyncAllPendingResult(
+        attemptedCount: conflictRetry.attemptedCount,
+        syncedCount: conflictRetry.resolvedCount,
+        failedCount: conflictRetry.failedCount,
+        conflictRetry: conflictRetry,
+      );
+    }
 
     try {
       await _ledgerRepository.syncPendingWrites();
@@ -163,9 +175,10 @@ class SyncCoordinator {
         _allPendingRetryAfter = _now().add(_retryDelay);
       }
       return SyncAllPendingResult(
-        attemptedCount: ledgerUuids.length,
-        syncedCount: syncedCount,
-        failedCount: failedCount,
+        attemptedCount: ledgerUuids.length + conflictRetry.attemptedCount,
+        syncedCount: syncedCount + conflictRetry.resolvedCount,
+        failedCount: failedCount + conflictRetry.failedCount,
+        conflictRetry: conflictRetry,
         error: firstError,
       );
     } catch (_) {

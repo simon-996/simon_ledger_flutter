@@ -2,9 +2,7 @@ import 'dart:async';
 
 import '../config/avatar_config.dart';
 import '../database/database_service.dart';
-import '../models/ledger.dart';
 import '../models/local_profile.dart';
-import '../models/person.dart';
 import '../models/conflict_record.dart';
 import '../network/api_exception.dart';
 import '../network/token_store.dart';
@@ -12,6 +10,7 @@ import '../preferences/local_profile_store.dart';
 import '../repositories/auth_repository.dart';
 import 'conflict_coordinator.dart';
 import 'conflict_snapshot_codec.dart';
+import 'profile_projection_service.dart';
 
 enum ProfileSyncStatus { localOnly, queued, synced, skipped, stale, conflict }
 
@@ -30,19 +29,21 @@ class ProfileSyncService {
     required DatabaseService database,
     ConflictCoordinator? conflictCoordinator,
     ConflictSnapshotCodec? conflictCodec,
+    ProfileProjectionService? profileProjection,
   }) : _localProfileStore = localProfileStore,
        _tokenStore = tokenStore,
        _authRepository = authRepository,
-       _database = database,
        _conflictCoordinator = conflictCoordinator,
-       _conflictCodec = conflictCodec;
+       _conflictCodec = conflictCodec,
+       _profileProjection =
+           profileProjection ?? ProfileProjectionService(database);
 
   final LocalProfileStore _localProfileStore;
   final TokenStore _tokenStore;
   final AuthRepository _authRepository;
-  final DatabaseService _database;
   final ConflictCoordinator? _conflictCoordinator;
   final ConflictSnapshotCodec? _conflictCodec;
+  final ProfileProjectionService _profileProjection;
   Future<ProfileSyncResult>? _runningSync;
 
   Future<ProfileSyncResult> saveProfile(
@@ -62,7 +63,7 @@ class ProfileSyncService {
     );
 
     await _localProfileStore.save(localProfile);
-    await _updateLocalSelfPeople(
+    await _profileProjection.apply(
       previous: previous,
       current: localProfile,
       linkedUserUuid: linkedUserUuid,
@@ -150,7 +151,7 @@ class ProfileSyncService {
         remoteVersion: user.version,
       );
       await _localProfileStore.save(synced);
-      await _updateLocalSelfPeople(
+      await _profileProjection.apply(
         previous: profile,
         current: synced,
         linkedUserUuid: user.uuid,
@@ -233,115 +234,11 @@ class ProfileSyncService {
       remoteVersion: user.version,
     );
     await _localProfileStore.save(remoteProfile);
-    await _updateLocalSelfPeople(
+    await _profileProjection.apply(
       previous: current,
       current: remoteProfile,
       linkedUserUuid: user.uuid,
     );
-  }
-
-  Future<void> _updateLocalSelfPeople({
-    required LocalProfile previous,
-    required LocalProfile current,
-    String? linkedUserUuid,
-  }) async {
-    final people = await _database.getAllPeople(includeDeleted: true);
-    var changed = false;
-    var matched = false;
-    final previousName = previous.normalizedNickname;
-    final previousAvatar = previous.personAvatar;
-
-    for (final person in people) {
-      if (person.isDeleted) {
-        continue;
-      }
-
-      final isSelf =
-          person.uuid == 'self' ||
-          person.uuid == 'p1' ||
-          (linkedUserUuid != null && person.linkedUserUuid == linkedUserUuid) ||
-          (person.name.trim() == previousName &&
-              person.avatar.trim() == previousAvatar);
-      if (!isSelf) {
-        continue;
-      }
-
-      matched = true;
-      person
-        ..name = current.normalizedNickname
-        ..avatar = current.personAvatar
-        ..linkedUserUuid = linkedUserUuid ?? person.linkedUserUuid;
-      changed = true;
-    }
-
-    if (!matched) {
-      people.add(
-        Person()
-          ..uuid = 'self'
-          ..name = current.normalizedNickname
-          ..avatar = current.personAvatar
-          ..linkedUserUuid = linkedUserUuid,
-      );
-      changed = true;
-    }
-
-    if (changed) {
-      for (final person in people) {
-        await _database.savePerson(person);
-      }
-    }
-
-    await _updateCachedSelfLedgerMembers(
-      previous: previous,
-      current: current,
-      linkedUserUuid: linkedUserUuid,
-    );
-  }
-
-  Future<void> _updateCachedSelfLedgerMembers({
-    required LocalProfile previous,
-    required LocalProfile current,
-    String? linkedUserUuid,
-  }) async {
-    final ledgers = await _database.getAllLedgers(includeDeleted: true);
-    final previousName = previous.normalizedNickname;
-    final previousAvatar = previous.personAvatar;
-
-    for (final ledger in ledgers) {
-      if (ledger.members.isEmpty) {
-        continue;
-      }
-
-      var changed = false;
-      final updatedMembers = ledger.members.map((member) {
-        final matchesLinkedUser =
-            linkedUserUuid != null &&
-            linkedUserUuid.isNotEmpty &&
-            member.userUuid == linkedUserUuid;
-        final matchesPreviousProfile =
-            member.nickname?.trim() == previousName &&
-            member.avatar?.trim() == previousAvatar;
-        if (!matchesLinkedUser && !matchesPreviousProfile) {
-          return member;
-        }
-
-        changed = true;
-        return LedgerMemberSummary(
-          uuid: member.uuid,
-          userUuid: linkedUserUuid ?? member.userUuid,
-          nickname: current.normalizedNickname,
-          avatar: current.personAvatar,
-          role: member.role,
-          version: member.version,
-        );
-      }).toList();
-
-      if (!changed) {
-        continue;
-      }
-
-      await _database.saveLedger(ledger..members = updatedMembers);
-    }
   }
 
   String _operationId() {

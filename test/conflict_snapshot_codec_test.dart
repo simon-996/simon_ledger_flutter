@@ -220,6 +220,29 @@ void main() {
           remoteVersion: 2,
         ),
       );
+      await database.savePerson(
+        Person()
+          ..uuid = 'self'
+          ..linkedUserUuid = 'account-a'
+          ..name = '本机昵称'
+          ..avatar = '⭐',
+      );
+      await database.saveLedger(
+        Ledger()
+          ..uuid = 'ledger-local'
+          ..name = '共享账本'
+          ..baseCurrencyCode = 'CNY'
+          ..members = const [
+            LedgerMemberSummary(
+              uuid: 'member-self',
+              userUuid: 'account-a',
+              nickname: '本机昵称',
+              avatar: '⭐',
+              role: 'editor',
+              version: 2,
+            ),
+          ],
+      );
 
       await codec.applyRemote(
         _record(
@@ -243,6 +266,12 @@ void main() {
       expect(saved.pendingSync, isFalse);
       expect(saved.pendingOperationId, isNull);
       expect(saved.syncError, isNull);
+      final self = (await database.getAllPeople()).single;
+      expect(self.name, '云端昵称');
+      expect(self.avatar, '🐱');
+      final member = (await database.getAllLedgers()).single.members.single;
+      expect(member.nickname, '云端昵称');
+      expect(member.avatar, '🐱');
     },
   );
 
