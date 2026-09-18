@@ -97,6 +97,40 @@ void main() {
     expect(person.name, '本地参与人修改');
     expect(person.isDeleted, isFalse);
   });
+
+  test(
+    'rejects mismatched nested identities without mutating the cache',
+    () async {
+      final database = DatabaseService();
+      await database.saveLedger(
+        Ledger()
+          ..uuid = 'remote-ledger'
+          ..name = 'hidden'
+          ..baseCurrencyCode = 'CNY'
+          ..isDeleted = true
+          ..pendingSync = true,
+      );
+      final malformed = {
+        ..._completeJoinJson,
+        'person': {
+          ...(_completeJoinJson['person'] as Map<String, dynamic>),
+          'ledgerUuid': 'another-ledger',
+        },
+      };
+
+      final result = InviteJoinResult.fromJson(malformed);
+      expect(result.isValid, isFalse);
+      expect(
+        InviteJoinCache(database).apply(result, accountUuid: 'remote-user'),
+        throwsStateError,
+      );
+      final ledger = (await database.getAllLedgers(
+        includeDeleted: true,
+      )).single;
+      expect(ledger.isDeleted, isTrue);
+      expect(ledger.pendingSync, isTrue);
+    },
+  );
 }
 
 final _completeJoinJson = <String, dynamic>{

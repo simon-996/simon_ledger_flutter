@@ -182,6 +182,9 @@ class InviteRepository {
       fromJson: InviteJoinResult.fromJson,
     );
     await _assertJoinSessionUnchanged(_tokenStore, session);
+    if (result.isComplete && !result.isValid) {
+      throw StateError('加入响应身份校验失败，请重试');
+    }
     if (_joinCache != null) {
       await _joinCache.apply(result, accountUuid: session?.accountUuid);
     } else {

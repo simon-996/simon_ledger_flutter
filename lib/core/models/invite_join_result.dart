@@ -16,6 +16,31 @@ class InviteJoinResult {
 
   bool get isComplete => ledger != null && member != null && person != null;
 
+  bool get isValid {
+    final ledgerSnapshot = ledger;
+    final memberSnapshot = member;
+    final personSnapshot = person;
+    if (!isComplete ||
+        ledgerSnapshot == null ||
+        memberSnapshot == null ||
+        personSnapshot == null) {
+      return false;
+    }
+    return ledgerSnapshot.uuid.trim().isNotEmpty &&
+        ledgerSnapshot.version > 0 &&
+        ledgerSnapshot.memberCount >= 0 &&
+        memberSnapshot.uuid.trim().isNotEmpty &&
+        memberSnapshot.userUuid.trim().isNotEmpty &&
+        memberSnapshot.status == 1 &&
+        memberSnapshot.version > 0 &&
+        personSnapshot.uuid.trim().isNotEmpty &&
+        personSnapshot.ledgerUuid == ledgerSnapshot.uuid &&
+        personSnapshot.linkedUserUuid == memberSnapshot.userUuid &&
+        personSnapshot.linkedUserUuid.trim().isNotEmpty &&
+        personSnapshot.version > 0 &&
+        invite.ledgerUuid == ledgerSnapshot.uuid;
+  }
+
   factory InviteJoinResult.fromJson(Object? json) {
     final map = (json as Map<Object?, Object?>).cast<String, dynamic>();
     final inviteJson = map['invite'];

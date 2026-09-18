@@ -13,6 +13,9 @@ class InviteJoinCache {
       await _database.restoreLedgerAccess(result.invite.ledgerUuid);
       return;
     }
+    if (!result.isValid) {
+      throw StateError('加入响应身份校验失败，请重试');
+    }
 
     final remoteLedger = result.ledger!;
     final remotePerson = result.person!;
