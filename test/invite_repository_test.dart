@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simon_ledger_flutter/core/database/database_service.dart';
-import 'package:simon_ledger_flutter/core/models/invite_join_result.dart';
 import 'package:simon_ledger_flutter/core/models/ledger.dart';
 import 'package:simon_ledger_flutter/core/network/api_client.dart';
 import 'package:simon_ledger_flutter/core/network/token_store.dart';
