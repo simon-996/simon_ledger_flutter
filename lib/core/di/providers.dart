@@ -167,6 +167,7 @@ final inviteRepositoryProvider = Provider<InviteRepository>((ref) {
   return InviteRepository(
     ref.watch(apiClientProvider),
     database: ref.watch(databaseProvider),
+    tokenStore: ref.watch(tokenStoreProvider),
   );
 });
 

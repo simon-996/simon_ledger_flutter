@@ -10,6 +10,7 @@ import '../../../../core/services/invite_link_service.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../presentation/providers/ledger_provider.dart';
 import '../../presentation/providers/ledger_stats_provider.dart';
+import '../../../people_pool/presentation/providers/person_provider.dart';
 
 Future<void> showLedgerInviteShareSheet({
   required BuildContext context,
@@ -652,6 +653,14 @@ class _LedgerInviteJoinPageState extends ConsumerState<LedgerInviteJoinPage> {
       ref.invalidate(ledgerProvider);
       ref.invalidate(ledgerStatsProvider);
       ref.invalidate(syncOverviewProvider);
+      ref.invalidate(cachedPeopleProvider);
+      final joinedLedgerUuid = _invite?.ledgerUuid;
+      if (joinedLedgerUuid != null && joinedLedgerUuid.isNotEmpty) {
+        ref.invalidate(personProvider(ledgerUuid: joinedLedgerUuid));
+        ref.invalidate(
+          personProvider(includeDeleted: true, ledgerUuid: joinedLedgerUuid),
+        );
+      }
       if (!mounted) return;
       AppNotice.success(context, '已加入账本：${_invite?.ledgerName ?? ''}');
       final navigator = Navigator.of(context);

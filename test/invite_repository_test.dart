@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simon_ledger_flutter/core/database/database_service.dart';
+import 'package:simon_ledger_flutter/core/models/invite_join_result.dart';
 import 'package:simon_ledger_flutter/core/models/ledger.dart';
 import 'package:simon_ledger_flutter/core/network/api_client.dart';
 import 'package:simon_ledger_flutter/core/network/token_store.dart';
@@ -95,6 +96,36 @@ void main() {
     expect(ledger.pendingSync, isFalse);
     expect(ledger.syncError, isNull);
   });
+
+  test(
+    'join accepts the complete envelope and caches the linked person',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final database = DatabaseService();
+      final apiClient = _InviteApiClient(nextPostJson: _completeJoinJson);
+      final repository = InviteRepository(apiClient, database: database);
+
+      final invite = await repository.join('abcd1234');
+
+      expect(invite.ledgerUuid, 'remote-ledger');
+      expect(apiClient.requestedIdempotencyKey, startsWith('join-invite-v2-'));
+      final people = await database.getAllPeople(includeDeleted: true);
+      expect(people.single.uuid, 'remote-person');
+    },
+  );
+
+  test(
+    'join aborts before cache write when the account changes mid-request',
+    () async {
+      final tokenStore = _ChangingTokenStore();
+      final repository = InviteRepository(
+        _InviteApiClient(nextPostJson: _completeJoinJson),
+        tokenStore: tokenStore,
+      );
+
+      expect(repository.join('abcd1234'), throwsStateError);
+    },
+  );
 }
 
 final _inviteJson = <String, dynamic>{
@@ -118,10 +149,13 @@ final _inviteJson = <String, dynamic>{
 const _defaultGetJson = Object();
 
 class _InviteApiClient extends ApiClient {
-  _InviteApiClient({this.nextGetJson = _defaultGetJson})
-    : super(tokenStore: TokenStore());
+  _InviteApiClient({
+    this.nextGetJson = _defaultGetJson,
+    this.nextPostJson = _defaultPostJson,
+  }) : super(tokenStore: TokenStore());
 
   final Object? nextGetJson;
+  final Object? nextPostJson;
   String? requestedPath;
   Object? requestedData;
   String? requestedIdempotencyKey;
@@ -149,6 +183,59 @@ class _InviteApiClient extends ApiClient {
     requestedPath = path;
     requestedData = data;
     requestedIdempotencyKey = idempotencyKey;
-    return fromJson!(_inviteJson);
+    final json = identical(nextPostJson, _defaultPostJson)
+        ? _inviteJson
+        : nextPostJson;
+    return fromJson!(json);
   }
 }
+
+class _ChangingTokenStore extends TokenStore {
+  int _tokenReads = 0;
+  int _accountReads = 0;
+
+  @override
+  Future<AuthToken?> read() async {
+    final value = _tokenReads++ == 0 ? 'before' : 'after';
+    return AuthToken(name: 'token', value: value);
+  }
+
+  @override
+  Future<String?> readAccountUuid() async {
+    return _accountReads++ == 0 ? 'user-before' : 'user-after';
+  }
+}
+
+const _defaultPostJson = Object();
+
+final _completeJoinJson = <String, dynamic>{
+  ..._inviteJson,
+  'invite': {..._inviteJson, 'ledgerUuid': 'remote-ledger'},
+  'ledger': {
+    'uuid': 'remote-ledger',
+    'name': '旅行账本',
+    'baseCurrencyCode': 'CNY',
+    'exchangeRateToCny': 1,
+    'version': 2,
+    'role': 'editor',
+    'memberCount': 1,
+    'members': [],
+  },
+  'member': {
+    'uuid': 'remote-member',
+    'userUuid': 'remote-user',
+    'nickname': 'Simon',
+    'avatar': '😎',
+    'role': 'editor',
+    'status': 1,
+    'version': 1,
+  },
+  'person': {
+    'uuid': 'remote-person',
+    'ledgerUuid': 'remote-ledger',
+    'linkedUserUuid': 'remote-user',
+    'name': 'Simon',
+    'avatar': '😎',
+    'version': 1,
+  },
+};

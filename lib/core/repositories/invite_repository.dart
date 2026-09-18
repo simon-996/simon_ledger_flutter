@@ -1,5 +1,10 @@
+import 'dart:math';
+
 import '../database/database_service.dart';
+import '../models/invite_join_result.dart';
 import '../network/api_client.dart';
+import '../network/token_store.dart';
+import '../services/invite_join_cache.dart';
 
 class LedgerInvite {
   const LedgerInvite({
@@ -117,11 +122,20 @@ class LedgerInviteMember {
 }
 
 class InviteRepository {
-  const InviteRepository(this._apiClient, {DatabaseService? database})
-    : _database = database;
+  InviteRepository(
+    this._apiClient, {
+    DatabaseService? database,
+    TokenStore? tokenStore,
+    InviteJoinCache? joinCache,
+  }) : _database = database,
+       _tokenStore = tokenStore,
+       _joinCache =
+           joinCache ?? (database == null ? null : InviteJoinCache(database));
 
   final ApiClient _apiClient;
   final DatabaseService? _database;
+  final TokenStore? _tokenStore;
+  final InviteJoinCache? _joinCache;
 
   Future<LedgerInvite?> getCurrentInvite(String ledgerUuid) {
     return _apiClient.get<LedgerInvite?>(
@@ -161,13 +175,19 @@ class InviteRepository {
 
   Future<LedgerInvite> join(String code) async {
     final normalizedCode = code.trim().toUpperCase();
-    final invite = await _apiClient.post<LedgerInvite>(
+    final session = await _captureSession(_tokenStore);
+    final result = await _apiClient.post<InviteJoinResult>(
       '/api/invites/$normalizedCode/join',
-      idempotencyKey: 'join-invite-$normalizedCode',
-      fromJson: LedgerInvite.fromJson,
+      idempotencyKey: 'join-invite-v2-${_newUuid()}',
+      fromJson: InviteJoinResult.fromJson,
     );
-    await _database?.restoreLedgerAccess(invite.ledgerUuid);
-    return invite;
+    await _assertJoinSessionUnchanged(_tokenStore, session);
+    if (_joinCache != null) {
+      await _joinCache.apply(result, accountUuid: session?.accountUuid);
+    } else {
+      await _database?.restoreLedgerAccess(result.invite.ledgerUuid);
+    }
+    return result.invite;
   }
 
   Future<LedgerInvite> preview(String code) {
@@ -177,4 +197,52 @@ class InviteRepository {
       fromJson: LedgerInvite.fromJson,
     );
   }
+}
+
+class _JoinSession {
+  const _JoinSession({this.token, this.accountUuid});
+
+  final AuthToken? token;
+  final String? accountUuid;
+}
+
+Future<_JoinSession?> _captureSession(TokenStore? tokenStore) async {
+  if (tokenStore == null) return null;
+  return _JoinSession(
+    token: await tokenStore.read(),
+    accountUuid: await tokenStore.readAccountUuid(),
+  );
+}
+
+Future<void> _assertJoinSessionUnchanged(
+  TokenStore? tokenStore,
+  _JoinSession? before,
+) async {
+  if (tokenStore == null || before == null) return;
+  final after = _JoinSession(
+    token: await tokenStore.read(),
+    accountUuid: await tokenStore.readAccountUuid(),
+  );
+  final beforeToken = before.token;
+  final afterToken = after.token;
+  final tokenChanged =
+      beforeToken?.name != afterToken?.name ||
+      beforeToken?.value != afterToken?.value;
+  if (tokenChanged || before.accountUuid != after.accountUuid) {
+    throw StateError('登录账号已切换，请重试加入账本');
+  }
+}
+
+String _newUuid() {
+  final random = Random.secure();
+  final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  final hex = bytes.map((value) => value.toRadixString(16).padLeft(2, '0'));
+  final values = hex.toList();
+  return '${values.sublist(0, 4).join()}-'
+      '${values.sublist(4, 6).join()}-'
+      '${values.sublist(6, 8).join()}-'
+      '${values.sublist(8, 10).join()}-'
+      '${values.sublist(10).join()}';
 }
