@@ -42,6 +42,20 @@ final localProfileProvider = FutureProvider<LocalProfile>((ref) {
   return ref.watch(localProfileStoreProvider).read();
 });
 
+class AuthSessionExpiredNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void markExpired() {
+    state++;
+  }
+}
+
+final authSessionExpiredProvider =
+    NotifierProvider<AuthSessionExpiredNotifier, int>(
+      AuthSessionExpiredNotifier.new,
+    );
+
 final syncIdentityResolverProvider = Provider<SyncIdentityResolver>((ref) {
   return SyncIdentityResolver(ref.watch(databaseProvider));
 });
@@ -53,7 +67,12 @@ final profileProjectionServiceProvider = Provider<ProfileProjectionService>((
 });
 
 final apiClientProvider = Provider<ApiClient>((ref) {
-  return ApiClient(tokenStore: ref.watch(tokenStoreProvider));
+  return ApiClient(
+    tokenStore: ref.watch(tokenStoreProvider),
+    onUnauthorized: () {
+      ref.read(authSessionExpiredProvider.notifier).markExpired();
+    },
+  );
 });
 
 final conflictStoreProvider = Provider<ConflictStore>((ref) {

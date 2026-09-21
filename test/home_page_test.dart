@@ -6,6 +6,7 @@ import 'package:simon_ledger_flutter/core/database/database_service.dart';
 import 'package:simon_ledger_flutter/core/di/providers.dart';
 import 'package:simon_ledger_flutter/core/models/conflict_record.dart';
 import 'package:simon_ledger_flutter/core/models/ledger.dart';
+import 'package:simon_ledger_flutter/app.dart';
 import 'package:simon_ledger_flutter/features/home/presentation/screens/home_page.dart';
 
 void main() {
@@ -133,5 +134,32 @@ void main() {
 
     expect(find.text('数据冲突'), findsOneWidget);
     expect(find.text('账户资料'), findsWidgets);
+  });
+
+  testWidgets('expired session navigates to the account login panel', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final database = DatabaseService();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          authTokenProvider.overrideWith((ref) async => null),
+        ],
+        child: const SimonLedgerApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(SimonLedgerApp)),
+    );
+    container.read(authSessionExpiredProvider.notifier).markExpired();
+    await tester.pumpAndSettle();
+
+    expect(find.text('邮箱或手机号'), findsOneWidget);
+    expect(find.byType(SegmentedButton<bool>), findsOneWidget);
   });
 }

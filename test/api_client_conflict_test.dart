@@ -114,6 +114,37 @@ void main() {
       );
     }
   });
+
+  test('clears an expired authenticated session and notifies once', () async {
+    SharedPreferences.setMockInitialValues({
+      'auth_token_name': 'simon-ledger',
+      'auth_token_value': 'expired-token',
+    });
+    var notifications = 0;
+    final client = ApiClient(
+      tokenStore: TokenStore(),
+      onUnauthorized: () => notifications++,
+      dio: Dio()
+        ..httpClientAdapter = _JsonAdapter({
+          'code': 401001,
+          'message': '登录状态已失效',
+          'data': null,
+        }, statusCode: 401),
+    );
+
+    await expectLater(
+      client.get<Object?>('/api/ledgers'),
+      throwsA(isA<ApiException>()),
+    );
+    await expectLater(
+      client.get<Object?>('/api/ledgers'),
+      throwsA(isA<ApiException>()),
+    );
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('auth_token_value'), isNull);
+    expect(notifications, 1);
+  });
 }
 
 const _conflictBody = <String, Object?>{
@@ -142,9 +173,10 @@ const _conflictBody = <String, Object?>{
 };
 
 class _JsonAdapter implements HttpClientAdapter {
-  const _JsonAdapter(this.body);
+  const _JsonAdapter(this.body, {this.statusCode = 409});
 
   final Map<String, Object?> body;
+  final int statusCode;
 
   @override
   Future<ResponseBody> fetch(
@@ -154,7 +186,7 @@ class _JsonAdapter implements HttpClientAdapter {
   ) async {
     return ResponseBody.fromString(
       jsonEncode(body),
-      409,
+      statusCode,
       headers: {
         Headers.contentTypeHeader: [Headers.jsonContentType],
       },

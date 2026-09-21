@@ -11,6 +11,7 @@ class ApiClient {
     required TokenStore tokenStore,
     ApiConfig config = const ApiConfig(baseUrl: ApiConfig.defaultBaseUrl),
     Dio? dio,
+    this.onUnauthorized,
   }) : _tokenStore = tokenStore,
        _dio =
            dio ??
@@ -30,6 +31,11 @@ class ApiClient {
           final token = await _tokenStore.read();
           if (token != null && token.isValid) {
             options.headers[token.name] = token.value;
+            options.extra['authTokenAttached'] = true;
+            if (_attachedTokenValue != token.value) {
+              _attachedTokenValue = token.value;
+              _unauthorizedNotified = false;
+            }
           }
           handler.next(options);
         },
@@ -39,6 +45,9 @@ class ApiClient {
 
   final Dio _dio;
   final TokenStore _tokenStore;
+  final void Function()? onUnauthorized;
+  String? _attachedTokenValue;
+  bool _unauthorizedNotified = false;
 
   Future<T> get<T>(
     String path, {
@@ -128,6 +137,9 @@ class ApiClient {
       return _parseResponse(response, fromJson);
     } on DioException catch (e) {
       final response = e.response;
+      if (_isUnauthorized(response) && _hasAttachedAuth(e.requestOptions)) {
+        await _handleUnauthorized();
+      }
       if (response?.data is Map<String, dynamic>) {
         final result = ApiResult<Object?>.fromJson(
           response!.data! as Map<String, dynamic>,
@@ -151,6 +163,9 @@ class ApiClient {
       _parseVoidResponse(response);
     } on DioException catch (e) {
       final response = e.response;
+      if (_isUnauthorized(response) && _hasAttachedAuth(e.requestOptions)) {
+        await _handleUnauthorized();
+      }
       if (response?.data is Map<String, dynamic>) {
         final result = ApiResult<Object?>.fromJson(
           response!.data! as Map<String, dynamic>,
@@ -228,5 +243,22 @@ class ApiClient {
       data: result.rawData,
       conflict: conflict,
     );
+  }
+
+  bool _isUnauthorized(Response<Object?>? response) {
+    if (response?.statusCode == 401) return true;
+    final body = response?.data;
+    return body is Map && body['code'] == 401001;
+  }
+
+  bool _hasAttachedAuth(RequestOptions options) {
+    return options.extra['authTokenAttached'] == true;
+  }
+
+  Future<void> _handleUnauthorized() async {
+    if (_unauthorizedNotified) return;
+    _unauthorizedNotified = true;
+    await _tokenStore.clear();
+    onUnauthorized?.call();
   }
 }

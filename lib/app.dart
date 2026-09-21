@@ -34,6 +34,7 @@ class _SimonLedgerAppState extends ConsumerState<SimonLedgerApp>
   final _navigatorKey = GlobalKey<NavigatorState>();
   bool _syncing = false;
   bool _checkingClipboard = false;
+  bool _handlingSessionExpiry = false;
   String? _lastOpenedInviteCode;
   String? _lastPromptedClipboardCode;
   DateTime? _lastSyncErrorNoticeAt;
@@ -192,6 +193,11 @@ class _SimonLedgerAppState extends ConsumerState<SimonLedgerApp>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<int>(authSessionExpiredProvider, (previous, next) {
+      if (previous == next) return;
+      unawaited(_handleSessionExpired());
+    });
+
     return MaterialApp(
       navigatorKey: _navigatorKey,
       title: 'Simon Ledger',
@@ -210,5 +216,37 @@ class _SimonLedgerAppState extends ConsumerState<SimonLedgerApp>
       },
       debugShowCheckedModeBanner: false,
     );
+  }
+
+  Future<void> _handleSessionExpired() async {
+    if (_handlingSessionExpiry) return;
+    _handlingSessionExpiry = true;
+    try {
+      ref.invalidate(authTokenProvider);
+      ref.invalidate(authAccountUuidProvider);
+      ref.invalidate(currentUserProvider);
+      ref.invalidate(ledgerProvider);
+      ref.invalidate(ledgerStatsProvider);
+      ref.invalidate(cachedPeopleProvider);
+      ref.invalidate(personProvider);
+      ref.invalidate(transactionProvider);
+      ref.invalidate(syncOverviewProvider);
+
+      final navigator = _navigatorKey.currentState;
+      if (navigator == null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          unawaited(_handleSessionExpired());
+        });
+        return;
+      }
+
+      navigator.pushNamedAndRemoveUntil('/account', (route) => false);
+      final noticeContext = _navigatorKey.currentContext;
+      if (noticeContext != null && noticeContext.mounted) {
+        AppNotice.error(noticeContext, '登录状态已失效，请重新登录');
+      }
+    } finally {
+      _handlingSessionExpiry = false;
+    }
   }
 }
