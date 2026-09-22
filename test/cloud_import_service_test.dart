@@ -148,6 +148,9 @@ class _LedgerRepository implements LedgerRepository {
 
   @override
   Future<void> deleteLedger(String uuid) => database.deleteLedger(uuid);
+
+  @override
+  Future<void> claimLedger(String uuid) async {}
 }
 
 class _PersonRepository implements PersonRepository {

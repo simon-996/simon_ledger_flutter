@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simon_ledger_flutter/core/database/database_service.dart';
+import 'package:simon_ledger_flutter/core/database/local_data_scope.dart';
 import 'package:simon_ledger_flutter/core/models/ledger.dart';
 import 'package:simon_ledger_flutter/core/models/conflict_record.dart';
 import 'package:simon_ledger_flutter/core/models/person.dart';
@@ -41,6 +42,37 @@ void main() {
     ]);
     expect(result.synced, 1);
   });
+
+  test(
+    'claims a visible guest ledger before syncing from an account scope',
+    () async {
+      final calls = <String>[];
+      final database = DatabaseService(
+        scope: LocalDataScope.account('account-a'),
+      );
+      await database.saveLedger(
+        Ledger()
+          ..uuid = 'local-ledger'
+          ..name = '离线账本'
+          ..baseCurrencyCode = 'CNY',
+      );
+      final coordinator = SyncCoordinator(
+        ledgerRepository: _ClaimingLedgerRepository(calls),
+        personRepository: _PersonRepository(calls),
+        transactionRepository: _TransactionRepository(calls),
+        database: database,
+      );
+
+      await coordinator.syncLedger('local-ledger');
+
+      expect(calls, [
+        'claim:local-ledger',
+        'ledger:local-ledger',
+        'people:local-ledger',
+        'tx:local-ledger',
+      ]);
+    },
+  );
 
   test('does not sync all when local cache has no pending writes', () async {
     final calls = <String>[];
@@ -390,6 +422,18 @@ class _LedgerRepository implements LedgerRepository {
 
   @override
   Future<void> deleteLedger(String uuid) async {}
+
+  @override
+  Future<void> claimLedger(String uuid) async {}
+}
+
+class _ClaimingLedgerRepository extends _LedgerRepository {
+  const _ClaimingLedgerRepository(super.calls);
+
+  @override
+  Future<void> claimLedger(String uuid) async {
+    calls.add('claim:$uuid');
+  }
 }
 
 class _PersonRepository implements PersonRepository {

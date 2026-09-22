@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simon_ledger_flutter/core/database/database_service.dart';
+import 'package:simon_ledger_flutter/core/database/local_data_scope.dart';
 import 'package:simon_ledger_flutter/core/models/ledger.dart';
 import 'package:simon_ledger_flutter/core/models/person.dart';
 import 'package:simon_ledger_flutter/core/models/transaction_record.dart';
@@ -212,9 +213,57 @@ void main() {
       expect(ledgers.single.uuid, 'local-ledger-1');
       expect(ledgers.single.isLocalTemporary, isTrue);
       expect(ledgers.single.syncedRemoteUuid, isNull);
-      expect(ledgers.single.cloudPolicy, LedgerCloudPolicy.uploadRequested);
+      expect(ledgers.single.cloudPolicy, LedgerCloudPolicy.localOnly);
+      expect(ledgers.single.claimPending, isFalse);
       expect(ledgers.single.personUuids, ['local-person-1']);
       expect(people.single.uuid, 'local-person-1');
+    },
+  );
+
+  test(
+    'explicit claim moves a guest ledger into the account sync scope',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final tokenStore = TokenStore();
+      await tokenStore.saveAccountUuid('account-a');
+      final guestDatabase = DatabaseService();
+      await guestDatabase.savePerson(
+        Person()
+          ..uuid = 'local-person-1'
+          ..name = '本人'
+          ..avatar = '😎',
+      );
+      await guestDatabase.saveLedger(
+        Ledger()
+          ..uuid = 'local-ledger-1'
+          ..name = '待同步账本'
+          ..baseCurrencyCode = 'CNY'
+          ..personUuids = ['local-person-1'],
+      );
+
+      final accountDatabase = DatabaseService(
+        scope: LocalDataScope.account('account-a'),
+      );
+      final apiClient = _LedgerCreateApiClient();
+      final repository = RemoteLedgerRepository(
+        apiClient: apiClient,
+        database: accountDatabase,
+        tokenStore: tokenStore,
+      );
+
+      await repository.claimLedger('local-ledger-1');
+
+      final claimed = (await accountDatabase.getAllLedgers()).single;
+      expect(claimed.localAccountUuid, 'account-a');
+      expect(claimed.claimPending, isTrue);
+      expect((await guestDatabase.getAllLedgers()), isEmpty);
+      expect(apiClient.postPaths, isEmpty);
+
+      await repository.syncPendingWrites(ledgerUuid: 'local-ledger-1');
+
+      final synced = (await accountDatabase.getAllLedgers()).single;
+      expect(synced.cloudPolicy, LedgerCloudPolicy.cloudManaged);
+      expect(apiClient.postPaths, ['/api/ledgers/with-people']);
     },
   );
 

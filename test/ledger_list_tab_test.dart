@@ -88,6 +88,52 @@ void main() {
     expect(find.byTooltip('同步待处理数据'), findsOneWidget);
   });
 
+  testWidgets('logged-in guest ledger offers explicit account sync', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final database = DatabaseService();
+    final ledger = Ledger()
+      ..uuid = 'guest-ledger'
+      ..name = '游客账本'
+      ..baseCurrencyCode = 'CNY';
+    await database.saveLedger(ledger);
+    var syncCalls = 0;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          authTokenProvider.overrideWith(
+            (ref) async => const AuthToken(name: 'satoken', value: 'token'),
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: LedgerListTab(
+              ledgers: [ledger],
+              ledgerStats: const {},
+              onTap: (_) {},
+              onEdit: (_) {},
+              onShare: (_) async {},
+              onDelete: (_) async {},
+              onCreate: () {},
+              onSync: (_) async => syncCalls += 1,
+              autoSyncEnabled: false,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final syncButton = find.byTooltip('同步到当前账号');
+    expect(syncButton, findsOneWidget);
+    await tester.tap(syncButton);
+    await tester.pump();
+    expect(syncCalls, 1);
+  });
+
   testWidgets('synced local ledger matches cloud card and exposes sharing', (
     tester,
   ) async {

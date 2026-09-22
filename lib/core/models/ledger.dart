@@ -29,11 +29,15 @@ class Ledger {
 
   String? syncedRemoteUuid;
 
+  String? localAccountUuid;
+
   String? cacheOwnerUserUuid;
 
   LedgerCloudPolicy cloudPolicy = LedgerCloudPolicy.localOnly;
 
   bool pendingSync = false;
+
+  bool claimPending = false;
 
   String? syncError;
 
@@ -54,6 +58,10 @@ class Ledger {
 
   bool get isLocalOnly =>
       cloudPolicy == LedgerCloudPolicy.localOnly && !isCloudManaged;
+
+  bool get isGuestLocal => localAccountUuid == null && !isCloudManaged;
+
+  bool get isAccountOwned => localAccountUuid != null;
 
   String get remoteSyncUuid => hasSyncedRemoteCopy ? syncedRemoteUuid! : uuid;
 

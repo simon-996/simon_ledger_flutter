@@ -214,7 +214,15 @@ class SyncCoordinator {
     required bool syncLedgerWrites,
   }) async {
     try {
-      if (syncLedgerWrites) {
+      final cachedLedger = (await _database.getAllLedgers(
+        includeDeleted: true,
+      )).where((ledger) => ledger.uuid == ledgerUuid).firstOrNull;
+      final shouldClaim =
+          _database.scope.isAccount && cachedLedger?.isGuestLocal == true;
+      if (shouldClaim) {
+        await _ledgerRepository.claimLedger(ledgerUuid);
+      }
+      if (syncLedgerWrites || shouldClaim) {
         await _ledgerRepository.syncPendingWrites(ledgerUuid: ledgerUuid);
       }
       await _personRepository.syncPendingPeople(ledgerUuid);
@@ -228,6 +236,12 @@ class SyncCoordinator {
           synced: result.synced,
           error: result.error ?? audit.error ?? StateError('部分数据仍在等待同步。'),
         );
+      }
+      final syncedLedger = (await _database.getAllLedgers(
+        includeDeleted: true,
+      )).where((ledger) => ledger.uuid == ledgerUuid).firstOrNull;
+      if (syncedLedger?.claimPending == true) {
+        await _database.saveLedger(syncedLedger!..claimPending = false);
       }
       _ledgerRetryAfter.remove(ledgerUuid);
       await _syncOverviewService.markSuccessfulSync(_now());

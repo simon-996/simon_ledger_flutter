@@ -55,11 +55,14 @@ class SyncOverviewService {
   }) : _conflictStore = conflictStore,
        _tokenStore = tokenStore;
 
-  static const _lastSuccessfulSyncAtKey = 'sync.last_successful_at.v1';
+  static const _legacyLastSuccessfulSyncAtKey = 'sync.last_successful_at.v1';
 
   final DatabaseService _database;
   final ConflictStore? _conflictStore;
   final TokenStore? _tokenStore;
+
+  String get _lastSuccessfulSyncAtKey =>
+      'sync.${_database.scope.storageKey}.last_successful_at.v2';
 
   Future<SyncOverview> read() async {
     final ledgers = await _database.getAllLedgers(includeDeleted: true);
@@ -104,6 +107,11 @@ class SyncOverviewService {
         )
         .toList();
     final prefs = await SharedPreferences.getInstance();
+    final lastSuccessfulSyncAt =
+        prefs.getString(_lastSuccessfulSyncAtKey) ??
+        (_database.scope.isGuest
+            ? prefs.getString(_legacyLastSuccessfulSyncAtKey)
+            : null);
     final failures = [
       for (final ledger in pendingLedgers)
         if (_hasError(ledger.syncError))
@@ -139,9 +147,7 @@ class SyncOverviewService {
       conflictCount: conflicts.length,
       conflictsByLedger: conflictsByLedger,
       failures: failures,
-      lastSuccessfulSyncAt: DateTime.tryParse(
-        prefs.getString(_lastSuccessfulSyncAtKey) ?? '',
-      ),
+      lastSuccessfulSyncAt: DateTime.tryParse(lastSuccessfulSyncAt ?? ''),
     );
   }
 

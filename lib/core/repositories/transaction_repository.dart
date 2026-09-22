@@ -388,6 +388,7 @@ class RemoteTransactionRepository implements TransactionRepository {
 
     for (final transaction in all) {
       transaction.ledgerUuid = ledgerUuid;
+      transaction.localAccountUuid = _db.scope.accountUuid;
       await _db.saveTransaction(transaction);
     }
     return all;
@@ -397,6 +398,7 @@ class RemoteTransactionRepository implements TransactionRepository {
     final clientOperationId = transaction.clientOperationId ?? transaction.uuid;
     return transaction
       ..clientOperationId = clientOperationId
+      ..localAccountUuid = transaction.localAccountUuid ?? _db.scope.accountUuid
       ..pendingSync = true
       ..syncError = null;
   }
@@ -411,6 +413,7 @@ class RemoteTransactionRepository implements TransactionRepository {
     await _db.saveTransaction(
       remote
         ..ledgerUuid = local.ledgerUuid
+        ..localAccountUuid = local.localAccountUuid ?? _db.scope.accountUuid
         ..clientOperationId = local.clientOperationId
         ..pendingSync = false
         ..syncError = null,

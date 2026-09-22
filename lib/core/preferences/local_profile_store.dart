@@ -1,31 +1,73 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../database/local_data_scope.dart';
 import '../models/local_profile.dart';
 
 class LocalProfileStore {
-  const LocalProfileStore();
+  const LocalProfileStore({this.scope = const LocalDataScope.guest()});
 
-  static const _nicknameKey = 'local_profile.nickname.v1';
-  static const _avatarIconKey = 'local_profile.avatar_icon.v1';
-  static const _pendingSyncKey = 'local_profile.pending_sync.v1';
-  static const _pendingOperationIdKey = 'local_profile.pending_operation_id.v1';
-  static const _syncErrorKey = 'local_profile.sync_error.v1';
-  static const _updatedAtKey = 'local_profile.updated_at.v1';
-  static const _remoteVersionKey = 'local_profile.remote_version.v1';
+  final LocalDataScope scope;
+
+  static const _legacyNicknameKey = 'local_profile.nickname.v1';
+  static const _legacyAvatarIconKey = 'local_profile.avatar_icon.v1';
+  static const _legacyPendingSyncKey = 'local_profile.pending_sync.v1';
+  static const _legacyPendingOperationIdKey =
+      'local_profile.pending_operation_id.v1';
+  static const _legacySyncErrorKey = 'local_profile.sync_error.v1';
+  static const _legacyUpdatedAtKey = 'local_profile.updated_at.v1';
+  static const _legacyRemoteVersionKey = 'local_profile.remote_version.v1';
+
+  String _key(String name) => 'local_profile.${scope.storageKey}.$name.v2';
+
+  String get _nicknameKey => _key('nickname');
+  String get _avatarIconKey => _key('avatar_icon');
+  String get _pendingSyncKey => _key('pending_sync');
+  String get _pendingOperationIdKey => _key('pending_operation_id');
+  String get _syncErrorKey => _key('sync_error');
+  String get _updatedAtKey => _key('updated_at');
+  String get _remoteVersionKey => _key('remote_version');
 
   Future<LocalProfile> read() async {
     final prefs = await SharedPreferences.getInstance();
+    final hasScopedProfile =
+        prefs.containsKey(_nicknameKey) ||
+        prefs.containsKey(_avatarIconKey) ||
+        prefs.containsKey(_pendingSyncKey) ||
+        prefs.containsKey(_remoteVersionKey);
+
+    final nicknameKey = hasScopedProfile || !scope.isGuest
+        ? _nicknameKey
+        : _legacyNicknameKey;
+    final avatarIconKey = hasScopedProfile || !scope.isGuest
+        ? _avatarIconKey
+        : _legacyAvatarIconKey;
+    final pendingSyncKey = hasScopedProfile || !scope.isGuest
+        ? _pendingSyncKey
+        : _legacyPendingSyncKey;
+    final pendingOperationIdKey = hasScopedProfile || !scope.isGuest
+        ? _pendingOperationIdKey
+        : _legacyPendingOperationIdKey;
+    final syncErrorKey = hasScopedProfile || !scope.isGuest
+        ? _syncErrorKey
+        : _legacySyncErrorKey;
+    final updatedAtKey = hasScopedProfile || !scope.isGuest
+        ? _updatedAtKey
+        : _legacyUpdatedAtKey;
+    final remoteVersionKey = hasScopedProfile || !scope.isGuest
+        ? _remoteVersionKey
+        : _legacyRemoteVersionKey;
+
     return LocalProfile(
       nickname:
-          prefs.getString(_nicknameKey) ?? LocalProfile.defaultProfile.nickname,
+          prefs.getString(nicknameKey) ?? LocalProfile.defaultProfile.nickname,
       avatarIcon:
-          prefs.getString(_avatarIconKey) ??
+          prefs.getString(avatarIconKey) ??
           LocalProfile.defaultProfile.avatarIcon,
-      pendingSync: prefs.getBool(_pendingSyncKey) ?? false,
-      pendingOperationId: prefs.getString(_pendingOperationIdKey),
-      syncError: prefs.getString(_syncErrorKey),
-      updatedAt: DateTime.tryParse(prefs.getString(_updatedAtKey) ?? ''),
-      remoteVersion: prefs.getInt(_remoteVersionKey) ?? 1,
+      pendingSync: prefs.getBool(pendingSyncKey) ?? false,
+      pendingOperationId: prefs.getString(pendingOperationIdKey),
+      syncError: prefs.getString(syncErrorKey),
+      updatedAt: DateTime.tryParse(prefs.getString(updatedAtKey) ?? ''),
+      remoteVersion: prefs.getInt(remoteVersionKey) ?? 1,
     );
   }
 

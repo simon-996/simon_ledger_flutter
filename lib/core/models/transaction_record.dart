@@ -32,6 +32,8 @@ class TransactionRecord {
 
   String? createdByAvatar;
 
+  String? localAccountUuid;
+
   late DateTime createdAt;
 
   bool pendingSync = false;

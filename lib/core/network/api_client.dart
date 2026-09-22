@@ -134,7 +134,7 @@ class ApiClient {
   }) async {
     try {
       final response = await request();
-      return _parseResponse(response, fromJson);
+      return await _parseResponse(response, fromJson);
     } on DioException catch (e) {
       final response = e.response;
       if (_isUnauthorized(response) && _hasAttachedAuth(e.requestOptions)) {

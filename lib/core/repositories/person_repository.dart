@@ -123,6 +123,7 @@ class RemotePersonRepository implements PersonRepository {
               (json! as List<dynamic>).map(_personFromJson).toList(),
         );
         for (final person in people) {
+          person.localAccountUuid = _db.scope.accountUuid;
           await _db.savePerson(person);
         }
         await _cacheLedgerPeople(
@@ -130,13 +131,13 @@ class RemotePersonRepository implements PersonRepository {
           people,
           cachedPersonUuidsBeforeRefresh: cachedPersonUuidsBeforeRefresh,
         );
-        return _mergeCachedPeople(
+        return await _mergeCachedPeople(
           ledgerUuid,
           people,
           includeDeleted: includeDeleted,
         );
       } catch (_) {
-        return _cachedPeopleForLedger(
+        return await _cachedPeopleForLedger(
           ledgerUuid,
           includeDeleted: includeDeleted,
         );
@@ -315,6 +316,7 @@ class RemotePersonRepository implements PersonRepository {
           ..name = saved.name
           ..avatar = saved.avatar
           ..linkedUserUuid = saved.linkedUserUuid
+          ..localAccountUuid = _db.scope.accountUuid
           ..version = saved.version
           ..pendingSync = false
           ..syncError = null
@@ -339,6 +341,7 @@ class RemotePersonRepository implements PersonRepository {
         ..name = saved.name
         ..avatar = saved.avatar
         ..linkedUserUuid = saved.linkedUserUuid
+        ..localAccountUuid = _db.scope.accountUuid
         ..version = saved.version
         ..pendingSync = false
         ..syncError = null

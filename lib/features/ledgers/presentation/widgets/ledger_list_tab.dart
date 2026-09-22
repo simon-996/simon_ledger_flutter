@@ -209,7 +209,9 @@ class _LedgerListTabState extends ConsumerState<LedgerListTab> {
               canReorder: !searching,
               canEdit: ledger.canManageSettings,
               canShare: isCloudMode && ledger.canInviteMembers,
-              canSync: isCloudMode,
+              canSync:
+                  isCloudMode &&
+                  (ledger.isGuestLocal || syncStatus.value?.hasPending == true),
             ),
           ),
         );
@@ -832,9 +834,17 @@ class _LedgerCard extends StatelessWidget {
                                   ],
                                 ),
                               ),
-                              if (canSync && (hasPendingSync || isSyncing))
+                              if (canSync &&
+                                  (ledger.isGuestLocal ||
+                                      hasPendingSync ||
+                                      isSyncing))
                                 IconButton(
-                                  tooltip: isSyncing ? '正在同步' : '同步待处理数据',
+                                  tooltip: isSyncing
+                                      ? '正在同步'
+                                      : ledger.isGuestLocal &&
+                                            !ledger.shouldUploadToCloud
+                                      ? '同步到当前账号'
+                                      : '同步待处理数据',
                                   icon: const Icon(Icons.sync_rounded),
                                   onPressed: isBusy ? null : onSync,
                                 ),

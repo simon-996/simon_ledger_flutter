@@ -394,6 +394,26 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Future<void> _syncLedger(Ledger ledger) async {
+    if (ledger.isGuestLocal) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('同步到当前账号？'),
+          content: const Text('同步后，这个账本将归当前账号所有。退出登录或切换账号后，其他账号将无法看到它。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('确认同步'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || confirmed != true) return;
+    }
     try {
       final result = await ref
           .read(syncCoordinatorProvider)

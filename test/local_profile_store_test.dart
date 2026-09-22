@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:simon_ledger_flutter/core/database/local_data_scope.dart';
 import 'package:simon_ledger_flutter/core/models/local_profile.dart';
 import 'package:simon_ledger_flutter/core/preferences/local_profile_store.dart';
 
@@ -33,6 +34,27 @@ void main() {
       expect(profile.avatarIcon, 'star');
       expect(profile.personAvatar, '⭐');
       expect(profile.remoteVersion, 7);
+    });
+
+    test('keeps profiles isolated between guest and account scopes', () async {
+      final guest = LocalProfileStore(scope: const LocalDataScope.guest());
+      final accountA = LocalProfileStore(
+        scope: LocalDataScope.account('account-a'),
+      );
+      final accountB = LocalProfileStore(
+        scope: LocalDataScope.account('account-b'),
+      );
+
+      await guest.save(
+        const LocalProfile(nickname: '游客', avatarIcon: 'person'),
+      );
+      await accountA.save(
+        const LocalProfile(nickname: '账号 A', avatarIcon: 'person'),
+      );
+
+      expect((await guest.read()).nickname, '游客');
+      expect((await accountA.read()).nickname, '账号 A');
+      expect((await accountB.read()).nickname, '我');
     });
   });
 }

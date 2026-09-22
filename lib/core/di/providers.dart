@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../database/database_service.dart';
+import '../database/local_data_scope.dart';
 import '../models/conflict_record.dart';
 import '../models/local_profile.dart';
 import '../network/api_client.dart';
@@ -24,10 +25,7 @@ import '../services/sync_overview_service.dart';
 /// This acts as our base Dependency Injection for the database layer.
 /// Other providers will watch this to perform DB operations.
 final databaseProvider = Provider<DatabaseService>((ref) {
-  // In the future, this should probably be initialized asynchronously
-  // before the app runs, or we use a FutureProvider for initialization.
-  // For now, we return the legacy global instance.
-  return dbService;
+  return DatabaseService(scope: ref.watch(activeLocalDataScopeProvider));
 });
 
 final tokenStoreProvider = Provider<TokenStore>((ref) {
@@ -35,7 +33,7 @@ final tokenStoreProvider = Provider<TokenStore>((ref) {
 });
 
 final localProfileStoreProvider = Provider<LocalProfileStore>((ref) {
-  return const LocalProfileStore();
+  return LocalProfileStore(scope: ref.watch(activeLocalDataScopeProvider));
 });
 
 final localProfileProvider = FutureProvider<LocalProfile>((ref) {
@@ -76,7 +74,7 @@ final apiClientProvider = Provider<ApiClient>((ref) {
 });
 
 final conflictStoreProvider = Provider<ConflictStore>((ref) {
-  return ConflictStore();
+  return ConflictStore(scope: ref.watch(activeLocalDataScopeProvider));
 });
 
 final conflictSnapshotCodecProvider = Provider<ConflictSnapshotCodec>((ref) {
@@ -115,6 +113,14 @@ final authAccountUuidProvider = FutureProvider<String?>((ref) async {
   final token = await ref.watch(authTokenProvider.future);
   if (token == null || !token.isValid) return null;
   return ref.watch(tokenStoreProvider).readAccountUuid();
+});
+
+final activeLocalDataScopeProvider = Provider<LocalDataScope>((ref) {
+  final accountUuid = ref.watch(authAccountUuidProvider).value;
+  if (accountUuid == null || accountUuid.isEmpty) {
+    return const LocalDataScope.guest();
+  }
+  return LocalDataScope.account(accountUuid);
 });
 
 final conflictRecordsProvider = FutureProvider<List<ConflictRecord>>((

@@ -42,6 +42,8 @@ abstract class LedgerRepository {
 
   Future<void> deleteLedger(String uuid);
 
+  Future<void> claimLedger(String uuid);
+
   Future<void> syncPendingWrites({String? ledgerUuid});
 }
 
@@ -83,6 +85,9 @@ class LocalLedgerRepository implements LedgerRepository {
   Future<void> deleteLedger(String uuid) {
     return _db.deleteLedger(uuid);
   }
+
+  @override
+  Future<void> claimLedger(String uuid) async {}
 
   @override
   Future<void> syncPendingWrites({String? ledgerUuid}) async {}
@@ -137,6 +142,7 @@ class RemoteLedgerRepository implements LedgerRepository {
       }).toList();
       for (final ledger in ledgers) {
         ledger.cacheOwnerUserUuid = accountUuid;
+        ledger.localAccountUuid = accountUuid;
       }
       final cachedPeopleByLedgerUuid = {
         for (final ledger in cachedLedgers) ledger.uuid: ledger.personUuids,
@@ -172,6 +178,7 @@ class RemoteLedgerRepository implements LedgerRepository {
             fromJson: _ledgerPeopleBatchFromJson,
           );
           for (final person in peopleBatch.people) {
+            person.localAccountUuid = accountUuid;
             await _db.savePerson(person);
           }
           for (final ledger in ledgers) {
@@ -277,17 +284,51 @@ class RemoteLedgerRepository implements LedgerRepository {
     Ledger ledger,
     List<Person> people,
   ) async {
-    for (final person in people) {
+    final guestPeople = people
+        .map(
+          (person) => Person()
+            ..uuid = _db.scope.isAccount ? 'guest:${person.uuid}' : person.uuid
+            ..version = person.version
+            ..name = person.name
+            ..avatar = person.avatar
+            ..linkedUserUuid = person.linkedUserUuid
+            ..pendingLedgerUuid = ledger.uuid
+            ..localAccountUuid = null,
+        )
+        .toList();
+    for (final person in guestPeople) {
       await _db.savePerson(person);
     }
     ledger
-      ..personUuids = people.map((person) => person.uuid).toList()
-      ..cloudPolicy = LedgerCloudPolicy.uploadRequested
-      ..pendingSync = true
+      ..personUuids = guestPeople.map((person) => person.uuid).toList()
+      ..localAccountUuid = null
+      ..cloudPolicy = LedgerCloudPolicy.localOnly
+      ..pendingSync = false
+      ..claimPending = false
       ..syncError = null;
     await _db.saveLedger(ledger);
-    unawaited(syncPendingWrites(ledgerUuid: ledger.uuid).catchError((_) {}));
-    return CreatedLedgerWithPeople(ledger: ledger, people: people);
+    return CreatedLedgerWithPeople(ledger: ledger, people: guestPeople);
+  }
+
+  @override
+  Future<void> claimLedger(String uuid) async {
+    final accountUuid =
+        await _tokenStore?.readAccountUuid() ?? _db.scope.accountUuid;
+    if (accountUuid == null || accountUuid.isEmpty) {
+      throw StateError('请先登录后再同步账本。');
+    }
+    await _db.claimLedger(uuid, accountUuid);
+    final ledger = (await _db.getAllLedgers(
+      includeDeleted: true,
+    )).where((item) => item.uuid == uuid).firstOrNull;
+    if (ledger == null) return;
+    ledger
+      ..localAccountUuid = accountUuid
+      ..cloudPolicy = LedgerCloudPolicy.uploadRequested
+      ..pendingSync = true
+      ..claimPending = true
+      ..syncError = null;
+    await _db.saveLedger(ledger);
   }
 
   Future<CreatedLedgerWithPeople> _createLedgerWithPeopleRemote(
@@ -372,6 +413,7 @@ class RemoteLedgerRepository implements LedgerRepository {
       ..role = created.ledger.role
       ..memberCount = created.ledger.memberCount
       ..members = created.ledger.members
+      ..localAccountUuid = ledger.localAccountUuid
       ..pendingSync = false
       ..syncError = null;
     await _db.saveLedger(ledger);

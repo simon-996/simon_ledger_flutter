@@ -37,29 +37,50 @@ class ProfileProjectionService {
 
     for (final person in people) {
       if (person.isDeleted) continue;
-      final isSelf =
-          person.uuid == 'self' ||
-          person.uuid == 'p1' ||
-          (linkedUserUuid != null && person.linkedUserUuid == linkedUserUuid) ||
-          (person.name.trim() == previousName &&
-              person.avatar.trim() == previousAvatar);
+      if (_database.scope.isAccount &&
+          person.localAccountUuid != _database.scope.accountUuid) {
+        continue;
+      }
+
+      final isAccountSelf =
+          linkedUserUuid != null &&
+          linkedUserUuid.isNotEmpty &&
+          (person.localAccountUuid == linkedUserUuid ||
+              person.linkedUserUuid == linkedUserUuid);
+      final isGuestSelf =
+          _database.scope.isGuest &&
+          person.localAccountUuid == null &&
+          (person.uuid == 'self' || person.uuid == 'p1');
+      final isLegacyGuestSelf =
+          _database.scope.isGuest &&
+          linkedUserUuid == null &&
+          person.localAccountUuid == null &&
+          person.name.trim() == previousName &&
+          person.avatar.trim() == previousAvatar;
+      final isSelf = isAccountSelf || isGuestSelf || isLegacyGuestSelf;
       if (!isSelf) continue;
 
       matched = true;
       person
         ..name = current.normalizedNickname
         ..avatar = current.personAvatar
-        ..linkedUserUuid = linkedUserUuid ?? person.linkedUserUuid;
+        ..linkedUserUuid = linkedUserUuid ?? person.linkedUserUuid
+        ..localAccountUuid = _database.scope.isAccount
+            ? linkedUserUuid ?? person.localAccountUuid
+            : null;
       await _database.savePerson(person);
     }
 
     if (!matched) {
       await _database.savePerson(
         Person()
-          ..uuid = 'self'
+          ..uuid = linkedUserUuid == null ? 'self' : 'self:$linkedUserUuid'
           ..name = current.normalizedNickname
           ..avatar = current.personAvatar
-          ..linkedUserUuid = linkedUserUuid,
+          ..linkedUserUuid = linkedUserUuid
+          ..localAccountUuid = _database.scope.isAccount
+              ? linkedUserUuid
+              : null,
       );
     }
   }
@@ -74,6 +95,10 @@ class ProfileProjectionService {
     final previousAvatar = previous.personAvatar;
 
     for (final ledger in ledgers) {
+      if (_database.scope.isAccount &&
+          ledger.localAccountUuid != _database.scope.accountUuid) {
+        continue;
+      }
       if (ledger.members.isEmpty) continue;
 
       var changed = false;
@@ -83,6 +108,8 @@ class ProfileProjectionService {
             linkedUserUuid.isNotEmpty &&
             member.userUuid == linkedUserUuid;
         final matchesPreviousProfile =
+            _database.scope.isGuest &&
+            linkedUserUuid == null &&
             member.nickname?.trim() == previousName &&
             member.avatar?.trim() == previousAvatar;
         if (!matchesLinkedUser && !matchesPreviousProfile) return member;

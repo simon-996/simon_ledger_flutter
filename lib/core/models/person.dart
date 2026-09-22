@@ -13,6 +13,8 @@ class Person {
 
   String? syncedRemoteUuid;
 
+  String? localAccountUuid;
+
   bool isDeleted = false; // Soft delete flag
 
   bool pendingSync = false;

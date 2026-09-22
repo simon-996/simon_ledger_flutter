@@ -3,11 +3,25 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../database/local_data_scope.dart';
 import '../models/conflict_record.dart';
 
 class ConflictStore {
   static const storageKey = 'local_store.conflicts.v1';
   static const quarantineKey = 'local_store.conflicts.quarantine.v1';
+
+  ConflictStore({this.scope = const LocalDataScope.guest()});
+
+  final LocalDataScope scope;
+
+  String get _storageKey => scope.isGuest
+      ? storageKey
+      : 'local_store.${scope.storageKey}.conflicts.v2';
+
+  String get _quarantineKey => scope.isGuest
+      ? quarantineKey
+      : 'local_store.${scope.storageKey}.conflicts.quarantine.v2';
+
   Future<void> _tail = Future<void>.value();
   final StreamController<int> _changes = StreamController<int>.broadcast(
     sync: true,
@@ -111,12 +125,12 @@ class ConflictStore {
 
   Future<_StoredConflicts> _readUnsafe() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(storageKey);
+    final raw = prefs.getString(_storageKey);
     if (raw == null || raw.isEmpty) return const _StoredConflicts();
     try {
       final decoded = jsonDecode(raw);
       if (decoded is! List<dynamic>) {
-        await prefs.setString(quarantineKey, raw);
+        await prefs.setString(_quarantineKey, raw);
         return const _StoredConflicts();
       }
       final records = <ConflictRecord>[];
@@ -137,14 +151,14 @@ class ConflictStore {
         (left, right) => left.detectedAt.compareTo(right.detectedAt),
       );
       if (invalidEntries.isNotEmpty) {
-        await prefs.setString(quarantineKey, jsonEncode(invalidEntries));
+        await prefs.setString(_quarantineKey, jsonEncode(invalidEntries));
       }
       return _StoredConflicts(records: records, invalidEntries: invalidEntries);
     } on FormatException {
-      await prefs.setString(quarantineKey, raw);
+      await prefs.setString(_quarantineKey, raw);
       return const _StoredConflicts();
     } on TypeError {
-      await prefs.setString(quarantineKey, raw);
+      await prefs.setString(_quarantineKey, raw);
       return const _StoredConflicts();
     }
   }
@@ -156,7 +170,7 @@ class ConflictStore {
     records.sort((left, right) => left.detectedAt.compareTo(right.detectedAt));
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
-      storageKey,
+      _storageKey,
       jsonEncode([
         ...records.map((record) => record.toJson()),
         ...invalidEntries,
