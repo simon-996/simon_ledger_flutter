@@ -467,6 +467,9 @@ class RemoteTransactionRepository implements TransactionRepository {
     final map = json! as Map<String, dynamic>;
     final uuid = map['uuid'].toString();
     final clientOperationId = map['clientOperationId']?.toString();
+    final creatorUuid = map['createdByUserUuid']?.toString();
+    final deletedCreator =
+        map.containsKey('createdByUserUuid') && creatorUuid == null;
     return TransactionRecord()
       ..uuid = uuid
       ..ledgerUuid = map['ledgerUuid'].toString()
@@ -481,9 +484,13 @@ class RemoteTransactionRepository implements TransactionRepository {
       ..personUuids = (map['personUuids'] as List<dynamic>? ?? [])
           .map((value) => value.toString())
           .toList()
-      ..createdByUserUuid = map['createdByUserUuid']?.toString()
-      ..createdByNickname = map['createdByNickname']?.toString()
-      ..createdByAvatar = map['createdByAvatar']?.toString()
+      ..createdByUserUuid = creatorUuid
+      ..createdByNickname = deletedCreator
+          ? '已注销用户'
+          : map['createdByNickname']?.toString()
+      ..createdByAvatar = deletedCreator
+          ? null
+          : map['createdByAvatar']?.toString()
       ..createdAt =
           DateTime.tryParse(map['happenedAt']?.toString() ?? '') ??
           DateTime.now()

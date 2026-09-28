@@ -1,21 +1,103 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simon_ledger_flutter/core/database/database_service.dart';
-import 'package:simon_ledger_flutter/core/models/ledger.dart';
 import 'package:simon_ledger_flutter/core/models/conflict_record.dart';
+import 'package:simon_ledger_flutter/core/models/ledger.dart';
+import 'package:simon_ledger_flutter/core/models/money.dart';
 import 'package:simon_ledger_flutter/core/models/person.dart';
 import 'package:simon_ledger_flutter/core/models/transaction_record.dart';
 import 'package:simon_ledger_flutter/core/network/api_client.dart';
 import 'package:simon_ledger_flutter/core/network/api_exception.dart';
 import 'package:simon_ledger_flutter/core/network/token_store.dart';
-import 'package:simon_ledger_flutter/core/repositories/transaction_repository.dart';
 import 'package:simon_ledger_flutter/core/preferences/local_profile_store.dart';
+import 'package:simon_ledger_flutter/core/repositories/transaction_repository.dart';
 import 'package:simon_ledger_flutter/core/services/conflict_coordinator.dart';
 import 'package:simon_ledger_flutter/core/services/conflict_snapshot_codec.dart';
 import 'package:simon_ledger_flutter/core/services/conflict_store.dart';
+import 'package:simon_ledger_flutter/core/widgets/app_components.dart';
+import 'package:simon_ledger_flutter/features/transactions/presentation/widgets/transaction_detail_sheet.dart';
 
 void main() {
   group('RemoteTransactionRepository', () {
+    testWidgets('shows a deleted creator on a retained remote transaction', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({});
+      final database = DatabaseService();
+      final repository = RemoteTransactionRepository(
+        apiClient: _FakeApiClient([
+          {
+            'page': 1,
+            'pageSize': 100,
+            'total': 1,
+            'records': [
+              {
+                ..._transactionJson('retained-tx'),
+                'createdByUserUuid': null,
+                'createdByNickname': '旧昵称',
+                'createdByAvatar': '😎',
+              },
+            ],
+          },
+        ]),
+        database: database,
+      );
+
+      final transaction = (await repository.getTransactionsForLedger(
+        'ledger-1',
+      )).single;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AppTransactionTile(
+              category: transaction.category,
+              date: '05-22 12:00',
+              people: '',
+              amount: formatTransactionPrimaryAmount(transaction),
+              isExpense: transaction.type == 0,
+              createdByText: transaction.createdByNickname,
+              createdByAvatar: transaction.createdByAvatar,
+            ),
+          ),
+        ),
+      );
+
+      expect(transaction.createdByUserUuid, isNull);
+      expect(transaction.amount, 12.5);
+      expect(find.text('- CNY 12.50'), findsOneWidget);
+      expect(find.text('由 已注销用户 添加'), findsOneWidget);
+      expect(find.text('由 旧昵称 添加'), findsNothing);
+      expect(find.text('😎'), findsNothing);
+
+      final cached = (await database.getTransactionsForLedger(
+        'ledger-1',
+      )).single;
+      expect(cached.amount, 12.5);
+      expect(cached.createdByNickname, '已注销用户');
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: TransactionDetailSheet(
+                transaction: cached,
+                peoplePool: const [],
+                ledger: Ledger()
+                  ..uuid = 'ledger-1'
+                  ..name = '共享账本'
+                  ..baseCurrencyCode = 'CNY',
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(find.text('添加人'), findsOneWidget);
+      expect(find.text('已注销用户'), findsOneWidget);
+      expect(find.text('CNY 12.50'), findsWidgets);
+    });
+
     test('loads all transaction pages for a ledger', () async {
       SharedPreferences.setMockInitialValues({});
       final apiClient = _FakeApiClient([
@@ -47,6 +129,7 @@ void main() {
         'tx-3',
       ]);
       expect(transactions.first.payerPersonUuid, 'person-1');
+      expect(transactions.first.createdByNickname, isNull);
       expect(apiClient.requestedPages, [1, 2]);
     });
 
@@ -192,6 +275,7 @@ void main() {
         'local-only-ledger',
       )).single;
       expect(transaction.pendingSync, isFalse);
+      expect(transaction.createdByNickname, isNull);
       expect(apiClient.postPaths, isEmpty);
     });
 
