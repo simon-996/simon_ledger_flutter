@@ -294,7 +294,9 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
       context: context,
       barrierDismissible: true,
       barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
-      barrierColor: Colors.black.withValues(alpha: 0.38),
+      barrierColor: Theme.of(context).colorScheme.scrim.withValues(
+        alpha: AppTheme.modalBarrierOpacity,
+      ),
       transitionDuration: const Duration(milliseconds: 420),
       pageBuilder: (context, animation, secondaryAnimation) {
         return SafeArea(
@@ -973,8 +975,8 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
   ThemeData _bookkeepingAccentTheme(BuildContext context) {
     final baseTheme = Theme.of(context);
     final baseScheme = baseTheme.colorScheme;
-    final accent = transactionAccentColor(baseScheme, _transactionType);
-    final onAccent = transactionOnAccentColor(baseScheme, _transactionType);
+    final accent = transactionAccentColor(context, _transactionType);
+    final onAccent = transactionOnAccentColor(context, _transactionType);
     final colorScheme = baseScheme.copyWith(
       primary: accent,
       onPrimary: onAccent,
@@ -1187,7 +1189,7 @@ class _BookkeepingSuccessCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isIncome = transactionType == 1;
-    final toneColor = transactionAccentColor(colorScheme, transactionType);
+    final toneColor = transactionAccentColor(context, transactionType);
     final amountPrefix = isIncome ? '+' : '-';
     final visiblePeople = people.take(3).toList();
     final hiddenPeopleCount = people.length - visiblePeople.length;
@@ -1452,8 +1454,8 @@ class _QuickEntryHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final accent = isIncome ? AppTheme.incomeColor : AppTheme.expenseColor;
-    final mutedColor = colorScheme.onSurfaceVariant.withValues(alpha: 0.68);
+    final accent = isIncome ? AppColors.of(context).income : AppColors.of(context).expense;
+    final mutedColor = colorScheme.onSurfaceVariant;
 
     return Material(
       color: Colors.transparent,

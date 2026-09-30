@@ -105,11 +105,13 @@ class _ShareLedgerImageContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final balanceColor = AppTheme.semanticAmountColor(context, balance >= 0);
+    final colorScheme = Theme.of(context).colorScheme;
+    final colors = AppColors.of(context);
+    final balanceColor = colors.amount(balance >= 0);
 
     return Container(
       width: double.infinity,
-      color: AppTheme.surfaceColor,
+      color: colorScheme.surface,
       padding: const EdgeInsets.all(18),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -122,10 +124,10 @@ class _ShareLedgerImageContent extends StatelessWidget {
                 Text(
                   ledger.name,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w800,
-                    color: AppTheme.onSurfaceColor,
+                    color: colorScheme.onSurface,
                     letterSpacing: 0,
                   ),
                 ),
@@ -133,19 +135,19 @@ class _ShareLedgerImageContent extends StatelessWidget {
                 Text(
                   ledger.displayCode,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: AppTheme.secondaryColor,
+                    color: colorScheme.onSurfaceVariant,
                     letterSpacing: 0,
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
+                Text(
                   '结余 (CNY)',
                   style: TextStyle(
                     fontSize: 13,
-                    color: AppTheme.secondaryColor,
+                    color: colorScheme.onSurfaceVariant,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 0,
                   ),
@@ -167,7 +169,7 @@ class _ShareLedgerImageContent extends StatelessWidget {
                       child: _ShareSummaryItem(
                         label: '总收入',
                         amount: totalIncome,
-                        color: AppTheme.incomeColor,
+                        color: colors.income,
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -175,7 +177,7 @@ class _ShareLedgerImageContent extends StatelessWidget {
                       child: _ShareSummaryItem(
                         label: '总支出',
                         amount: totalExpense,
-                        color: AppTheme.expenseColor,
+                        color: colors.expense,
                       ),
                     ),
                   ],
@@ -194,10 +196,7 @@ class _ShareLedgerImageContent extends StatelessWidget {
                 children: peopleInImage.map((p) {
                   final pBalance = personBalances[p.uuid] ?? 0.0;
                   final isPositive = pBalance >= 0;
-                  final amountColor = AppTheme.semanticAmountColor(
-                    context,
-                    isPositive,
-                  );
+                  final amountColor = colors.amount(isPositive);
                   return Container(
                     width: 104,
                     padding: const EdgeInsets.symmetric(
@@ -205,9 +204,9 @@ class _ShareLedgerImageContent extends StatelessWidget {
                       horizontal: 7,
                     ),
                     decoration: BoxDecoration(
-                      color: AppTheme.surfaceColor,
+                      color: colorScheme.surface,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE0E2E8)),
+                      border: Border.all(color: colorScheme.outlineVariant),
                     ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -217,9 +216,9 @@ class _ShareLedgerImageContent extends StatelessWidget {
                         Text(
                           p.name,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
-                            color: AppTheme.onSurfaceColor,
+                            color: colorScheme.onSurface,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -243,14 +242,14 @@ class _ShareLedgerImageContent extends StatelessWidget {
             _ShareCard(
               padding: EdgeInsets.zero,
               child: transactions.isEmpty
-                  ? const Padding(
+                  ? Padding(
                       padding: EdgeInsets.all(18),
                       child: Center(
                         child: Text(
                           '暂无流水明细',
                           style: TextStyle(
                             fontSize: 14,
-                            color: AppTheme.secondaryColor,
+                            color: colorScheme.onSurfaceVariant,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -265,19 +264,17 @@ class _ShareLedgerImageContent extends StatelessWidget {
                           t.personUuids,
                           fallbackAvatar: '?',
                         );
-                        final amountColor = t.type == 0
-                            ? AppTheme.expenseColor
-                            : AppTheme.incomeColor;
+                        final amountColor = colors.transaction(t.type);
 
                         return Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 12,
                           ),
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             border: Border(
                               bottom: BorderSide(
-                                color: Color(0xFFEDEEF2),
+                                color: colorScheme.outlineVariant,
                                 width: 1,
                               ),
                             ),
@@ -296,10 +293,10 @@ class _ShareLedgerImageContent extends StatelessWidget {
                                             t.category,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontWeight: FontWeight.w800,
                                               fontSize: 15,
-                                              color: AppTheme.onSurfaceColor,
+                                              color: colorScheme.onSurface,
                                             ),
                                           ),
                                         ),
@@ -308,9 +305,10 @@ class _ShareLedgerImageContent extends StatelessWidget {
                                           Expanded(
                                             child: Text(
                                               peopleAvatars,
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 fontSize: 13,
-                                                color: AppTheme.secondaryColor,
+                                                color: colorScheme
+                                                    .onSurfaceVariant,
                                               ),
                                               overflow: TextOverflow.ellipsis,
                                             ),
@@ -321,9 +319,9 @@ class _ShareLedgerImageContent extends StatelessWidget {
                                     const SizedBox(height: 4),
                                     Text(
                                       dateStr,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 12,
-                                        color: Color(0xFF8A8F99),
+                                        color: colorScheme.onSurfaceVariant,
                                       ),
                                     ),
                                     if (t.note.isNotEmpty) ...[
@@ -332,9 +330,9 @@ class _ShareLedgerImageContent extends StatelessWidget {
                                         t.note,
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontSize: 12,
-                                          color: AppTheme.secondaryColor,
+                                          color: colorScheme.onSurfaceVariant,
                                         ),
                                       ),
                                     ],
@@ -432,6 +430,7 @@ class _ShareFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final pageText = (totalPages ?? 1) > 1
         ? ' · 第 ${pageIndex ?? 1}/${totalPages ?? 1} 页'
         : '';
@@ -441,8 +440,8 @@ class _ShareFooter extends StatelessWidget {
         'Simon Ledger$pageText',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          color: Color(0xFF8A8F99),
+        style: TextStyle(
+          color: colorScheme.onSurfaceVariant,
           fontSize: 13,
           fontWeight: FontWeight.w800,
           letterSpacing: 0,
@@ -460,12 +459,13 @@ class _ShareCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFE0E2E8)),
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: child,
     );

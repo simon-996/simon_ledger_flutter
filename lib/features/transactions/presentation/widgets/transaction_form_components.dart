@@ -3,12 +3,12 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
 
-Color transactionAccentColor(ColorScheme _, int transactionType) {
-  return transactionType == 1 ? AppTheme.incomeColor : AppTheme.expenseColor;
+Color transactionAccentColor(BuildContext context, int transactionType) {
+  return AppColors.of(context).transaction(transactionType);
 }
 
-Color transactionOnAccentColor(ColorScheme _, int transactionType) {
-  return Colors.white;
+Color transactionOnAccentColor(BuildContext context, int transactionType) {
+  return AppColors.of(context).onTransaction(transactionType);
 }
 
 class TransactionTypeSelector extends StatelessWidget {
@@ -67,8 +67,8 @@ class _TransactionTypeButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final accent = transactionAccentColor(colorScheme, value);
-    final mutedColor = colorScheme.onSurfaceVariant.withValues(alpha: 0.48);
+    final accent = transactionAccentColor(context, value);
+    final mutedColor = colorScheme.onSurfaceVariant;
 
     return AnimatedContainer(
       key: ValueKey('transaction-type-option-$value'),
@@ -182,7 +182,7 @@ class _PaymentModeOption extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final mutedColor = colorScheme.onSurfaceVariant.withValues(alpha: 0.5);
+    final mutedColor = colorScheme.onSurfaceVariant;
 
     return AnimatedContainer(
       key: ValueKey('payment-mode-option-$label'),
@@ -363,7 +363,7 @@ class _CurrencyQuickItem extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final label = currency.trim().toUpperCase();
     final displayName = _currencyDisplayName(label);
-    final mutedColor = colorScheme.onSurfaceVariant.withValues(alpha: 0.52);
+    final mutedColor = colorScheme.onSurfaceVariant;
 
     return AnimatedContainer(
       key: ValueKey('currency-option-$label'),
@@ -546,8 +546,7 @@ class _AddCategoryQuickItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final accent = transactionAccentColor(colorScheme, isIncome ? 1 : 0);
+    final accent = transactionAccentColor(context, isIncome ? 1 : 0);
 
     return Tooltip(
       message: '添加自定义分类',
@@ -614,8 +613,7 @@ class _CategoryCreateSheetState extends State<_CategoryCreateSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
-    final colorScheme = Theme.of(context).colorScheme;
-    final accent = transactionAccentColor(colorScheme, widget.isIncome ? 1 : 0);
+    final accent = transactionAccentColor(context, widget.isIncome ? 1 : 0);
     final normalized = _value.trim();
     final duplicated = widget.categories.contains(normalized);
     final canSubmit = normalized.isNotEmpty && !duplicated;
@@ -703,8 +701,8 @@ class _CategoryQuickItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final accent = transactionAccentColor(colorScheme, isIncome ? 1 : 0);
-    final mutedColor = colorScheme.onSurfaceVariant.withValues(alpha: 0.5);
+    final accent = transactionAccentColor(context, isIncome ? 1 : 0);
+    final mutedColor = colorScheme.onSurfaceVariant;
 
     return AnimatedContainer(
       key: ValueKey('category-option-$category'),

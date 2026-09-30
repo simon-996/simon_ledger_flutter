@@ -894,7 +894,7 @@ class _LedgerCard extends StatelessWidget {
                                 child: _StatPill(
                                   label: '支出',
                                   value: formatMoney('CNY', expense),
-                                  color: AppTheme.expenseColor,
+                                  color: AppColors.of(context).expense,
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -902,7 +902,7 @@ class _LedgerCard extends StatelessWidget {
                                 child: _StatPill(
                                   label: '收入',
                                   value: formatMoney('CNY', income),
-                                  color: AppTheme.incomeColor,
+                                  color: AppColors.of(context).income,
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -1187,7 +1187,7 @@ class _DeleteBackground extends StatelessWidget {
           color: error,
           borderRadius: BorderRadius.circular(28),
         ),
-        child: const Icon(Icons.delete_rounded, color: Colors.white),
+        child: Icon(Icons.delete_rounded, color: Theme.of(context).colorScheme.onError),
       ),
     );
   }

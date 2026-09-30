@@ -172,10 +172,6 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
     return map;
   }
 
-  Color _getColorForCategory(int index, BuildContext context) {
-    return AppTheme.chartColors[index % AppTheme.chartColors.length];
-  }
-
   @override
   Widget build(BuildContext context) {
     if (widget.ledgers.isEmpty) {
@@ -298,8 +294,6 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                             setState(() => _displayCurrency = currency);
                             _persistPreference();
                           },
-                          colorForIndex: (index) =>
-                              _getColorForCategory(index, context),
                         ),
                       ),
                     ),
@@ -330,7 +324,7 @@ class _StatisticsTabState extends ConsumerState<StatisticsTab> {
                       return AppAnimatedEntry(
                         delay: Duration(milliseconds: delayMs),
                         child: _CategoryBreakdownTile(
-                          color: _getColorForCategory(index, context),
+                          color: AppColors.of(context).chartColorFor(entry.key),
                           category: entry.key,
                           amount: formatMoney(_displayCurrency, entry.value),
                           percentage: '${percentage.toStringAsFixed(1)}%',
@@ -577,7 +571,6 @@ class _SummaryChartCard extends StatelessWidget {
     required this.displayCurrencies,
     required this.selectedCurrency,
     required this.onCurrencyChanged,
-    required this.colorForIndex,
   });
 
   final String title;
@@ -590,12 +583,12 @@ class _SummaryChartCard extends StatelessWidget {
   final List<String> displayCurrencies;
   final String selectedCurrency;
   final ValueChanged<String> onCurrencyChanged;
-  final Color Function(int index) colorForIndex;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final accent = transactionAccentColor(colorScheme, isExpense ? 0 : 1);
+    final accent = transactionAccentColor(context, isExpense ? 0 : 1);
+    final colors = AppColors.of(context);
 
     return AppSectionCard(
       key: const ValueKey('statistics-summary-card'),
@@ -701,18 +694,19 @@ class _SummaryChartCard extends StatelessWidget {
                     centerSpaceRadius: 52,
                     sections: List.generate(categories.length, (index) {
                       final entry = categories[index];
+                      final color = colors.chartColorFor(entry.key);
                       final percentage = entry.value / totalAmount * 100;
                       return PieChartSectionData(
-                        color: colorForIndex(index),
+                        color: color,
                         value: entry.value,
                         title: percentage >= 6
                             ? '${percentage.toStringAsFixed(0)}%'
                             : '',
                         radius: 58,
-                        titleStyle: const TextStyle(
+                        titleStyle: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
-                          color: Colors.white,
+                          color: AppColors.foregroundFor(color, colorScheme),
                         ),
                       );
                     }),

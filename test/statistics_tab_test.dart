@@ -170,7 +170,7 @@ void main() {
                 .first,
           )
           .color,
-      AppTheme.expenseColor,
+      AppColors.light.expense,
     );
 
     await tester.tap(find.text('收入'));
@@ -188,7 +188,7 @@ void main() {
                 .first,
           )
           .color,
-      AppTheme.incomeColor,
+      AppColors.light.income,
     );
   });
 }

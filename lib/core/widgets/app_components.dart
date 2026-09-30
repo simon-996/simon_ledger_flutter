@@ -200,7 +200,7 @@ class _AppNoticeOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final config = _config(colorScheme);
+    final config = _config(colorScheme, AppColors.of(context));
 
     return Positioned(
       top: 0,
@@ -310,17 +310,17 @@ class _AppNoticeOverlay extends StatelessWidget {
     );
   }
 
-  _AppNoticeVisualConfig _config(ColorScheme colorScheme) {
+  _AppNoticeVisualConfig _config(ColorScheme colorScheme, AppColors colors) {
     return switch (type) {
       AppNoticeType.success => _AppNoticeVisualConfig(
         icon: Icons.check_rounded,
-        color: colorScheme.primary,
-        borderColor: colorScheme.primary.withValues(alpha: 0.28),
+        color: colors.success,
+        borderColor: colors.success.withValues(alpha: 0.28),
       ),
       AppNoticeType.info => _AppNoticeVisualConfig(
         icon: Icons.info_outline_rounded,
-        color: colorScheme.tertiary,
-        borderColor: colorScheme.tertiary.withValues(alpha: 0.28),
+        color: colors.info,
+        borderColor: colors.info.withValues(alpha: 0.28),
       ),
       AppNoticeType.error => _AppNoticeVisualConfig(
         icon: Icons.error_outline_rounded,
@@ -777,7 +777,7 @@ class AppMetricTile extends StatelessWidget {
     return AppSectionCard(
       padding: const EdgeInsets.all(14),
       color: colorScheme.surfaceContainerLowest.withValues(alpha: 0.82),
-      borderColor: Colors.white.withValues(alpha: 0.34),
+      borderColor: colorScheme.outlineVariant.withValues(alpha: 0.68),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -837,8 +837,8 @@ class AppPersonBalanceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final amountColor = isPositive
-        ? AppTheme.incomeColor
-        : AppTheme.expenseColor;
+        ? AppColors.of(context).income
+        : AppColors.of(context).expense;
 
     return _AnimatedTapSurface(
       color: isSelected
@@ -1089,12 +1089,12 @@ class _LedgerPersonChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
           color: isShared
-              ? AppTheme.successColor.withValues(alpha: 0.08)
+              ? AppColors.of(context).success.withValues(alpha: 0.08)
               : colorScheme.surfaceContainerHigh.withValues(alpha: 0.68),
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
             color: isShared
-                ? AppTheme.successColor.withValues(alpha: 0.72)
+                ? AppColors.of(context).success.withValues(alpha: 0.72)
                 : colorScheme.outlineVariant.withValues(alpha: 0.72),
           ),
         ),
@@ -1287,7 +1287,7 @@ class _PersonChoiceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final mutedColor = colorScheme.onSurfaceVariant.withValues(alpha: 0.52);
+    final mutedColor = colorScheme.onSurfaceVariant;
 
     return _AnimatedTapSurface(
       key: ValueKey('person-choice-tile-${item.id}'),
@@ -1399,8 +1399,8 @@ class AppTransactionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final amountColor = isExpense
-        ? AppTheme.expenseColor
-        : AppTheme.incomeColor;
+        ? AppColors.of(context).expense
+        : AppColors.of(context).income;
     final hasNote = note != null && note!.isNotEmpty;
 
     return Padding(

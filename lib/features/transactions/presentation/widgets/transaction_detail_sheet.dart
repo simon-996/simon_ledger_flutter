@@ -29,8 +29,8 @@ class TransactionDetailSheet extends ConsumerWidget {
         '${transaction.createdAt.year}-${transaction.createdAt.month.toString().padLeft(2, '0')}-${transaction.createdAt.day.toString().padLeft(2, '0')} ${transaction.createdAt.hour.toString().padLeft(2, '0')}:${transaction.createdAt.minute.toString().padLeft(2, '0')}';
     final colorScheme = Theme.of(context).colorScheme;
     final accent = transaction.type == 0
-        ? AppTheme.expenseColor
-        : AppTheme.incomeColor;
+        ? AppColors.of(context).expense
+        : AppColors.of(context).income;
     final maxHeight = MediaQuery.sizeOf(context).height * 0.82;
     final convertedAmount = formatTransactionConvertedAmount(
       transaction,
