@@ -240,6 +240,63 @@ void main() {
       );
     },
   );
+  testWidgets('bookkeeping and edit remain usable at large text size', (
+    tester,
+  ) async {
+    final data = await _fixture();
+    final boundary = GlobalKey();
+    await _mount(
+      tester,
+      data.database,
+      boundary,
+      const HomePage(),
+      width: 390,
+      textScale: 1.5,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.enterText(
+      find.byKey(const ValueKey('bookkeeping-amount-input')),
+      '-5',
+    );
+    await tester.tap(find.text('保存记账'));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .renderObject<RenderParagraph>(find.text('请输入大于 0 的有效金额'))
+          .didExceedMaxLines,
+      isFalse,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.runAsync(
+      () => _capture(boundary, 'bookkeeping-large-text-390'),
+    );
+    await tester.pumpWidget(const SizedBox());
+    await _mount(
+      tester,
+      data.database,
+      boundary,
+      Scaffold(
+        body: EditTransactionSheet(
+          transaction: data.record,
+          ledger: data.ledger,
+        ),
+      ),
+      width: 390,
+      textScale: 1.5,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.enterText(find.byType(TextField).first, '-5');
+    await tester.tap(find.text('保存修改'));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .renderObject<RenderParagraph>(find.text('请输入大于 0 的有效金额'))
+          .didExceedMaxLines,
+      isFalse,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.runAsync(() => _capture(boundary, 'edit-large-text-390'));
+  });
 }
 
 Future<
@@ -292,6 +349,7 @@ Future<void> _mount(
   GlobalKey boundary,
   Widget screen, {
   required double width,
+  double textScale = 1,
 }) async {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = Size(width, 844);
@@ -309,6 +367,12 @@ Future<void> _mount(
         child: MaterialApp(
           debugShowCheckedModeBanner: false,
           theme: _realFontTheme(AppTheme.lightTheme),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: TextScaler.linear(textScale)),
+            child: child!,
+          ),
           home: screen,
         ),
       ),

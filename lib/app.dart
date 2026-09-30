@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'core/di/providers.dart';
 import 'core/network/friendly_error.dart';
@@ -201,6 +202,9 @@ class _SimonLedgerAppState extends ConsumerState<SimonLedgerApp>
     return MaterialApp(
       navigatorKey: _navigatorKey,
       title: 'Simon Ledger',
+      locale: const Locale('zh', 'CN'),
+      supportedLocales: const [Locale('zh', 'CN')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       theme: AppTheme.lightTheme,
       routes: {
         '/': (context) => const HomePage(),
