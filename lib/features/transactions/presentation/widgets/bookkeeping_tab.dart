@@ -469,16 +469,22 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (context) => FractionallySizedBox(
-        heightFactor: 0.9,
-        child: AiBookkeepingFlow(
-          ledger: ledger,
-          people: people,
-          queue: ref.read(aiDraftQueueProvider),
-          repository: ref.read(aiBookkeepingRepositoryProvider),
-          canParse: canParse,
-          canTranscribe: canTranscribe,
-          onSave: (item, draft) => _saveAiDraft(ledger, item, draft),
+      isDismissible: false,
+      enableDrag: false,
+      builder: (context) => AnimatedPadding(
+        duration: AppMotion.fast,
+        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+        child: FractionallySizedBox(
+          heightFactor: 0.9,
+          child: AiBookkeepingFlow(
+            ledger: ledger,
+            people: people,
+            queue: ref.read(aiDraftQueueProvider),
+            repository: ref.read(aiBookkeepingRepositoryProvider),
+            canParse: canParse,
+            canTranscribe: canTranscribe,
+            onSave: (item, draft) => _saveAiDraft(ledger, item, draft),
+          ),
         ),
       ),
     );

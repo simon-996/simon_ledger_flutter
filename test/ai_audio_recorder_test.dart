@@ -28,7 +28,9 @@ class FakeRecorderDevice implements AiRecorderDevice {
   }
 
   @override
-  Future<void> dispose() async { await chunks.close(); }
+  Future<void> dispose() async {
+    await chunks.close();
+  }
 }
 
 void main() {
@@ -56,6 +58,19 @@ void main() {
     final recorder = AiAudioRecorder(device: device);
     await recorder.start();
     await expectLater(recorder.stop(), throwsStateError);
+    expect(recorder.isRecording, isFalse);
+    await recorder.dispose();
+  });
+
+  test('reports automatic stop failure to the caller', () async {
+    final device = FakeRecorderDevice(failStop: true);
+    final recorder = AiAudioRecorder(
+      device: device,
+      maxDuration: const Duration(milliseconds: 10),
+    );
+    final failure = Completer<void>();
+    await recorder.start(onAutoStopError: () => failure.complete());
+    await failure.future.timeout(const Duration(seconds: 1));
     expect(recorder.isRecording, isFalse);
     await recorder.dispose();
   });

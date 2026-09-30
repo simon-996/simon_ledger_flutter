@@ -7,29 +7,55 @@ import '../database/local_data_scope.dart';
 import '../models/ai_draft.dart';
 import '../models/transaction_record.dart';
 
-typedef LoadLedgerTransactions = Future<List<TransactionRecord>> Function(String ledgerUuid);
+typedef LoadLedgerTransactions =
+    Future<List<TransactionRecord>> Function(String ledgerUuid);
 
 class AiDraftItem {
   const AiDraftItem({
     required this.uuid,
     required this.operationId,
     required this.draft,
+    required this.position,
+    required this.total,
+    this.amountInput,
   });
 
   final String uuid;
   final String operationId;
   final AiDraft draft;
+  final int position;
+  final int total;
+  final String? amountInput;
 
-  factory AiDraftItem.fromJson(Map<String, dynamic> json) => AiDraftItem(
+  factory AiDraftItem.fromJson(
+    Map<String, dynamic> json, {
+    required int fallbackPosition,
+    required int fallbackTotal,
+  }) => AiDraftItem(
     uuid: json['uuid'] as String,
     operationId: json['operationId'] as String,
     draft: AiDraft.fromJson(json['draft'] as Map<String, dynamic>),
+    position: json['position'] as int? ?? fallbackPosition,
+    total: json['total'] as int? ?? fallbackTotal,
+    amountInput: json['amountInput'] as String?,
+  );
+
+  AiDraftItem withDraft(AiDraft value, {String? amountInput}) => AiDraftItem(
+    uuid: uuid,
+    operationId: operationId,
+    draft: value,
+    position: position,
+    total: total,
+    amountInput: amountInput ?? this.amountInput,
   );
 
   Map<String, dynamic> toJson() => {
     'uuid': uuid,
     'operationId': operationId,
     'draft': draft.toJson(),
+    'position': position,
+    'total': total,
+    'amountInput': amountInput,
   };
 }
 
@@ -59,9 +85,11 @@ class AiDraftQueue {
 
   Future<bool> isSaved(String ledgerUuid, AiDraftItem item) async {
     final transactions = await loadTransactions(ledgerUuid);
-    return transactions.any((transaction) =>
-      transaction.uuid == item.uuid ||
-      transaction.clientOperationId == item.operationId);
+    return transactions.any(
+      (transaction) =>
+          transaction.uuid == item.uuid ||
+          transaction.clientOperationId == item.operationId,
+    );
   }
 
   Future<List<AiDraftItem>> load(String ledgerUuid) async {
@@ -73,17 +101,28 @@ class AiDraftQueue {
     try {
       final json = jsonDecode(raw) as Map<String, dynamic>;
       if (json['version'] != 1) return [];
-      items = (json['items'] as List<dynamic>)
-          .map((value) => AiDraftItem.fromJson(value as Map<String, dynamic>))
-          .toList();
+      final rawItems = json['items'] as List<dynamic>;
+      items = [
+        for (var index = 0; index < rawItems.length; index++)
+          AiDraftItem.fromJson(
+            rawItems[index] as Map<String, dynamic>,
+            fallbackPosition: index + 1,
+            fallbackTotal: rawItems.length,
+          ),
+      ];
     } catch (_) {
       return [];
     }
     final saved = await loadTransactions(ledgerUuid);
-    final pending = items.where((item) => !saved.any((transaction) =>
-      transaction.uuid == item.uuid ||
-      transaction.clientOperationId == item.operationId,
-    )).toList();
+    final pending = items
+        .where(
+          (item) => !saved.any(
+            (transaction) =>
+                transaction.uuid == item.uuid ||
+                transaction.clientOperationId == item.operationId,
+          ),
+        )
+        .toList();
     if (pending.length != items.length) {
       await _write(ledgerUuid, pending);
     }
@@ -93,12 +132,33 @@ class AiDraftQueue {
   Future<List<AiDraftItem>> add(String ledgerUuid, List<AiDraft> drafts) async {
     if (scope.isGuest) throw StateError('AI drafts require an account scope');
     final items = await load(ledgerUuid);
-    for (final draft in drafts) {
+    for (var index = 0; index < drafts.length; index++) {
       final id = _newId();
-      items.add(AiDraftItem(uuid: id, operationId: id, draft: draft));
+      items.add(
+        AiDraftItem(
+          uuid: id,
+          operationId: id,
+          draft: drafts[index],
+          position: index + 1,
+          total: drafts.length,
+        ),
+      );
     }
     await _write(ledgerUuid, items);
     return items;
+  }
+
+  Future<void> update(
+    String ledgerUuid,
+    String uuid,
+    AiDraft draft, {
+    String? amountInput,
+  }) async {
+    final items = await load(ledgerUuid);
+    final index = items.indexWhere((item) => item.uuid == uuid);
+    if (index < 0) throw StateError('AI draft no longer exists');
+    items[index] = items[index].withDraft(draft, amountInput: amountInput);
+    await _write(ledgerUuid, items);
   }
 
   Future<void> remove(String ledgerUuid, String uuid) async {
@@ -109,10 +169,13 @@ class AiDraftQueue {
 
   Future<void> _write(String ledgerUuid, List<AiDraftItem> items) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_key(ledgerUuid), jsonEncode({
-      'version': 1,
-      'items': items.map((item) => item.toJson()).toList(),
-    }));
+    await prefs.setString(
+      _key(ledgerUuid),
+      jsonEncode({
+        'version': 1,
+        'items': items.map((item) => item.toJson()).toList(),
+      }),
+    );
   }
 
   String _newId() {
