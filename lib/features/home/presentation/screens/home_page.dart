@@ -487,9 +487,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         return person.linkedUserUuid == user.uuid;
       }
 
-      return person.uuid == 'self' ||
-          person.uuid == 'p1' ||
-          person.name.trim() == nickname;
+      return person.representsLocalSelf;
     }).firstOrNull;
 
     if (existing != null) {
@@ -505,6 +503,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
 
     final person = Person()
+      ..isLocalSelf = true
       ..uuid = isCloudMode
           ? 'self-${DateTime.now().microsecondsSinceEpoch}'
           : 'self'

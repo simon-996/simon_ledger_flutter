@@ -4,6 +4,7 @@ import '../database/database_service.dart';
 import '../models/conflict_record.dart';
 import '../models/ledger.dart';
 import '../models/person.dart';
+import '../preferences/local_profile_store.dart';
 import '../network/api_client.dart';
 import '../network/api_exception.dart';
 import '../services/conflict_coordinator.dart';
@@ -322,6 +323,7 @@ class RemotePersonRepository implements PersonRepository {
           ..syncError = null
           ..pendingLedgerUuid = null;
         await _savePersonLocally(person);
+        await _updateMappedPersonCache(person);
         return;
       }
 
@@ -433,6 +435,7 @@ class RemotePersonRepository implements PersonRepository {
     if (await _isLocalOnlyLedger(ledgerUuid)) {
       return;
     }
+    await _repairUnlinkedLocalSelf(ledgerUuid);
     final people = await _db.getAllPeople(includeDeleted: true);
     final pending = people.where((person) {
       return person.pendingSync && person.pendingLedgerUuid == ledgerUuid;
@@ -444,6 +447,95 @@ class RemotePersonRepository implements PersonRepository {
       }
       await _saveRemotePerson(person, ledgerUuid);
     }
+  }
+
+  Future<void> _repairUnlinkedLocalSelf(String ledgerUuid) async {
+    final accountUuid = _db.scope.accountUuid;
+    if (accountUuid == null) return;
+    final ledger = (await _db.getAllLedgers(
+      includeDeleted: true,
+    )).where((item) => item.uuid == ledgerUuid).firstOrNull;
+    if (ledger == null ||
+        ledger.isDeleted ||
+        !ledger.isCloudManaged ||
+        !ledger.canManageSettings) {
+      return;
+    }
+    final referencedUuids = await _cachedPersonUuidsForLedger(
+      ledger,
+      includeDeleted: true,
+    );
+    final candidates = (await _db.getAllPeople())
+        .where(
+          (person) =>
+              person.localAccountUuid == accountUuid &&
+              person.representsLocalSelf &&
+              (person.linkedUserUuid?.trim().isEmpty ?? true) &&
+              !person.pendingSync &&
+              person.hasSyncedRemoteCopy &&
+              (referencedUuids.contains(person.uuid) ||
+                  referencedUuids.contains(person.remoteSyncUuid)),
+        )
+        .toList();
+    if (candidates.isEmpty) return;
+
+    // Verify the mapped UUID in this ledger before changing a legacy record.
+    final remotePeople = await _apiClient.get<List<Person>>(
+      '/api/ledgers/${ledger.remoteSyncUuid}/people',
+      fromJson: (json) =>
+          (json! as List<dynamic>).map(_personFromJson).toList(),
+    );
+    final profile = await LocalProfileStore(scope: _db.scope).read();
+    for (final person in candidates) {
+      final remote = remotePeople
+          .where(
+            (item) => item.uuid == person.remoteSyncUuid && !item.isDeleted,
+          )
+          .firstOrNull;
+      if (remote == null ||
+          (remote.linkedUserUuid != null &&
+              remote.linkedUserUuid != accountUuid)) {
+        continue;
+      }
+      person
+        ..version = remote.version
+        ..linkedUserUuid = accountUuid
+        ..name = remote.linkedUserUuid == accountUuid
+            ? remote.name
+            : profile.normalizedNickname
+        ..avatar = remote.linkedUserUuid == accountUuid
+            ? remote.avatar
+            : profile.personAvatar
+        ..pendingSync = remote.linkedUserUuid != accountUuid
+        ..pendingLedgerUuid = remote.linkedUserUuid == accountUuid
+            ? null
+            : ledgerUuid
+        ..syncError = null;
+      await _savePersonLocally(person);
+      if (!person.pendingSync) await _updateMappedPersonCache(person);
+    }
+  }
+
+  Future<void> _updateMappedPersonCache(Person person) async {
+    if (!person.hasSyncedRemoteCopy) return;
+    final alias = (await _db.getAllPeople(includeDeleted: true))
+        .where(
+          (item) =>
+              item.uuid == person.remoteSyncUuid &&
+              item.uuid != person.uuid &&
+              item.localAccountUuid == person.localAccountUuid &&
+              !item.pendingSync,
+        )
+        .firstOrNull;
+    if (alias == null) return;
+    await _savePersonLocally(
+      Person.copy(alias)
+        ..name = person.name
+        ..avatar = person.avatar
+        ..linkedUserUuid = person.linkedUserUuid
+        ..version = person.version
+        ..isLocalSelf = person.representsLocalSelf || alias.representsLocalSelf,
+    );
   }
 
   Future<void> _deleteRemotePerson(Person person, String ledgerUuid) async {

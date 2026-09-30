@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -216,6 +217,11 @@ void main() {
     expect(result!.people.single.uuid, 'self');
     expect(result!.people.single.name, 'Simon');
     expect(result!.people.single.avatar, '⭐');
+    await database.savePerson(result!.people.single);
+    final prefs = await SharedPreferences.getInstance();
+    final storedPeople =
+        jsonDecode(prefs.getString('local_store.guest.people.v2')!) as List;
+    expect(storedPeople.single['isLocalSelf'], isTrue);
   });
 
   testWidgets('creating ledger does not wait for remote account profile', (

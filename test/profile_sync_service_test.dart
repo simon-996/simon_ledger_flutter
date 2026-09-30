@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simon_ledger_flutter/core/database/database_service.dart';
+import 'package:simon_ledger_flutter/core/database/local_data_scope.dart';
 import 'package:simon_ledger_flutter/core/models/ledger.dart';
 import 'package:simon_ledger_flutter/core/models/local_profile.dart';
 import 'package:simon_ledger_flutter/core/models/person.dart';
@@ -19,19 +20,28 @@ void main() {
     'saving profile updates cached ledger member display immediately',
     () async {
       SharedPreferences.setMockInitialValues({});
-      const store = LocalProfileStore();
+      const scope = LocalDataScope.account('user-1');
+      const store = LocalProfileStore(scope: scope);
       await store.save(const LocalProfile(nickname: '旧昵称', avatarIcon: 'face'));
 
-      final database = DatabaseService();
+      final database = DatabaseService(scope: scope);
+      final tokenStore = TokenStore();
+      await tokenStore.save(
+        const AuthToken(name: 'Authorization', value: 'token'),
+      );
+      await tokenStore.saveAccountUuid('user-1');
       await database.savePerson(
         Person()
           ..uuid = 'self'
+          ..localAccountUuid = 'user-1'
+          ..linkedUserUuid = 'user-1'
           ..name = '旧昵称'
           ..avatar = '🙂',
       );
       await database.saveLedger(
         Ledger()
           ..uuid = 'ledger-1'
+          ..localAccountUuid = 'user-1'
           ..name = '共享账本'
           ..baseCurrencyCode = 'CNY'
           ..memberCount = 2
@@ -54,7 +64,7 @@ void main() {
       );
       final service = ProfileSyncService(
         localProfileStore: store,
-        tokenStore: TokenStore(),
+        tokenStore: tokenStore,
         authRepository: _FakeAuthRepository(),
         database: database,
       );
@@ -63,7 +73,7 @@ void main() {
         const LocalProfile(nickname: '新昵称', avatarIcon: 'star'),
       );
 
-      expect(result.status, ProfileSyncStatus.localOnly);
+      expect(result.status, ProfileSyncStatus.synced);
       final ledger = (await database.getAllLedgers()).single;
       expect(ledger.members.first.displayName, '新昵称');
       expect(ledger.members.first.displayAvatar, '⭐');

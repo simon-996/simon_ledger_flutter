@@ -32,8 +32,6 @@ class ProfileProjectionService {
   }) async {
     final people = await _database.getAllPeople(includeDeleted: true);
     var matched = false;
-    final previousName = previous.normalizedNickname;
-    final previousAvatar = previous.personAvatar;
 
     for (final person in people) {
       if (person.isDeleted) continue;
@@ -45,19 +43,13 @@ class ProfileProjectionService {
       final isAccountSelf =
           linkedUserUuid != null &&
           linkedUserUuid.isNotEmpty &&
-          (person.localAccountUuid == linkedUserUuid ||
-              person.linkedUserUuid == linkedUserUuid);
+          person.linkedUserUuid == linkedUserUuid;
       final isGuestSelf =
           _database.scope.isGuest &&
           person.localAccountUuid == null &&
-          (person.uuid == 'self' || person.uuid == 'p1');
-      final isLegacyGuestSelf =
-          _database.scope.isGuest &&
           linkedUserUuid == null &&
-          person.localAccountUuid == null &&
-          person.name.trim() == previousName &&
-          person.avatar.trim() == previousAvatar;
-      final isSelf = isAccountSelf || isGuestSelf || isLegacyGuestSelf;
+          person.representsLocalSelf;
+      final isSelf = isAccountSelf || isGuestSelf;
       if (!isSelf) continue;
 
       matched = true;
@@ -75,6 +67,7 @@ class ProfileProjectionService {
       await _database.savePerson(
         Person()
           ..uuid = linkedUserUuid == null ? 'self' : 'self:$linkedUserUuid'
+          ..isLocalSelf = true
           ..name = current.normalizedNickname
           ..avatar = current.personAvatar
           ..linkedUserUuid = linkedUserUuid
@@ -91,8 +84,6 @@ class ProfileProjectionService {
     String? linkedUserUuid,
   }) async {
     final ledgers = await _database.getAllLedgers(includeDeleted: true);
-    final previousName = previous.normalizedNickname;
-    final previousAvatar = previous.personAvatar;
 
     for (final ledger in ledgers) {
       if (_database.scope.isAccount &&
@@ -107,17 +98,12 @@ class ProfileProjectionService {
             linkedUserUuid != null &&
             linkedUserUuid.isNotEmpty &&
             member.userUuid == linkedUserUuid;
-        final matchesPreviousProfile =
-            _database.scope.isGuest &&
-            linkedUserUuid == null &&
-            member.nickname?.trim() == previousName &&
-            member.avatar?.trim() == previousAvatar;
-        if (!matchesLinkedUser && !matchesPreviousProfile) return member;
+        if (!matchesLinkedUser) return member;
 
         changed = true;
         return LedgerMemberSummary(
           uuid: member.uuid,
-          userUuid: linkedUserUuid ?? member.userUuid,
+          userUuid: linkedUserUuid,
           nickname: current.normalizedNickname,
           avatar: current.personAvatar,
           role: member.role,

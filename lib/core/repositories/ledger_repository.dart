@@ -291,6 +291,7 @@ class RemoteLedgerRepository implements LedgerRepository {
             ..version = person.version
             ..name = person.name
             ..avatar = person.avatar
+            ..isLocalSelf = person.representsLocalSelf
             ..linkedUserUuid = person.linkedUserUuid
             ..pendingLedgerUuid = ledger.uuid
             ..localAccountUuid = null,

@@ -115,7 +115,9 @@ class _PersonEditDialogState extends State<PersonEditDialog> {
                         final name = _nameController.text.trim();
                         if (name.isNotEmpty) {
                           Navigator.of(context).pop(
-                            Person()
+                            (widget.person == null
+                                  ? Person()
+                                  : Person.copy(widget.person!))
                               ..uuid =
                                   widget.person?.uuid ??
                                   DateTime.now().microsecondsSinceEpoch

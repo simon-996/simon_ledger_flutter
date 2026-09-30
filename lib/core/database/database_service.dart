@@ -31,6 +31,7 @@ class DatabaseService {
         Person()
           ..id = 1
           ..uuid = 'self'
+          ..isLocalSelf = true
           ..name = profile.normalizedNickname
           ..avatar = profile.personAvatar,
       ]);
@@ -157,7 +158,7 @@ class DatabaseService {
   ) async {
     var changed = false;
     for (final person in people) {
-      if (person.uuid != 'self' && person.uuid != 'p1') continue;
+      if (!person.representsLocalSelf) continue;
       final name = profile.normalizedNickname;
       final avatar = profile.personAvatar;
       if (person.name == name && person.avatar == avatar) continue;
@@ -292,16 +293,58 @@ class DatabaseService {
             transaction.payerPersonUuid != null)
           transaction.payerPersonUuid!,
     };
-    final people = guestPeople
-        .where((person) => personUuids.contains(person.uuid))
-        .map((person) => person..localAccountUuid = accountUuid)
-        .toList();
+    final accountPeople = await _readPeopleForScope(accountScope);
+    final referencedByOtherGuestLedger = <String>{
+      for (final item in guestLedgers)
+        if (item.uuid != uuid) ...item.personUuids,
+      for (final item in guestTransactions)
+        if (item.ledgerUuid != uuid) ...item.personUuids,
+      for (final item in guestTransactions)
+        if (item.ledgerUuid != uuid && item.payerPersonUuid != null)
+          item.payerPersonUuid!,
+    };
+    final profile = await LocalProfileStore(scope: accountScope).read();
+    final claimedUuidByGuestUuid = <String, String>{};
+    final people = <Person>[];
+    for (final source in guestPeople) {
+      if (!personUuids.contains(source.uuid)) continue;
+      final needsCopyUuid =
+          referencedByOtherGuestLedger.contains(source.uuid) ||
+          accountPeople.any((person) => person.uuid == source.uuid);
+      final person = Person.copy(source)
+        ..uuid = needsCopyUuid ? 'claimed:$uuid:${source.uuid}' : source.uuid
+        ..localAccountUuid = accountUuid
+        ..pendingLedgerUuid = uuid;
+      if (!ledger.hasSyncedRemoteCopy) {
+        person
+          ..syncedRemoteUuid = null
+          ..version = 1;
+      }
+      if (person.representsLocalSelf) {
+        person
+          ..linkedUserUuid = accountUuid
+          ..name = profile.normalizedNickname
+          ..avatar = profile.personAvatar;
+      }
+      claimedUuidByGuestUuid[source.uuid] = person.uuid;
+      people.add(person);
+    }
+    String claimedUuid(String original) =>
+        claimedUuidByGuestUuid[original] ?? original;
     final transactions = guestTransactions
         .where((transaction) => transaction.ledgerUuid == uuid)
-        .map((transaction) => transaction..localAccountUuid = accountUuid)
+        .map(
+          (transaction) => transaction
+            ..localAccountUuid = accountUuid
+            ..personUuids = transaction.personUuids.map(claimedUuid).toList()
+            ..payerPersonUuid = transaction.payerPersonUuid == null
+                ? null
+                : claimedUuid(transaction.payerPersonUuid!),
+        )
         .toList();
     final claimedLedger = ledger
       ..localAccountUuid = accountUuid
+      ..personUuids = ledger.personUuids.map(claimedUuid).toList()
       ..claimPending = true;
 
     final accountLedgers = await _readLedgersForScope(accountScope);
@@ -314,7 +357,6 @@ class DatabaseService {
     );
     await _writeLedgersForScope(accountScope, accountLedgers);
 
-    final accountPeople = await _readPeopleForScope(accountScope);
     for (final person in people) {
       _upsertByUuid<Person>(
         accountPeople,
@@ -340,17 +382,15 @@ class DatabaseService {
 
     guestLedgers.removeWhere((item) => item.uuid == uuid);
     guestTransactions.removeWhere((item) => item.ledgerUuid == uuid);
-    final referencedByOtherGuestLedger = <String>{
-      for (final item in guestLedgers) ...item.personUuids,
-      for (final item in guestTransactions) ...item.personUuids,
-      for (final item in guestTransactions)
-        if (item.payerPersonUuid != null) item.payerPersonUuid!,
-    };
     guestPeople.removeWhere(
       (person) =>
           personUuids.contains(person.uuid) &&
           !referencedByOtherGuestLedger.contains(person.uuid),
     );
+    // Older claims mutated retained guest records in place. Restore their scope.
+    for (final person in guestPeople) {
+      if (personUuids.contains(person.uuid)) person.localAccountUuid = null;
+    }
     await _writeLedgersForScope(guestScope, guestLedgers);
     await _writePeopleForScope(guestScope, guestPeople);
     await _writeTransactionsForScope(guestScope, guestTransactions);
@@ -763,6 +803,7 @@ class DatabaseService {
       ..uuid = json['uuid']?.toString() ?? ''
       ..name = json['name']?.toString() ?? ''
       ..avatar = json['avatar']?.toString() ?? '🧑'
+      ..isLocalSelf = json['isLocalSelf'] == true
       ..linkedUserUuid = json['linkedUserUuid']?.toString()
       ..syncedRemoteUuid = json['syncedRemoteUuid']?.toString()
       ..localAccountUuid = json['localAccountUuid']?.toString()
@@ -779,6 +820,7 @@ class DatabaseService {
       'uuid': person.uuid,
       'name': person.name,
       'avatar': person.avatar,
+      'isLocalSelf': person.representsLocalSelf,
       'linkedUserUuid': person.linkedUserUuid,
       'syncedRemoteUuid': person.syncedRemoteUuid,
       'localAccountUuid': person.localAccountUuid,

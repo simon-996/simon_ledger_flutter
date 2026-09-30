@@ -562,6 +562,7 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
     return [
       Person()
         ..uuid = 'self-${DateTime.now().microsecondsSinceEpoch}'
+        ..isLocalSelf = true
         ..name = _effectiveSelfName(profile, currentUser)
         ..avatar = _effectiveSelfAvatar(profile, currentUser)
         ..linkedUserUuid = currentUser?.uuid ?? accountUuid,
@@ -612,6 +613,7 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
   Person _buildDraftSelfPerson(LocalProfile? profile, AuthUser? user) {
     return Person()
       ..uuid = _draftSelfPersonUuid
+      ..isLocalSelf = true
       ..name = _effectiveSelfName(profile, user)
       ..avatar = _effectiveSelfAvatar(profile, user)
       ..linkedUserUuid = user?.uuid;
@@ -635,6 +637,7 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
       return [
         Person()
           ..uuid = selectedSelfUuid!
+          ..isLocalSelf = true
           ..name = profile.normalizedNickname
           ..avatar = profile.personAvatar,
       ];
@@ -664,21 +667,13 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
   }
 
   Person _copyWithLocalProfile(Person person, LocalProfile profile) {
-    return Person()
-      ..id = person.id
-      ..uuid = person.uuid
+    return Person.copy(person)
       ..name = profile.normalizedNickname
-      ..avatar = profile.personAvatar
-      ..linkedUserUuid = person.linkedUserUuid
-      ..syncedRemoteUuid = person.syncedRemoteUuid
-      ..isDeleted = person.isDeleted
-      ..pendingSync = person.pendingSync
-      ..syncError = person.syncError
-      ..pendingLedgerUuid = person.pendingLedgerUuid;
+      ..avatar = profile.personAvatar;
   }
 
   bool _isLocalSelfPerson(Person person) {
-    return _isLocalSelfUuid(person.uuid);
+    return person.representsLocalSelf;
   }
 
   bool _isLocalSelfUuid(String uuid) {
@@ -757,24 +752,14 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
     LocalProfile? localProfile,
     AuthUser? currentUser,
   ) {
-    final nickname = localProfile?.normalizedNickname.trim();
     for (final person in peoplePool) {
-      final isSelfUuid = person.uuid == 'self' || person.uuid == 'p1';
       final isLinkedUser =
           currentUser != null && person.linkedUserUuid == currentUser.uuid;
-      final isProfileName =
-          nickname != null &&
-          nickname.isNotEmpty &&
-          person.name.trim() == nickname;
-      if (isSelfUuid ||
-          isLinkedUser ||
-          isProfileName ||
-          person.name == '自己' ||
-          person.name == '本人') {
+      if (person.representsLocalSelf || isLinkedUser) {
         return person;
       }
     }
-    return peoplePool.firstOrNull;
+    return null;
   }
 }
 
