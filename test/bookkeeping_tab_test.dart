@@ -43,7 +43,9 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('旅行账本'), findsOneWidget);
-    expect(find.textContaining(ledger.displayCode), findsOneWidget);
+    expect(find.textContaining(ledger.displayCode), findsNothing);
+    expect(find.textContaining('本地'), findsWidgets);
+    expect(find.byIcon(Icons.event_outlined), findsOneWidget);
 
     final context = tester.element(find.byType(BookkeepingTab));
     final colorScheme = Theme.of(context).colorScheme;
@@ -102,7 +104,7 @@ void main() {
     expect(_saveButtonScheme(tester).primary, AppColors.light.income);
   });
 
-  testWidgets('bookkeeping amount controls use an Apple input panel', (
+  testWidgets('bookkeeping amount controls keep a light input panel', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
@@ -135,9 +137,12 @@ void main() {
     final border = decoration.border! as Border;
 
     expect(decoration.color, colorScheme.surfaceContainerLowest);
-    expect(borderRadius.topLeft.x, 28);
-    expect(border.top.color, colorScheme.outlineVariant.withValues(alpha: 0.7));
-    expect(decoration.boxShadow, isNotEmpty);
+    expect(borderRadius.topLeft.x, 20);
+    expect(
+      border.top.color,
+      colorScheme.outlineVariant.withValues(alpha: 0.45),
+    );
+    expect(decoration.boxShadow, isNull);
   });
 
   testWidgets(
@@ -190,68 +195,92 @@ void main() {
     },
   );
 
-  testWidgets(
-    'saving transaction keeps keyboard dismissed and success dialog visible',
-    (tester) async {
-      SharedPreferences.setMockInitialValues({});
-      await tester.binding.setSurfaceSize(const Size(390, 844));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+  testWidgets('saving transaction keeps keyboard dismissed and exposes undo', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      final database = DatabaseService();
-      final ledger = await _saveLedgerFixture(database);
+    final database = DatabaseService();
+    final ledger = await _saveLedgerFixture(database);
 
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            databaseProvider.overrideWithValue(database),
-            authTokenProvider.overrideWith((ref) async => null),
-          ],
-          child: MaterialApp(
-            theme: AppTheme.lightTheme,
-            home: MediaQuery(
-              data: const MediaQueryData(
-                size: Size(390, 844),
-                viewInsets: EdgeInsets.only(bottom: 300),
-              ),
-              child: Scaffold(
-                resizeToAvoidBottomInset: false,
-                body: BookkeepingTab(ledgers: [ledger]),
-              ),
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          authTokenProvider.overrideWith((ref) async => null),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.lightTheme,
+          home: MediaQuery(
+            data: const MediaQueryData(
+              size: Size(390, 844),
+              viewInsets: EdgeInsets.only(bottom: 300),
+            ),
+            child: Scaffold(
+              resizeToAvoidBottomInset: false,
+              body: BookkeepingTab(ledgers: [ledger]),
             ),
           ),
         ),
-      );
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      final amountInput = find.byKey(
-        const ValueKey('bookkeeping-amount-input'),
-      );
-      await tester.enterText(amountInput, '12.50');
-      expect(tester.testTextInput.isVisible, isTrue);
+    final amountInput = find.byKey(const ValueKey('bookkeeping-amount-input'));
+    await tester.enterText(amountInput, '12.50');
+    expect(tester.testTextInput.isVisible, isTrue);
 
-      await tester.tap(find.text('保存记账'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 700));
+    await tester.tap(find.text('保存记账'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 700));
 
-      expect(find.text('支出已记下'), findsOneWidget);
-      expect(tester.testTextInput.isVisible, isFalse);
-      expect(tester.widget<TextField>(amountInput).autofocus, isFalse);
+    expect(find.text('支出已记下'), findsOneWidget);
+    expect(tester.testTextInput.isVisible, isFalse);
+    expect(tester.widget<TextField>(amountInput).autofocus, isFalse);
 
-      final mediaQuery = MediaQuery.of(
-        tester.element(find.byType(BookkeepingTab)),
-      );
-      final keyboardTop = mediaQuery.size.height - mediaQuery.viewInsets.bottom;
-      final successCardBottom = tester
-          .getBottomLeft(
-            find.ancestor(of: find.text('支出已记下'), matching: find.byType(Card)),
-          )
-          .dy;
-      expect(successCardBottom, lessThanOrEqualTo(keyboardTop - 16));
+    expect(find.text('撤销'), findsOneWidget);
+    await tester.tap(find.text('收入'));
+    await tester.pumpAndSettle();
+    expect(_saveButtonScheme(tester).primary, AppColors.light.income);
+    await tester.tap(find.text('撤销'));
+    await tester.pumpAndSettle();
+    expect(await database.getTransactionsForLedger(ledger.uuid), isEmpty);
 
-      await tester.pump(const Duration(milliseconds: 1500));
-      await tester.pumpAndSettle();
-    },
-  );
+    await tester.pump(const Duration(milliseconds: 1500));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('invalid amount stays beside amount and keeps input', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final database = DatabaseService();
+    final ledger = await _saveLedgerFixture(database);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          authTokenProvider.overrideWith((ref) async => null),
+        ],
+        child: MaterialApp(
+          home: Scaffold(body: BookkeepingTab(ledgers: [ledger])),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final input = find.byKey(const ValueKey('bookkeeping-amount-input'));
+    await tester.enterText(input, 'NaN');
+    await tester.tap(find.text('保存记账'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<TextField>(input).decoration?.errorText,
+      '请输入大于 0 的有效金额',
+    );
+    expect(tester.widget<TextField>(input).controller?.text, 'NaN');
+    expect(await database.getTransactionsForLedger(ledger.uuid), isEmpty);
+  });
 
   testWidgets(
     'locally saved transaction still shows success after post-save failure',

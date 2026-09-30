@@ -6,6 +6,11 @@ import 'app_colors.dart';
 export 'app_colors.dart';
 
 class AppTheme {
+  static const double navigationBreakpoint = 720;
+  static const double contentMaxWidth = 1240;
+  static const FontWeight headingWeight = FontWeight.w600;
+  static const FontWeight emphasisWeight = FontWeight.w700;
+
   static const double radiusSmall = 12;
   static const double radiusMedium = 18;
   static const double radiusLarge = 24;
@@ -70,64 +75,75 @@ class AppTheme {
         .apply(bodyColor: AppPalette.content, displayColor: AppPalette.content)
         .copyWith(
           displayMedium: base.textTheme.displayMedium?.copyWith(
+            fontFeatures: const [FontFeature.tabularFigures()],
             fontSize: 48,
-            fontWeight: FontWeight.w800,
+            fontWeight: headingWeight,
             letterSpacing: 0,
             height: 1.04,
           ),
           headlineMedium: base.textTheme.headlineMedium?.copyWith(
+            fontFeatures: const [FontFeature.tabularFigures()],
             fontSize: 30,
-            fontWeight: FontWeight.w800,
+            fontWeight: headingWeight,
             letterSpacing: 0,
             height: 1.12,
           ),
           headlineSmall: base.textTheme.headlineSmall?.copyWith(
+            fontFeatures: const [FontFeature.tabularFigures()],
             fontSize: 24,
-            fontWeight: FontWeight.w800,
+            fontWeight: headingWeight,
             letterSpacing: 0,
             height: 1.12,
           ),
           titleLarge: base.textTheme.titleLarge?.copyWith(
+            fontFeatures: const [FontFeature.tabularFigures()],
             fontSize: 21,
-            fontWeight: FontWeight.w800,
+            fontWeight: headingWeight,
             letterSpacing: 0,
             height: 1.18,
           ),
           titleMedium: base.textTheme.titleMedium?.copyWith(
+            fontFeatures: const [FontFeature.tabularFigures()],
             fontSize: 17,
-            fontWeight: FontWeight.w700,
+            fontWeight: headingWeight,
             letterSpacing: 0,
             height: 1.2,
           ),
           titleSmall: base.textTheme.titleSmall?.copyWith(
+            fontFeatures: const [FontFeature.tabularFigures()],
             fontSize: 15,
-            fontWeight: FontWeight.w700,
+            fontWeight: headingWeight,
             letterSpacing: 0,
             height: 1.2,
           ),
           bodyMedium: base.textTheme.bodyMedium?.copyWith(
+            fontFeatures: const [FontFeature.tabularFigures()],
             fontSize: 15,
             height: 1.42,
             letterSpacing: 0,
           ),
           bodySmall: base.textTheme.bodySmall?.copyWith(
+            fontFeatures: const [FontFeature.tabularFigures()],
             fontSize: 13,
             height: 1.35,
             letterSpacing: 0,
           ),
           labelLarge: base.textTheme.labelLarge?.copyWith(
+            fontFeatures: const [FontFeature.tabularFigures()],
             fontSize: 15,
-            fontWeight: FontWeight.w700,
+            fontWeight: headingWeight,
             letterSpacing: 0,
           ),
           labelMedium: base.textTheme.labelMedium?.copyWith(
+            fontFeatures: const [FontFeature.tabularFigures()],
             fontSize: 13,
-            fontWeight: FontWeight.w700,
+            fontWeight: headingWeight,
             letterSpacing: 0,
           ),
           labelSmall: base.textTheme.labelSmall?.copyWith(
+            fontFeatures: const [FontFeature.tabularFigures()],
             fontSize: 12,
-            fontWeight: FontWeight.w700,
+            fontWeight: headingWeight,
             letterSpacing: 0,
           ),
         );
@@ -195,7 +211,7 @@ class AppTheme {
           final selected = states.contains(WidgetState.selected);
           return TextStyle(
             color: selected ? AppPalette.primary : AppPalette.secondary,
-            fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+            fontWeight: selected ? emphasisWeight : FontWeight.w500,
             fontSize: 12,
             letterSpacing: 0,
           );
@@ -242,7 +258,7 @@ class AppTheme {
             return colorScheme.onSurfaceVariant;
           }),
           textStyle: WidgetStateProperty.all(
-            const TextStyle(fontWeight: FontWeight.w800, letterSpacing: 0),
+            const TextStyle(fontWeight: emphasisWeight, letterSpacing: 0),
           ),
           shape: WidgetStateProperty.all(
             RoundedRectangleBorder(
@@ -267,7 +283,7 @@ class AppTheme {
           ),
           textStyle: const TextStyle(
             fontSize: 16,
-            fontWeight: FontWeight.w800,
+            fontWeight: emphasisWeight,
             letterSpacing: 0,
           ),
         ).copyWith(overlayColor: _tintedButtonOverlayColor(AppPalette.primary)),
@@ -276,7 +292,7 @@ class AppTheme {
         style: TextButton.styleFrom(
           foregroundColor: AppPalette.primary,
           textStyle: const TextStyle(
-            fontWeight: FontWeight.w800,
+            fontWeight: emphasisWeight,
             letterSpacing: 0,
           ),
         ).copyWith(overlayColor: _tintedButtonOverlayColor(AppPalette.primary)),
@@ -305,7 +321,7 @@ class AppTheme {
         ),
         secondaryLabelStyle: const TextStyle(
           color: AppPalette.primary,
-          fontWeight: FontWeight.w800,
+          fontWeight: emphasisWeight,
         ),
         selectedColor: AppPalette.primary.withValues(alpha: 0.13),
         checkmarkColor: AppPalette.primary,
@@ -394,7 +410,7 @@ class AppTheme {
       ),
       textStyle: const TextStyle(
         fontSize: 16,
-        fontWeight: FontWeight.w800,
+        fontWeight: emphasisWeight,
         letterSpacing: 0,
       ),
     ).copyWith(overlayColor: _filledButtonOverlayColor());

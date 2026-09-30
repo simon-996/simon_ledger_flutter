@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -249,6 +251,181 @@ void main() {
         expect(cached.single.uuid, _remoteTransactionUuid);
         expect(cached.single.ledgerUuid, 'local-ledger');
         expect(cached.single.pendingSync, isFalse);
+      },
+    );
+
+    test(
+      'undo resolves a local alias after upload has replaced its uuid',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final api = _UndoApiClient()..release.complete();
+        final db = DatabaseService();
+        final repo = RemoteTransactionRepository(apiClient: api, database: db);
+        final record = _transaction()..pendingSync = true;
+        await db.saveTransaction(record);
+        await repo.syncPendingTransactions('ledger-1');
+        expect(
+          (await db.getTransactionsForLedger('ledger-1')).single.uuid,
+          _remoteTransactionUuid,
+        );
+        await repo.deleteTransaction('ledger-1', record.uuid);
+        expect(await db.getTransactionsForLedger('ledger-1'), isEmpty);
+        await repo.syncPendingTransactions('ledger-1');
+        expect(api.deletePaths, [
+          '/api/ledgers/ledger-1/transactions/$_remoteTransactionUuid',
+        ]);
+      },
+    );
+
+    test(
+      'undo during upload stays deleted and deletes the returned remote row',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final api = _UndoApiClient();
+        final db = DatabaseService();
+        final repo = RemoteTransactionRepository(apiClient: api, database: db);
+        final record = _transaction()..pendingSync = true;
+        await db.saveTransaction(record);
+        final upload = repo.syncPendingTransactions('ledger-1');
+        await api.started.future;
+        final secondSync = repo.syncPendingTransactions('ledger-1');
+        await repo.deleteTransaction('ledger-1', record.uuid);
+        expect(await db.getTransactionsForLedger('ledger-1'), isEmpty);
+        api.release.complete();
+        await Future.wait([upload, secondSync]);
+        expect(await db.getTransactionsForLedger('ledger-1'), isEmpty);
+        expect(api.postPaths, hasLength(1));
+        expect(api.deletePaths, [
+          '/api/ledgers/ledger-1/transactions/$_remoteTransactionUuid',
+        ]);
+      },
+    );
+
+    test('failed undo sync remains hidden during remote refresh', () async {
+      SharedPreferences.setMockInitialValues({});
+      final api = _UndoApiClient()..release.complete();
+      final db = DatabaseService();
+      final repo = RemoteTransactionRepository(apiClient: api, database: db);
+      final record = _transaction()..pendingSync = true;
+      await db.saveTransaction(record);
+      await repo.syncPendingTransactions('ledger-1');
+      api.failDeletion = true;
+      await repo.deleteTransaction('ledger-1', record.uuid);
+      final refreshed = await repo.getTransactionsForLedger('ledger-1');
+      expect(refreshed, isEmpty);
+      expect(await db.getTransactionsForLedger('ledger-1'), isEmpty);
+      final pending = (await db.getTransactionsForLedger(
+        'ledger-1',
+        includeDeleted: true,
+      )).where((record) => record.pendingSync);
+      expect(pending.single.isDeleted, isTrue);
+      api.failDeletion = false;
+      await repo.syncPendingTransactions('ledger-1');
+      expect(
+        (await db.getTransactionsForLedger(
+          'ledger-1',
+          includeDeleted: true,
+        )).where((record) => record.pendingSync),
+        isEmpty,
+      );
+    });
+
+    test(
+      'a second save during upload is drained without another trigger',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final api = _UndoApiClient();
+        final db = DatabaseService();
+        final repo = RemoteTransactionRepository(apiClient: api, database: db);
+        await repo.saveTransaction(_transaction());
+        await api.started.future;
+        await repo.saveTransaction(
+          _transaction()
+            ..uuid = 'local-second'
+            ..clientOperationId = 'second-op',
+        );
+        final sync = repo.syncPendingTransactions('ledger-1');
+        api.release.complete();
+        await sync;
+        expect(api.postPaths, hasLength(2));
+        expect(
+          (await db.getTransactionsForLedger(
+            'ledger-1',
+          )).where((record) => record.pendingSync),
+          isEmpty,
+        );
+      },
+    );
+
+    test('a newer edit during upload is preserved and uploaded next', () async {
+      SharedPreferences.setMockInitialValues({});
+      final api = _UndoApiClient();
+      final db = DatabaseService();
+      final repo = RemoteTransactionRepository(apiClient: api, database: db);
+      await repo.saveTransaction(_transaction());
+      await api.started.future;
+      await repo.saveTransaction(
+        _transaction()
+          ..amount = 99
+          ..note = '修正',
+      );
+      final sync = repo.syncPendingTransactions('ledger-1');
+      api.release.complete();
+      await sync;
+      expect(api.putData?['amount'], 99);
+      expect((await db.getTransactionsForLedger('ledger-1')).single.amount, 99);
+    });
+
+    test(
+      'accepted create with lost response remains cancelled during refresh',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final api = _UndoApiClient()..loseResponse = true;
+        final db = DatabaseService();
+        final repo = RemoteTransactionRepository(apiClient: api, database: db);
+        final record = _transaction()..pendingSync = true;
+        await db.saveTransaction(record);
+        final upload = repo.syncPendingTransactions('ledger-1');
+        await api.started.future;
+        await repo.deleteTransaction('ledger-1', record.uuid);
+        api.release.complete();
+        await upload;
+        expect(await repo.getTransactionsForLedger('ledger-1'), isEmpty);
+        expect(await db.getTransactionsForLedger('ledger-1'), isEmpty);
+        api.loseResponse = false;
+        await repo.syncPendingTransactions('ledger-1');
+        expect(
+          api.deletePaths,
+          contains(
+            '/api/ledgers/ledger-1/transactions/$_remoteTransactionUuid',
+          ),
+        );
+      },
+    );
+
+    test(
+      'in-flight undo deletion failure retries only the remote identity',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final api = _UndoApiClient()..failDeletion = true;
+        final db = DatabaseService();
+        final repo = RemoteTransactionRepository(apiClient: api, database: db);
+        final record = _transaction()..pendingSync = true;
+        await db.saveTransaction(record);
+        final upload = repo.syncPendingTransactions('ledger-1');
+        await api.started.future;
+        await repo.deleteTransaction('ledger-1', record.uuid);
+        api.release.complete();
+        await upload;
+        final pending = (await db.getTransactionsForLedger(
+          'ledger-1',
+          includeDeleted: true,
+        )).where((record) => record.pendingSync);
+        expect(pending.map((record) => record.uuid), [_remoteTransactionUuid]);
+        api.failDeletion = false;
+        await repo.syncPendingTransactions('ledger-1');
+        expect(api.postPaths, hasLength(1));
+        expect(await db.getTransactionsForLedger('ledger-1'), isEmpty);
       },
     );
 
@@ -527,5 +704,73 @@ class _UnusedGateway implements ConflictResolutionGateway {
   @override
   Future<ConflictMutationResult> submit(ConflictRecord record) {
     throw UnimplementedError();
+  }
+}
+
+class _UndoApiClient extends _FakeApiClient {
+  _UndoApiClient() : super([]);
+  bool failDeletion = false;
+  bool loseResponse = false;
+  Map<String, dynamic>? putData;
+  final started = Completer<void>();
+  final release = Completer<void>();
+  @override
+  Future<T> get<T>(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+    T Function(Object? json)? fromJson,
+  }) async => fromJson!({
+    'total': 1,
+    'records': [
+      {
+        ..._transactionJson(_remoteTransactionUuid),
+        'clientOperationId': 'client-op-1',
+      },
+    ],
+  });
+  @override
+  Future<void> deleteVoid(
+    String path, {
+    Object? data,
+    String? idempotencyKey,
+  }) async {
+    if (failDeletion) throw StateError('offline');
+    await super.deleteVoid(path, data: data, idempotencyKey: idempotencyKey);
+  }
+
+  @override
+  Future<T> put<T>(
+    String path, {
+    Object? data,
+    String? idempotencyKey,
+    T Function(Object? json)? fromJson,
+  }) async {
+    putPaths.add(path);
+    putData = data! as Map<String, dynamic>;
+    return fromJson!({
+      ..._transactionJson(path.split('/').last),
+      ...putData!,
+      'version': 2,
+    });
+  }
+
+  @override
+  Future<T> post<T>(
+    String path, {
+    Object? data,
+    String? idempotencyKey,
+    T Function(Object? json)? fromJson,
+  }) async {
+    postPaths.add(path);
+    if (!started.isCompleted) started.complete();
+    await release.future;
+    if (loseResponse) throw StateError('response lost after acceptance');
+    final recordUuid = idempotencyKey == 'second-op'
+        ? 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+        : _remoteTransactionUuid;
+    return fromJson!({
+      ..._transactionJson(recordUuid),
+      'clientOperationId': idempotencyKey,
+    });
   }
 }

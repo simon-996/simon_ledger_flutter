@@ -8,6 +8,7 @@ import '../../../../core/models/transaction_record.dart';
 import '../../../../core/network/friendly_error.dart';
 import '../../../../core/preferences/transaction_category_preference.dart';
 import '../../../../core/widgets/app_components.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
 import '../providers/transaction_provider.dart';
 import 'transaction_form_components.dart';
@@ -37,6 +38,40 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
   String? _payerPersonUuid;
   final Set<String> _selectedPersonIds = {};
   bool _saving = false;
+  bool _validationActive = false;
+  late DateTime _date;
+  final _amountFocus = FocusNode();
+  final _amountAnchor = GlobalKey();
+  final _categoryAnchor = GlobalKey();
+  final _peopleAnchor = GlobalKey();
+  String? get _amountError {
+    final amount = double.tryParse(_amountController.text);
+    return _validationActive &&
+            (amount == null || !amount.isFinite || amount <= 0)
+        ? '请输入大于 0 的有效金额'
+        : null;
+  }
+
+  String? get _peopleError {
+    if (!_validationActive) return null;
+    if (_selectedPersonIds.isEmpty) return '请至少选择一个参与人员';
+    final people = ref
+        .read(
+          personProvider(includeDeleted: true, ledgerUuid: widget.ledger.uuid),
+        )
+        .value;
+    if (people != null) {
+      final ids = people.map((person) => person.uuid).toSet();
+      if (!_selectedPersonIds.every(ids.contains) ||
+          (_payerPersonUuid != null && !ids.contains(_payerPersonUuid))) {
+        return '请重新确认无法识别的人员';
+      }
+    }
+    return null;
+  }
+
+  String? get _categoryError =>
+      _validationActive && _selectedCategory.trim().isEmpty ? '请选择分类' : null;
 
   List<String> _expenseCategories =
       TransactionCategoryPreference.defaultExpenseCategories;
@@ -50,6 +85,7 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
       text: _editableAmount(widget.transaction.amount),
     );
     _noteController = TextEditingController(text: widget.transaction.note);
+    _date = widget.transaction.createdAt;
     _transactionType = widget.transaction.type == 1 ? 1 : 0;
     _selectedCurrency = widget.transaction.currencyCode.trim().toUpperCase();
     _payerPersonUuid = widget.transaction.payerPersonUuid;
@@ -60,6 +96,7 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
 
   @override
   void dispose() {
+    _amountFocus.dispose();
     _amountController.dispose();
     _noteController.dispose();
     super.dispose();
@@ -136,17 +173,22 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
   Future<void> _saveChanges() async {
     if (_saving) return;
 
+    setState(() => _validationActive = true);
     final amount = double.tryParse(_amountController.text);
-    if (amount == null || amount <= 0) {
-      AppNotice.error(context, '请输入大于 0 的有效金额');
+    if (_amountError != null) {
+      revealTransactionField(_amountAnchor, focus: _amountFocus);
+      return;
+    }
+    if (_peopleError != null) {
+      revealTransactionField(_peopleAnchor);
+      return;
+    }
+    if (_categoryError != null) {
+      revealTransactionField(_categoryAnchor);
       return;
     }
 
-    if (_selectedPersonIds.isEmpty) {
-      AppNotice.error(context, '请至少选择一个参与人员');
-      return;
-    }
-
+    final oldDate = widget.transaction.createdAt;
     final oldAmount = widget.transaction.amount;
     final oldCurrencyCode = widget.transaction.currencyCode;
     final oldType = widget.transaction.type;
@@ -155,7 +197,8 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
     final oldNote = widget.transaction.note;
     final oldPersonUuids = List<String>.from(widget.transaction.personUuids);
 
-    widget.transaction.amount = amount;
+    widget.transaction.createdAt = _date;
+    widget.transaction.amount = amount!;
     widget.transaction.currencyCode = _selectedCurrency;
     widget.transaction.type = _transactionType;
     widget.transaction.payerPersonUuid = _transactionType == 0
@@ -172,6 +215,7 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
           .updateTransaction(widget.transaction);
       await _rememberCategory(_transactionType, _selectedCategory);
     } catch (e) {
+      widget.transaction.createdAt = oldDate;
       widget.transaction.amount = oldAmount;
       widget.transaction.currencyCode = oldCurrencyCode;
       widget.transaction.type = oldType;
@@ -266,8 +310,10 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                               TransactionResponsivePair(
                                 breakpoint: 0,
                                 first: SizedBox(
-                                  height: 56,
+                                  height: _amountError == null ? 56 : 118,
                                   child: TextField(
+                                    key: _amountAnchor,
+                                    focusNode: _amountFocus,
                                     controller: _amountController,
                                     keyboardType:
                                         const TextInputType.numberWithOptions(
@@ -276,9 +322,13 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                                     style: Theme.of(context)
                                         .textTheme
                                         .headlineSmall
-                                        ?.copyWith(fontWeight: FontWeight.w800),
+                                        ?.copyWith(
+                                          fontWeight: AppTheme.emphasisWeight,
+                                        ),
                                     decoration: InputDecoration(
                                       labelText: '金额',
+                                      errorText: _amountError,
+                                      errorMaxLines: 3,
                                       hintText: '0.00',
                                       hintStyle: Theme.of(context)
                                           .textTheme
@@ -294,10 +344,13 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                                           .labelLarge
                                           ?.copyWith(
                                             color: colorScheme.onSurfaceVariant,
-                                            fontWeight: FontWeight.w800,
+                                            fontWeight: AppTheme.emphasisWeight,
                                           ),
                                     ),
-                                    onChanged: _limitAmountPrecision,
+                                    onChanged: (value) {
+                                      _limitAmountPrecision(value);
+                                      setState(() {});
+                                    },
                                   ),
                                 ),
                                 second: CurrencySelector(
@@ -340,6 +393,7 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                               ),
                               const SizedBox(height: 12),
                               CategorySelector(
+                                key: _categoryAnchor,
                                 categories: _currentCategories,
                                 selectedCategory: _selectedCategory,
                                 isIncome: _transactionType == 1,
@@ -350,6 +404,7 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                                 },
                                 onAddCategory: _addCurrentCategory,
                               ),
+                              TransactionFieldError(message: _categoryError),
                             ],
                           ),
                         ),
@@ -396,9 +451,7 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
 
                             return AppAnimatedSwitcher(
                               child: AppSectionCard(
-                                key: ValueKey(
-                                  'edit-people-${widget.transaction.uuid}',
-                                ),
+                                key: _peopleAnchor,
                                 child: Column(
                                   crossAxisAlignment:
                                       CrossAxisAlignment.stretch,
@@ -415,8 +468,8 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                                           paidByPerson:
                                               _payerPersonUuid != null,
                                           description: _payerPersonUuid == null
-                                              ? '使用人员将平均分摊该支出金额。'
-                                              : '付款人先垫付，总额由使用人员平均分摊。',
+                                              ? '谁付款 · 共同钱包'
+                                              : '谁付款 · 选择垫付人',
                                           onChanged: (paidByPerson) {
                                             setState(() {
                                               if (paidByPerson) {
@@ -435,8 +488,8 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                                     ),
                                     AppSectionHeader(
                                       title: _transactionType == 0
-                                          ? '使用人员'
-                                          : '参与人员',
+                                          ? '谁承担'
+                                          : '谁收款',
                                       trailing: TextButton(
                                         onPressed: () {
                                           setState(() {
@@ -472,6 +525,21 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                                         });
                                       },
                                     ),
+                                    TransactionFieldError(
+                                      message: _peopleError,
+                                    ),
+                                    TransactionSplitSummary(
+                                      type: _transactionType,
+                                      amount: double.tryParse(
+                                        _amountController.text,
+                                      ),
+                                      currency: _selectedCurrency,
+                                      participantCount:
+                                          _selectedPersonIds.length,
+                                      payerName: _payerPersonUuid == null
+                                          ? null
+                                          : personMap[_payerPersonUuid]?.name,
+                                    ),
                                     TransactionAnimatedVisibility(
                                       visible:
                                           _transactionType == 0 &&
@@ -499,7 +567,7 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                                                   CrossAxisAlignment.stretch,
                                               children: [
                                                 Text(
-                                                  '付款人',
+                                                  '谁付款',
                                                   style: Theme.of(
                                                     context,
                                                   ).textTheme.titleSmall,
@@ -528,6 +596,10 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                         ),
                       ),
                       const SizedBox(height: 14),
+                      TransactionDateControl(
+                        date: _date,
+                        onChanged: (date) => setState(() => _date = date),
+                      ),
                       AppAnimatedEntry(
                         delay: const Duration(milliseconds: 180),
                         child: TextField(
@@ -639,13 +711,13 @@ class _EditSheetHeader extends StatelessWidget {
             children: [
               Text(
                 '编辑明细',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: AppTheme.headingWeight,
+                ),
               ),
               const SizedBox(height: 2),
               Text(
-                '${ledger.name} · ${ledger.displayCode}',
+                '${ledger.name} · ${ledger.isLocalOnly ? '本地保存' : '云端同步'}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(

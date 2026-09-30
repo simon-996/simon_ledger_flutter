@@ -439,6 +439,8 @@ void main() {
       await tester.tap(find.text('确认记账'));
       await tester.pumpAndSettle();
       expect(confirmed, isNull);
+      expect(find.text('请选择分类'), findsOneWidget);
+      expect(find.text('请确认待识别姓名和付款方式'), findsOneWidget);
       await tester.ensureVisible(find.text('餐饮'));
       await tester.tap(find.text('餐饮'));
       await tester.ensureVisible(find.text('忽略小李'));
@@ -931,6 +933,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     expect(find.byType(DatePickerDialog), findsOneWidget);
+    final picker = tester.widget<DatePickerDialog>(
+      find.byType(DatePickerDialog),
+    );
+    expect(DateUtils.isSameDay(picker.lastDate, DateTime.now()), isTrue);
   });
 
   testWidgets('review flow closes from a real bottom sheet route', (

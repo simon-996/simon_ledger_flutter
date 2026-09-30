@@ -5,6 +5,8 @@ import '../../../../core/models/ledger.dart';
 import '../../../../core/models/money.dart';
 import '../../../../core/models/person.dart';
 import '../../../../core/preferences/transaction_category_preference.dart';
+import '../../../../core/widgets/app_components.dart';
+import '../../../../core/theme/app_theme.dart';
 import 'transaction_form_components.dart';
 
 class AiDraftReview extends StatefulWidget {
@@ -48,7 +50,38 @@ class _AiDraftReviewState extends State<AiDraftReview> {
   String? _category;
   DateTime? _date;
   String? _payer;
-  String? _error;
+  bool _validationActive = false;
+  final _amountFocus = FocusNode();
+  final _amountAnchor = GlobalKey();
+  final _categoryAnchor = GlobalKey();
+  final _peopleAnchor = GlobalKey();
+  final _unknownAnchor = GlobalKey();
+  final _dateAnchor = GlobalKey();
+  String? get _amountError {
+    final value = double.tryParse(_amount.text.trim());
+    return _validationActive && (value == null || !value.isFinite || value <= 0)
+        ? '请输入大于 0 的有效金额'
+        : null;
+  }
+
+  String? get _categoryError =>
+      _validationActive &&
+          (_category == null || !_categories.contains(_category))
+      ? '请选择分类'
+      : null;
+  String? get _peopleError =>
+      _validationActive && _people.isEmpty ? '请至少选择一个参与人员' : null;
+  String? get _unknownError =>
+      _validationActive && _unresolved.isNotEmpty ? '请确认待识别姓名和付款方式' : null;
+  String? get _dateError =>
+      _validationActive &&
+          _date != null &&
+          DateUtils.dateOnly(
+            _date!.toLocal(),
+          ).isAfter(DateUtils.dateOnly(DateTime.now()))
+      ? '日期不能晚于今天'
+      : null;
+
   List<String> _expenseCategories =
       TransactionCategoryPreference.defaultExpenseCategories;
   List<String> _incomeCategories =
@@ -106,6 +139,7 @@ class _AiDraftReviewState extends State<AiDraftReview> {
 
   @override
   void dispose() {
+    _amountFocus.dispose();
     _amount.dispose();
     _note.dispose();
     super.dispose();
@@ -125,7 +159,7 @@ class _AiDraftReviewState extends State<AiDraftReview> {
   );
 
   void _changed() {
-    _error = null;
+    setState(() {});
     widget.onChanged?.call(_editedDraft(), _amount.text);
   }
 
@@ -150,56 +184,34 @@ class _AiDraftReviewState extends State<AiDraftReview> {
     _changed();
   }
 
-  Future<void> _chooseDate() async {
-    final now = DateTime.now();
-    final initialDate = _date ?? now;
-    final day = await showDatePicker(
-      context: context,
-      initialDate: initialDate,
-      firstDate: DateTime(initialDate.year < 2000 ? initialDate.year : 2000),
-      lastDate: DateTime(
-        initialDate.year > now.year + 10 ? initialDate.year : now.year + 10,
-        12,
-        31,
-      ),
-    );
-    if (day == null || !mounted) return;
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(_date ?? now),
-    );
-    if (time == null || !mounted) return;
-    setState(
-      () => _date = DateTime(
-        day.year,
-        day.month,
-        day.day,
-        time.hour,
-        time.minute,
-      ),
-    );
-    _changed();
-  }
-
   Future<void> _confirm() async {
+    setState(() => _validationActive = true);
     final amount = double.tryParse(_amount.text.trim());
-    if (amount == null ||
-        !amount.isFinite ||
-        amount <= 0 ||
-        _category == null ||
-        !_categories.contains(_category) ||
-        _people.isEmpty ||
-        _unresolved.isNotEmpty ||
-        !supportedCurrenciesForLedger(widget.ledger).contains(_currency)) {
-      setState(() => _error = '请先核对金额、分类、币种、参与人和待确认姓名');
+    if (_amountError != null) {
+      revealTransactionField(_amountAnchor, focus: _amountFocus);
       return;
     }
-    setState(() => _error = null);
+    if (_categoryError != null) {
+      revealTransactionField(_categoryAnchor);
+      return;
+    }
+    if (_peopleError != null) {
+      revealTransactionField(_peopleAnchor);
+      return;
+    }
+    if (_unknownError != null) {
+      revealTransactionField(_unknownAnchor);
+      return;
+    }
+    if (_dateError != null) {
+      revealTransactionField(_dateAnchor);
+      return;
+    }
     await widget.onConfirm(
       AiDraft(
         sourceText: widget.draft.sourceText,
         type: _type,
-        amount: amount,
+        amount: amount!,
         currencyCode: _currency,
         categorySuggestion: _category,
         note: _note.text.trim(),
@@ -220,7 +232,7 @@ class _AiDraftReviewState extends State<AiDraftReview> {
           title,
           style: Theme.of(
             context,
-          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+          ).textTheme.titleSmall?.copyWith(fontWeight: AppTheme.headingWeight),
         ),
         const SizedBox(height: 10),
         child,
@@ -247,9 +259,9 @@ class _AiDraftReviewState extends State<AiDraftReview> {
             children: [
               Text(
                 '第 ${widget.position}/${widget.total} 笔',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: AppTheme.emphasisWeight,
+                ),
               ),
               const SizedBox(height: 10),
               LinearProgressIndicator(value: widget.position / widget.total),
@@ -332,34 +344,28 @@ class _AiDraftReviewState extends State<AiDraftReview> {
                       ),
                       const SizedBox(height: 12),
                       TextField(
+                        key: _amountAnchor,
+                        focusNode: _amountFocus,
                         controller: _amount,
                         enabled: !widget.busy,
                         keyboardType: const TextInputType.numberWithOptions(
                           decimal: true,
                         ),
                         onChanged: (_) => _changed(),
-                        decoration: const InputDecoration(labelText: '金额'),
+                        decoration: InputDecoration(
+                          labelText: '金额',
+                          errorText: _amountError,
+                        ),
                       ),
                       const SizedBox(height: 12),
-                      DropdownButtonFormField<String>(
-                        key: ValueKey('currency-$_currency'),
-                        initialValue: _currency,
-                        decoration: const InputDecoration(labelText: '币种'),
-                        items: currencies
-                            .map(
-                              (currency) => DropdownMenuItem(
-                                value: currency,
-                                child: Text(currency),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: widget.busy
-                            ? null
-                            : (value) {
-                                if (value == null) return;
-                                setState(() => _currency = value);
-                                _changed();
-                              },
+                      CurrencySelector(
+                        currencies: currencies,
+                        selectedCurrency: _currency,
+                        onChanged: (value) {
+                          if (widget.busy) return;
+                          setState(() => _currency = value);
+                          _changed();
+                        },
                       ),
                     ],
                   ),
@@ -375,6 +381,7 @@ class _AiDraftReviewState extends State<AiDraftReview> {
                           child: Text('AI 建议「$suggestion」不在现有分类中，请选择或新建分类。'),
                         ),
                       CategorySelector(
+                        key: _categoryAnchor,
                         categories: _categories,
                         selectedCategory: _category ?? '',
                         isIncome: _type == 1,
@@ -385,6 +392,7 @@ class _AiDraftReviewState extends State<AiDraftReview> {
                         },
                         onAddCategory: widget.busy ? null : _addCategory,
                       ),
+                      TransactionFieldError(message: _categoryError),
                       Padding(
                         padding: const EdgeInsets.only(top: 6),
                         child: Text(
@@ -393,35 +401,26 @@ class _AiDraftReviewState extends State<AiDraftReview> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      OutlinedButton.icon(
-                        onPressed: widget.busy ? null : _chooseDate,
-                        icon: const Icon(Icons.event_outlined),
-                        label: Text(
-                          _date == null
-                              ? '选择发生时间 · 留空则记为当前时间'
-                              : '${_date!.year}-${_date!.month.toString().padLeft(2, '0')}-${_date!.day.toString().padLeft(2, '0')}  ${_date!.hour.toString().padLeft(2, '0')}:${_date!.minute.toString().padLeft(2, '0')}',
-                        ),
+                      TransactionDateControl(
+                        key: _dateAnchor,
+                        date: _date,
+                        enabled: !widget.busy,
+                        onChanged: (date) {
+                          setState(() => _date = date);
+                          _changed();
+                        },
                       ),
-                      if (_date != null)
-                        TextButton(
-                          onPressed: widget.busy
-                              ? null
-                              : () {
-                                  setState(() => _date = null);
-                                  _changed();
-                                },
-                          child: const Text('改为当前时间'),
-                        ),
+                      TransactionFieldError(message: _dateError),
                     ],
                   ),
                 ),
                 _section(
-                  '参与人与付款',
+                  _type == 0 ? '谁承担与谁付款' : '谁收款',
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       if (_unresolved.isNotEmpty) ...[
-                        const Text('请确认未识别的人员，以及这笔支出的付款方式。'),
+                        Text('请确认未识别的人员，以及这笔支出的付款方式。', key: _unknownAnchor),
                         const SizedBox(height: 8),
                         for (final name in [..._unresolved])
                           Padding(
@@ -485,58 +484,86 @@ class _AiDraftReviewState extends State<AiDraftReview> {
                             ),
                           ),
                       ],
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 4,
-                        children: [
-                          for (final person in widget.people)
-                            FilterChip(
-                              label: Text(person.name),
-                              selected: _people.contains(person.uuid),
-                              onSelected: widget.busy
-                                  ? null
-                                  : (selected) {
-                                      setState(() {
-                                        if (selected) {
-                                          _people.add(person.uuid);
-                                        } else {
-                                          _people.remove(person.uuid);
-                                        }
-                                      });
-                                      _changed();
-                                    },
-                            ),
-                        ],
+                      TransactionFieldError(message: _unknownError),
+                      AppPersonChoiceGrid(
+                        key: _peopleAnchor,
+                        items: widget.people
+                            .map(
+                              (person) => AppPersonChoiceItem(
+                                id: person.uuid,
+                                name: person.name,
+                                avatar: person.avatar,
+                              ),
+                            )
+                            .toList(),
+                        selectedIds: _people,
+                        onToggle: (id, selected) {
+                          if (widget.busy) return;
+                          setState(() {
+                            if (selected) {
+                              _people.add(id);
+                            } else {
+                              _people.remove(id);
+                            }
+                          });
+                          _changed();
+                        },
                       ),
+                      TransactionFieldError(message: _peopleError),
                       if (_type == 0) ...[
                         const SizedBox(height: 12),
-                        DropdownButtonFormField<String?>(
-                          key: ValueKey('payer-$_payer'),
-                          initialValue: _payer,
-                          decoration: const InputDecoration(labelText: '付款人'),
-                          items: [
-                            const DropdownMenuItem<String?>(
-                              value: null,
-                              child: Text('共同钱包'),
-                            ),
-                            ...widget.people.map(
-                              (person) => DropdownMenuItem<String?>(
-                                value: person.uuid,
-                                child: Text(person.name),
-                              ),
-                            ),
-                          ],
-                          onChanged: widget.busy
-                              ? null
-                              : (value) {
-                                  setState(() {
-                                    _payer = value;
-                                    _unresolved.remove(_paymentDecision);
-                                  });
-                                  _changed();
-                                },
+                        PaymentModePanel(
+                          paidByPerson: _payer != null,
+                          description: _payer == null
+                              ? '谁付款 · 共同钱包'
+                              : '谁付款 · 选择垫付人',
+                          onChanged: (paidByPerson) {
+                            if (widget.busy) return;
+                            setState(() {
+                              _payer = paidByPerson
+                                  ? (_people.firstOrNull ??
+                                        widget.people.firstOrNull?.uuid)
+                                  : null;
+                              _unresolved.remove(_paymentDecision);
+                              _unresolved.remove('原付款人已失效');
+                            });
+                            _changed();
+                          },
                         ),
+                        if (_payer != null) ...[
+                          const SizedBox(height: 8),
+                          const Text('谁付款'),
+                          AppPersonChoiceGrid(
+                            items: widget.people
+                                .map(
+                                  (person) => AppPersonChoiceItem(
+                                    id: person.uuid,
+                                    name: person.name,
+                                    avatar: person.avatar,
+                                  ),
+                                )
+                                .toList(),
+                            selectedId: _payer,
+                            onSelect: (id) {
+                              if (widget.busy) return;
+                              setState(() => _payer = id);
+                              _changed();
+                            },
+                          ),
+                        ],
                       ],
+                      TransactionSplitSummary(
+                        type: _type,
+                        amount: double.tryParse(_amount.text),
+                        currency: _currency,
+                        participantCount: _people.length,
+                        payerName: _payer == null
+                            ? null
+                            : widget.people
+                                  .where((person) => person.uuid == _payer)
+                                  .firstOrNull
+                                  ?.name,
+                      ),
                     ],
                   ),
                 ),
@@ -550,16 +577,6 @@ class _AiDraftReviewState extends State<AiDraftReview> {
                     decoration: const InputDecoration(labelText: '备注（选填）'),
                   ),
                 ),
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: Text(
-                      _error!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),

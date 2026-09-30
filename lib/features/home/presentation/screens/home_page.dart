@@ -35,6 +35,7 @@ class HomePage extends ConsumerStatefulWidget {
 
 class _HomePageState extends ConsumerState<HomePage> {
   late int _currentIndex;
+  int _bookkeepingRevision = 0;
   bool _checkingOnboarding = false;
   bool _onboardingShown = false;
 
@@ -58,152 +59,211 @@ class _HomePageState extends ConsumerState<HomePage> {
         !hideNavigationForKeyboard &&
         ledgersAsyncValue.value?.isNotEmpty == true;
 
-    final pageContent = isAccountTab
-        ? const AccountTab()
-        : ledgersAsyncValue.when(
-            loading: () => const AppLoadingState(
-              title: '正在加载账本',
-              message: '同步账本、人员和本地缓存状态',
-              icon: Icons.book_outlined,
-            ),
-            error: (err, stack) => AppEmptyState(
-              icon: Icons.error_outline_rounded,
-              title: '加载账本失败',
-              message: FriendlyError.message(
-                err,
-                fallback: '暂时无法加载账本，请检查网络后重试。',
-              ),
-            ),
-            data: (ledgers) {
-              _maybeShowOnboarding(ledgers);
-              return AppAnimatedIndexedStack(
-                index: _currentIndex,
-                children: [
-                  BookkeepingTab(
-                    ledgers: ledgers,
-                    isActive: _currentIndex == 0,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= AppTheme.navigationBreakpoint;
+        final pageContent = isAccountTab
+            ? const AccountTab()
+            : ledgersAsyncValue.when(
+                loading: () => const AppLoadingState(
+                  title: '正在加载账本',
+                  message: '同步账本、人员和本地缓存状态',
+                  icon: Icons.book_outlined,
+                ),
+                error: (err, stack) => AppEmptyState(
+                  icon: Icons.error_outline_rounded,
+                  title: '加载账本失败',
+                  message: FriendlyError.message(
+                    err,
+                    fallback: '暂时无法加载账本，请检查网络后重试。',
                   ),
-                  ledgerStatsAsyncValue.when(
-                    loading: () => LedgerListTab(
-                      ledgers: ledgers,
-                      ledgerStats: const {},
-                      onTap: _openLedger,
-                      onEdit: _editLedger,
-                      onShare: _shareLedger,
-                      onDelete: _deleteLedger,
-                      onCreate: _openCreateLedger,
-                      onSync: _syncLedger,
-                      autoSyncEnabled: _currentIndex == 1,
-                    ),
-                    error: (err, stack) => LedgerListTab(
-                      ledgers: ledgers,
-                      ledgerStats: const {},
-                      onTap: _openLedger,
-                      onEdit: _editLedger,
-                      onShare: _shareLedger,
-                      onDelete: _deleteLedger,
-                      onCreate: _openCreateLedger,
-                      onSync: _syncLedger,
-                      autoSyncEnabled: _currentIndex == 1,
-                    ),
-                    data: (stats) => LedgerListTab(
-                      ledgers: ledgers,
-                      ledgerStats: stats,
-                      onTap: _openLedger,
-                      onEdit: _editLedger,
-                      onShare: _shareLedger,
-                      onDelete: _deleteLedger,
-                      onCreate: _openCreateLedger,
-                      onSync: _syncLedger,
-                      autoSyncEnabled: _currentIndex == 1,
-                    ),
+                ),
+                data: (ledgers) {
+                  _maybeShowOnboarding(ledgers);
+                  return AppAnimatedIndexedStack(
+                    index: _currentIndex,
+                    children: [
+                      BookkeepingTab(
+                        key: ValueKey(_bookkeepingRevision),
+                        ledgers: ledgers,
+                        isActive: _currentIndex == 0,
+                        onCreateLedger: () =>
+                            _openCreateLedger(returnToBookkeeping: true),
+                        onOpenLedger: _openLedger,
+                        bottomNavigationReserve: wide ? 0 : 70,
+                      ),
+                      ledgerStatsAsyncValue.when(
+                        loading: () => LedgerListTab(
+                          ledgers: ledgers,
+                          ledgerStats: const {},
+                          onTap: _openLedger,
+                          onEdit: _editLedger,
+                          onShare: _shareLedger,
+                          onDelete: _deleteLedger,
+                          onCreate: _openCreateLedger,
+                          onSync: _syncLedger,
+                          autoSyncEnabled: _currentIndex == 1,
+                        ),
+                        error: (err, stack) => LedgerListTab(
+                          ledgers: ledgers,
+                          ledgerStats: const {},
+                          onTap: _openLedger,
+                          onEdit: _editLedger,
+                          onShare: _shareLedger,
+                          onDelete: _deleteLedger,
+                          onCreate: _openCreateLedger,
+                          onSync: _syncLedger,
+                          autoSyncEnabled: _currentIndex == 1,
+                        ),
+                        data: (stats) => LedgerListTab(
+                          ledgers: ledgers,
+                          ledgerStats: stats,
+                          onTap: _openLedger,
+                          onEdit: _editLedger,
+                          onShare: _shareLedger,
+                          onDelete: _deleteLedger,
+                          onCreate: _openCreateLedger,
+                          onSync: _syncLedger,
+                          autoSyncEnabled: _currentIndex == 1,
+                        ),
+                      ),
+                      StatisticsTab(ledgers: ledgers),
+                    ],
+                  );
+                },
+              );
+
+        return Scaffold(
+          resizeToAvoidBottomInset: false,
+          body: SafeArea(
+            top: true,
+            child: Row(
+              children: [
+                if (wide) ...[
+                  NavigationRail(
+                    key: const ValueKey('home-navigation-rail'),
+                    selectedIndex: _currentIndex,
+                    labelType: NavigationRailLabelType.all,
+                    groupAlignment: -1,
+                    onDestinationSelected: (index) =>
+                        setState(() => _currentIndex = index),
+                    destinations: const [
+                      NavigationRailDestination(
+                        icon: Icon(Icons.edit_note_outlined),
+                        selectedIcon: Icon(Icons.edit_note),
+                        label: Text('记账'),
+                      ),
+                      NavigationRailDestination(
+                        icon: Icon(Icons.book_outlined),
+                        selectedIcon: Icon(Icons.book),
+                        label: Text('账本'),
+                      ),
+                      NavigationRailDestination(
+                        icon: Icon(Icons.bar_chart_outlined),
+                        selectedIcon: Icon(Icons.bar_chart),
+                        label: Text('统计'),
+                      ),
+                      NavigationRailDestination(
+                        icon: Icon(Icons.account_circle_outlined),
+                        selectedIcon: Icon(Icons.account_circle),
+                        label: Text('我的'),
+                      ),
+                    ],
                   ),
-                  StatisticsTab(ledgers: ledgers),
+                  const VerticalDivider(width: 1),
                 ],
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: _currentIndex == 0 || _currentIndex == 3
+                            ? 680
+                            : AppTheme.contentMaxWidth,
+                      ),
+                      child: Column(
+                        children: [
+                          if (conflictCount > 0)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(
+                                AppTheme.pagePadding,
+                                10,
+                                AppTheme.pagePadding,
+                                2,
+                              ),
+                              child: ConflictNoticeBanner(
+                                count: conflictCount,
+                                onTap: _openConflictCenter,
+                              ),
+                            ),
+                          Expanded(child: pageContent),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          floatingActionButton: AnimatedSwitcher(
+            duration: AppMotion.normal,
+            switchInCurve: AppMotion.emphasized,
+            switchOutCurve: AppMotion.standard,
+            transitionBuilder: (child, animation) {
+              return ScaleTransition(
+                scale: animation,
+                child: FadeTransition(opacity: animation, child: child),
               );
             },
-          );
-
-    return Scaffold(
-      resizeToAvoidBottomInset: false,
-      body: SafeArea(
-        top: true,
-        child: Column(
-          children: [
-            if (conflictCount > 0)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppTheme.pagePadding,
-                  10,
-                  AppTheme.pagePadding,
-                  2,
-                ),
-                child: ConflictNoticeBanner(
-                  count: conflictCount,
-                  onTap: _openConflictCenter,
-                ),
-              ),
-            Expanded(child: pageContent),
-          ],
-        ),
-      ),
-      floatingActionButton: AnimatedSwitcher(
-        duration: AppMotion.normal,
-        switchInCurve: AppMotion.emphasized,
-        switchOutCurve: AppMotion.standard,
-        transitionBuilder: (child, animation) {
-          return ScaleTransition(
-            scale: animation,
-            child: FadeTransition(opacity: animation, child: child),
-          );
-        },
-        child: showLedgerFab
-            ? FloatingActionButton.extended(
-                key: const ValueKey('ledger-fab'),
-                onPressed: _openCreateLedger,
-                icon: const Icon(Icons.add_rounded),
-                label: const Text('添加账本'),
-              )
-            : const SizedBox.shrink(key: ValueKey('empty-fab')),
-      ),
-      bottomNavigationBar: AnimatedSwitcher(
-        duration: AppMotion.fast,
-        switchInCurve: AppMotion.standard,
-        switchOutCurve: AppMotion.standard,
-        child: hideNavigationForKeyboard
-            ? const SizedBox.shrink(key: ValueKey('keyboard-hidden-nav'))
-            : NavigationBar(
-                key: const ValueKey('home-navigation-bar'),
-                selectedIndex: _currentIndex,
-                onDestinationSelected: (index) {
-                  setState(() {
-                    _currentIndex = index;
-                  });
-                },
-                destinations: const [
-                  NavigationDestination(
-                    icon: Icon(Icons.edit_note_outlined),
-                    selectedIcon: Icon(Icons.edit_note),
-                    label: '记账',
+            child: showLedgerFab
+                ? FloatingActionButton.extended(
+                    key: const ValueKey('ledger-fab'),
+                    onPressed: _openCreateLedger,
+                    icon: const Icon(Icons.add_rounded),
+                    label: const Text('添加账本'),
+                  )
+                : const SizedBox.shrink(key: ValueKey('empty-fab')),
+          ),
+          bottomNavigationBar: AnimatedSwitcher(
+            duration: AppMotion.fast,
+            switchInCurve: AppMotion.standard,
+            switchOutCurve: AppMotion.standard,
+            child: hideNavigationForKeyboard || wide
+                ? const SizedBox.shrink(key: ValueKey('keyboard-hidden-nav'))
+                : NavigationBar(
+                    key: const ValueKey('home-navigation-bar'),
+                    selectedIndex: _currentIndex,
+                    onDestinationSelected: (index) {
+                      setState(() {
+                        _currentIndex = index;
+                      });
+                    },
+                    destinations: const [
+                      NavigationDestination(
+                        icon: Icon(Icons.edit_note_outlined),
+                        selectedIcon: Icon(Icons.edit_note),
+                        label: '记账',
+                      ),
+                      NavigationDestination(
+                        icon: Icon(Icons.book_outlined),
+                        selectedIcon: Icon(Icons.book),
+                        label: '账本',
+                      ),
+                      NavigationDestination(
+                        icon: Icon(Icons.bar_chart_outlined),
+                        selectedIcon: Icon(Icons.bar_chart),
+                        label: '统计',
+                      ),
+                      NavigationDestination(
+                        icon: Icon(Icons.account_circle_outlined),
+                        selectedIcon: Icon(Icons.account_circle),
+                        label: '我的',
+                      ),
+                    ],
                   ),
-                  NavigationDestination(
-                    icon: Icon(Icons.book_outlined),
-                    selectedIcon: Icon(Icons.book),
-                    label: '账本',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.bar_chart_outlined),
-                    selectedIcon: Icon(Icons.bar_chart),
-                    label: '统计',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.account_circle_outlined),
-                    selectedIcon: Icon(Icons.account_circle),
-                    label: '我的',
-                  ),
-                ],
-              ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -230,7 +290,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         switch (action) {
           case OnboardingAction.createLedger:
             setState(() => _currentIndex = 1);
-            _openCreateLedger();
+            _openCreateLedger(returnToBookkeeping: true);
           case OnboardingAction.account:
             setState(() => _currentIndex = 3);
           case OnboardingAction.done:
@@ -243,7 +303,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     });
   }
 
-  void _openCreateLedger() async {
+  void _openCreateLedger({bool returnToBookkeeping = false}) async {
     final result = await showModalBottomSheet<CreateLedgerResult>(
       context: context,
       isScrollControlled: true,
@@ -279,6 +339,15 @@ class _HomePageState extends ConsumerState<HomePage> {
       ref.invalidate(cachedPeopleProvider);
       if (!isCloudMode && result.includeSelf) {
         await _addSelfToLedgerWithRetry(newLedger);
+      }
+      if (returnToBookkeeping && mounted) {
+        await LastSelectedLedgerPreference.setUuid(newLedger.uuid);
+        if (mounted) {
+          setState(() {
+            _currentIndex = 0;
+            _bookkeepingRevision += 1;
+          });
+        }
       }
     } catch (e) {
       _showWriteError(e);

@@ -63,7 +63,7 @@ void main() {
     final syncButtonFinder = find.byTooltip('同步待处理数据');
     expect(
       tester.getTopLeft(syncButtonFinder).dx,
-      lessThan(tester.getTopLeft(find.byTooltip('编辑')).dx),
+      lessThan(tester.getTopLeft(find.byTooltip('账本操作')).dx),
     );
 
     await tester.tap(syncButtonFinder);
@@ -176,7 +176,13 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.byTooltip('分享邀请'), findsOneWidget);
+    expect(find.text(ledger.displayCode), findsNothing);
+    await tester.tap(find.byTooltip('账本操作'));
+    await tester.pumpAndSettle();
+    expect(find.text('分享邀请'), findsOneWidget);
+    await tester.tap(find.text('账本信息'));
+    await tester.pumpAndSettle();
+    expect(find.text(ledger.displayCode), findsOneWidget);
     expect(find.text('本地已同步'), findsNothing);
     expect(find.text('本机'), findsNothing);
     expect(find.text('待同步'), findsNothing);
@@ -319,17 +325,18 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    await tester.tap(find.byTooltip('分享邀请'));
+    await tester.tap(find.byTooltip('账本操作'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('分享邀请'));
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('正在生成邀请'), findsOneWidget);
     expect(shareCalls, 1);
-    final sharingButton = tester.widget<IconButton>(
-      find.byWidgetPredicate(
-        (widget) => widget is IconButton && widget.tooltip == '分享邀请',
-      ),
+    final actions = tester.widget<PopupMenuButton>(
+      find.byWidgetPredicate((w) => w is PopupMenuButton).first,
     );
-    expect(sharingButton.onPressed, isNull);
+    expect(actions.enabled, isFalse);
 
     releaseShare.complete();
     await tester.pump();

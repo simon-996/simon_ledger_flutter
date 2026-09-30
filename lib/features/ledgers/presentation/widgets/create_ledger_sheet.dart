@@ -7,6 +7,7 @@ import '../../../../core/models/person.dart';
 import '../../../../core/network/friendly_error.dart';
 import '../../../../core/repositories/auth_repository.dart';
 import '../../../../core/widgets/app_components.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../people_pool/presentation/widgets/person_edit_dialog.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
@@ -44,6 +45,9 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
   late final TextEditingController _nameController;
   late final TextEditingController _rateController;
   final FocusNode _nameFocus = FocusNode();
+  final FocusNode _rateFocus = FocusNode();
+  final GlobalKey _rateFieldKey = GlobalKey();
+  String? _rateError;
   late String _baseCurrencyCode;
 
   final Set<String> _selectedPersonIds = {};
@@ -75,6 +79,7 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
     _nameController.dispose();
     _rateController.dispose();
     _nameFocus.dispose();
+    _rateFocus.dispose();
     super.dispose();
   }
 
@@ -331,10 +336,7 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _SheetHeader(
-                isEditing: widget.existingLedger != null,
-                displayCode: widget.existingLedger?.displayCode,
-              ),
+              _SheetHeader(isEditing: widget.existingLedger != null),
               const SizedBox(height: 16),
               Flexible(
                 child: SingleChildScrollView(
@@ -373,10 +375,19 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
                             _CurrencyRateFields(
                               baseCurrencyCode: _baseCurrencyCode,
                               rateController: _rateController,
+                              rateFocus: _rateFocus,
+                              rateFieldKey: _rateFieldKey,
+                              rateError: _rateError,
+                              onRateChanged: (_) {
+                                if (_rateError != null) {
+                                  setState(() => _rateError = null);
+                                }
+                              },
                               onCurrencyChanged: (value) {
                                 if (value == null) return;
                                 setState(() {
                                   _baseCurrencyCode = value;
+                                  _rateError = null;
                                   if (value == 'CNY') {
                                     _rateController.text = '1';
                                   }
@@ -494,8 +505,15 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
     final rate = _baseCurrencyCode == 'CNY'
         ? 1.0
         : double.tryParse(_rateController.text);
-    if (rate == null || rate <= 0) {
-      AppNotice.error(context, '请输入大于 0 的有效汇率');
+    if (rate == null || !rate.isFinite || rate <= 0) {
+      setState(() => _rateError = '请输入大于 0 的有效汇率');
+      _rateFocus.requestFocus();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final fieldContext = _rateFieldKey.currentContext;
+        if (mounted && fieldContext != null) {
+          Scrollable.ensureVisible(fieldContext, alignment: 0.35);
+        }
+      });
       return;
     }
 
@@ -764,10 +782,9 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
 }
 
 class _SheetHeader extends StatelessWidget {
-  const _SheetHeader({required this.isEditing, this.displayCode});
+  const _SheetHeader({required this.isEditing});
 
   final bool isEditing;
-  final String? displayCode;
 
   @override
   Widget build(BuildContext context) {
@@ -775,17 +792,6 @@ class _SheetHeader extends StatelessWidget {
 
     return Column(
       children: [
-        Center(
-          child: Container(
-            width: 38,
-            height: 4,
-            decoration: BoxDecoration(
-              color: colorScheme.outlineVariant,
-              borderRadius: BorderRadius.circular(999),
-            ),
-          ),
-        ),
-        const SizedBox(height: 14),
         Row(
           children: [
             Container(
@@ -809,12 +815,12 @@ class _SheetHeader extends StatelessWidget {
                   Text(
                     isEditing ? '编辑账本' : '新建账本',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
+                      fontWeight: AppTheme.headingWeight,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    isEditing ? (displayCode ?? '调整名称、币种和人员') : '设置名称、币种和初始参与人',
+                    isEditing ? '调整名称、币种和人员' : '设置名称、币种和初始参与人',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -856,7 +862,7 @@ class _CountPill extends StatelessWidget {
         '$count 人',
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
           color: colorScheme.primary,
-          fontWeight: FontWeight.w800,
+          fontWeight: AppTheme.headingWeight,
         ),
       ),
     );
@@ -1000,7 +1006,7 @@ class _PersonSelectTile extends StatelessWidget {
                     color: selected
                         ? colorScheme.primary
                         : colorScheme.onSurface,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: AppTheme.headingWeight,
                   ),
                 ),
               ),
@@ -1115,11 +1121,19 @@ class _CurrencyRateFields extends StatelessWidget {
   const _CurrencyRateFields({
     required this.baseCurrencyCode,
     required this.rateController,
+    required this.rateFocus,
+    required this.rateFieldKey,
+    required this.rateError,
+    required this.onRateChanged,
     required this.onCurrencyChanged,
   });
 
   final String baseCurrencyCode;
   final TextEditingController rateController;
+  final FocusNode rateFocus;
+  final GlobalKey rateFieldKey;
+  final String? rateError;
+  final ValueChanged<String> onRateChanged;
   final ValueChanged<String?> onCurrencyChanged;
 
   @override
@@ -1145,12 +1159,32 @@ class _CurrencyRateFields extends StatelessWidget {
           onChanged: onCurrencyChanged,
         );
 
+        if (isCny) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              currencyField,
+              const SizedBox(height: 8),
+              Text(
+                '人民币账本汇率固定为 1',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          );
+        }
+
         final rateField = TextField(
+          key: rateFieldKey,
           controller: rateController,
+          focusNode: rateFocus,
+          onChanged: onRateChanged,
           enabled: !isCny,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           decoration: InputDecoration(
             labelText: '对人民币汇率',
+            errorText: rateError,
             prefixIcon: const Icon(Icons.currency_exchange_rounded),
             helperText: isCny ? '人民币账本汇率固定为 1' : '1 $baseCurrencyCode = ? CNY',
           ),

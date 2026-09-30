@@ -510,7 +510,7 @@ class _DeleteLedgerConfirmPanelState extends State<_DeleteLedgerConfirmPanel> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
+                    fontWeight: AppTheme.emphasisWeight,
                   ),
                 ),
                 const SizedBox(height: 3),
@@ -653,6 +653,8 @@ class _DeleteLedgerConfirmPanelState extends State<_DeleteLedgerConfirmPanel> {
   }
 }
 
+enum _LedgerAction { details, edit, share }
+
 class _LedgerCard extends StatelessWidget {
   const _LedgerCard({
     required this.ledger,
@@ -777,19 +779,6 @@ class _LedgerCard extends StatelessWidget {
                                         context,
                                       ).textTheme.titleLarge,
                                     ),
-                                    const SizedBox(height: 3),
-                                    Text(
-                                      ledger.displayCode,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(
-                                            color: colorScheme.onSurfaceVariant,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                    ),
                                     const SizedBox(height: 7),
                                     Wrap(
                                       spacing: 8,
@@ -848,18 +837,69 @@ class _LedgerCard extends StatelessWidget {
                                   icon: const Icon(Icons.sync_rounded),
                                   onPressed: isBusy ? null : onSync,
                                 ),
-                              if (canEdit)
-                                IconButton(
-                                  tooltip: '编辑',
-                                  icon: const Icon(Icons.edit_outlined),
-                                  onPressed: isBusy ? null : onEdit,
-                                ),
-                              if (canShare)
-                                IconButton(
-                                  tooltip: '分享邀请',
-                                  icon: const Icon(Icons.ios_share_rounded),
-                                  onPressed: isBusy ? null : onShare,
-                                ),
+                              PopupMenuButton<_LedgerAction>(
+                                tooltip: '账本操作',
+                                enabled: !isBusy,
+                                icon: const Icon(Icons.more_horiz_rounded),
+                                onSelected: (action) {
+                                  switch (action) {
+                                    case _LedgerAction.details:
+                                      showDialog<void>(
+                                        context: context,
+                                        builder: (context) => AlertDialog(
+                                          title: Text(ledger.name),
+                                          content: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              const Text('账本编号'),
+                                              SelectableText(
+                                                ledger.displayCode,
+                                              ),
+                                              const SizedBox(height: 16),
+                                              Text(
+                                                '默认币种：${ledger.baseCurrencyCode}',
+                                              ),
+                                              Text(
+                                                ledger.isLocalOnly
+                                                    ? '存储方式：本机'
+                                                    : '存储方式：云端同步',
+                                              ),
+                                            ],
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () =>
+                                                  Navigator.pop(context),
+                                              child: const Text('关闭'),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    case _LedgerAction.edit:
+                                      onEdit();
+                                    case _LedgerAction.share:
+                                      onShare();
+                                  }
+                                },
+                                itemBuilder: (context) => [
+                                  const PopupMenuItem(
+                                    value: _LedgerAction.details,
+                                    child: Text('账本信息'),
+                                  ),
+                                  if (canEdit)
+                                    const PopupMenuItem(
+                                      value: _LedgerAction.edit,
+                                      child: Text('编辑账本'),
+                                    ),
+                                  if (canShare)
+                                    const PopupMenuItem(
+                                      value: _LedgerAction.share,
+                                      child: Text('分享邀请'),
+                                    ),
+                                ],
+                              ),
                               if (canReorder)
                                 Tooltip(
                                   message: '排序',
@@ -1021,7 +1061,7 @@ class _LedgerOperationOverlay extends StatelessWidget {
                     message,
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
                       color: colorScheme.onSurface,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: AppTheme.headingWeight,
                     ),
                   ),
                 ],
@@ -1117,7 +1157,7 @@ class _SyncMetaChip extends StatelessWidget {
               softWrap: false,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: color,
-                fontWeight: FontWeight.w800,
+                fontWeight: AppTheme.headingWeight,
               ),
             ),
           ],
@@ -1153,7 +1193,7 @@ class _StatPill extends StatelessWidget {
             label,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
               color: color,
-              fontWeight: FontWeight.w800,
+              fontWeight: AppTheme.headingWeight,
             ),
           ),
           const SizedBox(height: 4),
@@ -1187,7 +1227,10 @@ class _DeleteBackground extends StatelessWidget {
           color: error,
           borderRadius: BorderRadius.circular(28),
         ),
-        child: Icon(Icons.delete_rounded, color: Theme.of(context).colorScheme.onError),
+        child: Icon(
+          Icons.delete_rounded,
+          color: Theme.of(context).colorScheme.onError,
+        ),
       ),
     );
   }

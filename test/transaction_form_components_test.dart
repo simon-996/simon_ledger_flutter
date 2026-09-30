@@ -4,6 +4,46 @@ import 'package:simon_ledger_flutter/core/theme/app_theme.dart';
 import 'package:simon_ledger_flutter/features/transactions/presentation/widgets/transaction_form_components.dart';
 
 void main() {
+  testWidgets('one currency is an informative static label', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CurrencySelector(
+            currencies: const ['CNY'],
+            selectedCurrency: 'CNY',
+            onChanged: (_) {},
+          ),
+        ),
+      ),
+    );
+    expect(find.textContaining('人民币'), findsOneWidget);
+    expect(find.byType(InkWell), findsNothing);
+  });
+
+  testWidgets('many currencies can be searched without horizontal scrolling', (
+    tester,
+  ) async {
+    String selected = 'CNY';
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CurrencySelector(
+            currencies: const ['CNY', 'USD', 'EUR', 'JPY', 'GBP'],
+            selectedCurrency: selected,
+            onChanged: (value) => selected = value,
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('currency-picker')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'GBP');
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('英镑'));
+    await tester.pumpAndSettle();
+    expect(selected, 'GBP');
+  });
+
   testWidgets('transaction form options use tonal fills without borders', (
     tester,
   ) async {

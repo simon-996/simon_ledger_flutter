@@ -127,4 +127,50 @@ void main() {
       expect(tester.widget<AnimatedScale>(find.byType(AnimatedScale)).scale, 1);
     },
   );
+  testWidgets('reduced motion keeps press feedback stationary', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: MediaQuery(
+          data: MediaQueryData(disableAnimations: true),
+          child: Scaffold(
+            body: Center(child: AppPressable(child: Text('保存'))),
+          ),
+        ),
+      ),
+    );
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('保存')),
+    );
+    await tester.pump();
+    expect(tester.widget<AnimatedScale>(find.byType(AnimatedScale)).scale, 1);
+    await gesture.up();
+    await tester.pump();
+  });
+  testWidgets(
+    'narrow transaction keeps category readable beside a long amount',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.lightTheme,
+          home: const Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 280,
+                child: AppTransactionTile(
+                  category: '餐饮',
+                  date: '10-01 10:00',
+                  people: 'SA',
+                  amount: '- JPY 360000.00',
+                  convertedAmount: '≈ CNY 18000.00',
+                  isExpense: true,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(tester.getSize(find.text('餐饮')).width, greaterThanOrEqualTo(30));
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

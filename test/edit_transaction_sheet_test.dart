@@ -41,7 +41,8 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.text('编辑明细'), findsOneWidget);
-      expect(find.text('旅行账本 · ${ledger.displayCode}'), findsOneWidget);
+      expect(find.textContaining('旅行账本'), findsOneWidget);
+      expect(find.textContaining('2026-06-01'), findsOneWidget);
       expect(find.text('支出'), findsOneWidget);
       expect(find.text('收入'), findsOneWidget);
       expect(find.text('餐饮'), findsOneWidget);
@@ -51,6 +52,41 @@ void main() {
       expect(find.text('保存修改'), findsOneWidget);
     },
   );
+
+  testWidgets('edit invalid amount is persistent field validation', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final database = DatabaseService();
+    final ledger = await _saveLedgerFixture(database);
+    final transaction = _transactionFixture(ledger);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          authTokenProvider.overrideWith((ref) async => null),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: EditTransactionSheet(
+              transaction: transaction,
+              ledger: ledger,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final input = find.byType(TextField).first;
+    await tester.enterText(input, 'Infinity');
+    await tester.tap(find.text('保存修改'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<TextField>(input).decoration?.errorText,
+      '请输入大于 0 的有效金额',
+    );
+    expect(transaction.amount, 12.34);
+  });
 
   testWidgets('edit transaction bottom sheet keeps height while type changes', (
     tester,

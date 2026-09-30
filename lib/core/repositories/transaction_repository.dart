@@ -115,6 +115,23 @@ class RemoteTransactionRepository implements TransactionRepository {
   final SyncIdentityResolver _identityResolver;
   final ConflictCoordinator? _conflictCoordinator;
   final ConflictSnapshotCodec? _conflictCodec;
+  final Map<String, Future<TransactionSyncResult>> _activeSyncs = {};
+  Future<void> _cacheMutation = Future<void>.value();
+  final Set<String> _syncAgain = {};
+
+  // Keep short cache mutations ordered; network requests remain outside this
+  // queue so undo can hide a transaction immediately while an upload is waiting.
+  Future<T> _mutateCache<T>(Future<T> Function() action) {
+    final result = Completer<T>();
+    _cacheMutation = _cacheMutation.then((_) async {
+      try {
+        result.complete(await action());
+      } catch (error, stack) {
+        result.completeError(error, stack);
+      }
+    });
+    return result.future;
+  }
 
   @override
   Future<List<TransactionRecord>> getCachedTransactionsForLedger(
@@ -145,15 +162,21 @@ class RemoteTransactionRepository implements TransactionRepository {
       final remoteTransactions = await _fetchRemoteTransactions(ledgerUuid);
       final latestLocalTransactions = await _db.getTransactionsForLedger(
         ledgerUuid,
-        includeDeleted: includeDeleted,
+        includeDeleted: true,
       );
       final latestPending = latestLocalTransactions
           .where((transaction) => transaction.pendingSync)
           .toList();
 
-      return _mergeTransactions(remoteTransactions, latestPending);
+      return _mergeTransactions(
+        remoteTransactions,
+        latestPending,
+      ).where((record) => includeDeleted || !record.isDeleted).toList();
     } catch (_) {
-      return localTransactions;
+      return _db.getTransactionsForLedger(
+        ledgerUuid,
+        includeDeleted: includeDeleted,
+      );
     }
   }
 
@@ -185,16 +208,47 @@ class RemoteTransactionRepository implements TransactionRepository {
       return;
     }
     final local = _localPendingTransaction(transaction);
-    await _db.saveTransaction(local);
+    await _mutateCache(() => _db.saveTransaction(local));
     transaction
       ..clientOperationId = local.clientOperationId
       ..pendingSync = local.pendingSync
       ..syncError = local.syncError;
+    if (_activeSyncs.containsKey(transaction.ledgerUuid)) {
+      _syncAgain.add(transaction.ledgerUuid);
+    }
     unawaited(syncPendingTransactions(transaction.ledgerUuid));
   }
 
   @override
-  Future<TransactionSyncResult> syncPendingTransactions(
+  Future<TransactionSyncResult> syncPendingTransactions(String ledgerUuid) {
+    final active = _activeSyncs[ledgerUuid];
+    if (active != null) return active;
+    final operation = _drainPendingTransactions(ledgerUuid);
+    _activeSyncs[ledgerUuid] = operation;
+    operation.then<void>(
+      (_) => _activeSyncs.remove(ledgerUuid),
+      onError: (Object error, StackTrace stack) {
+        _activeSyncs.remove(ledgerUuid);
+      },
+    );
+    return operation;
+  }
+
+  Future<TransactionSyncResult> _drainPendingTransactions(
+    String ledgerUuid,
+  ) async {
+    var synced = 0;
+    Object? error;
+    do {
+      _syncAgain.remove(ledgerUuid);
+      final pass = await _syncPendingTransactions(ledgerUuid);
+      synced += pass.synced;
+      error ??= pass.error;
+    } while (_syncAgain.contains(ledgerUuid));
+    return TransactionSyncResult(synced: synced, error: error);
+  }
+
+  Future<TransactionSyncResult> _syncPendingTransactions(
     String ledgerUuid,
   ) async {
     if (await _isLocalOnlyLedger(ledgerUuid)) {
@@ -230,10 +284,37 @@ class RemoteTransactionRepository implements TransactionRepository {
           continue;
         }
         firstError ??= error;
-        transaction
-          ..pendingSync = true
-          ..syncError = error.toString();
-        await _db.saveTransaction(transaction);
+        await _mutateCache(() async {
+          final records = await _db.getTransactionsForLedger(
+            ledgerUuid,
+            includeDeleted: true,
+          );
+          var latest = records
+              .where((record) => record.uuid == transaction.uuid)
+              .firstOrNull;
+          if (latest != null &&
+              latest.isDeleted &&
+              !_looksLikeRemoteUuid(latest.uuid) &&
+              latest.clientOperationId != null) {
+            final operationId = latest.clientOperationId;
+            latest =
+                records
+                    .where(
+                      (record) =>
+                          record.clientOperationId == operationId &&
+                          _looksLikeRemoteUuid(record.uuid),
+                    )
+                    .firstOrNull ??
+                latest;
+          }
+          if (latest == null) return;
+          // A create may have been accepted before its response was lost.
+          // Retain its deletion intent and stable idempotency key for retry.
+          latest
+            ..pendingSync = true
+            ..syncError = error.toString();
+          await _db.saveTransaction(latest);
+        });
       }
     }
 
@@ -275,7 +356,9 @@ class RemoteTransactionRepository implements TransactionRepository {
         idempotencyKey: transaction.clientOperationId ?? transaction.uuid,
         fromJson: _transactionFromJson,
       );
-      await _saveSyncedTransaction(transaction, saved);
+      if (await _saveSyncedTransaction(transaction, saved)) {
+        await _deletePendingTransaction(saved);
+      }
       return;
     }
 
@@ -285,29 +368,40 @@ class RemoteTransactionRepository implements TransactionRepository {
       idempotencyKey: 'update-transaction-$remoteUuid-$version',
       fromJson: _transactionFromJson,
     );
-    await _saveSyncedTransaction(transaction, saved);
+    if (await _saveSyncedTransaction(transaction, saved)) {
+      await _deletePendingTransaction(saved);
+    }
   }
 
   @override
   Future<void> deleteTransaction(String ledgerUuid, String uuid) async {
-    final transactions = await _db.getTransactionsForLedger(
-      ledgerUuid,
-      includeDeleted: true,
-    );
-    final transaction = transactions
-        .where((transaction) => transaction.uuid == uuid)
-        .firstOrNull;
-    if (transaction == null) {
-      return;
-    }
-
-    transaction
-      ..isDeleted = true
-      ..pendingSync =
-          !await _isLocalOnlyLedger(ledgerUuid) &&
-          _looksLikeRemoteUuid(transaction.uuid)
-      ..syncError = null;
-    await _db.saveTransaction(transaction);
+    final localOnly = await _isLocalOnlyLedger(ledgerUuid);
+    await _mutateCache(() async {
+      final records = await _db.getTransactionsForLedger(
+        ledgerUuid,
+        includeDeleted: true,
+      );
+      final source = records.where((record) => record.uuid == uuid).firstOrNull;
+      if (source == null) return;
+      final operationId = source.clientOperationId ?? source.uuid;
+      // Upload can replace a local uuid. Retain aliases and delete every current
+      // representation of the same operation, including the returned cloud row.
+      for (final record in records.where(
+        (record) =>
+            record.uuid == uuid ||
+            (record.clientOperationId != null &&
+                record.clientOperationId == operationId),
+      )) {
+        final pendingDelete =
+            !localOnly &&
+            (record.pendingSync || _looksLikeRemoteUuid(record.uuid));
+        record
+          ..isDeleted = true
+          ..pendingSync = pendingDelete
+          ..syncError = null;
+        await _db.saveTransaction(record);
+      }
+    });
   }
 
   Future<void> _deletePendingTransaction(TransactionRecord transaction) async {
@@ -319,7 +413,9 @@ class RemoteTransactionRepository implements TransactionRepository {
         : null;
     final version = transaction.version;
     if (remoteUuid == null) {
-      await _saveDeletedTransaction(transaction);
+      // Replay a cancelled create with the same idempotency key, then delete the
+      // returned identity. This also covers a server-accepted, lost response.
+      await _uploadPendingTransaction(transaction);
       return;
     }
 
@@ -386,11 +482,53 @@ class RemoteTransactionRepository implements TransactionRepository {
       page += 1;
     } while (all.length < total);
 
-    for (final transaction in all) {
-      transaction.ledgerUuid = ledgerUuid;
-      transaction.localAccountUuid = _db.scope.accountUuid;
-      await _db.saveTransaction(transaction);
-    }
+    await _mutateCache(() async {
+      final cached = await _db.getTransactionsForLedger(
+        ledgerUuid,
+        includeDeleted: true,
+      );
+      for (final transaction in all) {
+        final current = cached
+            .where((record) => record.uuid == transaction.uuid)
+            .firstOrNull;
+        if (current?.pendingSync == true) continue;
+        final cancelledAlias = cached
+            .where(
+              (record) =>
+                  record.isDeleted &&
+                  record.pendingSync &&
+                  transaction.clientOperationId != null &&
+                  record.clientOperationId == transaction.clientOperationId,
+            )
+            .firstOrNull;
+        if (cancelledAlias != null) {
+          transaction
+            ..ledgerUuid = ledgerUuid
+            ..localAccountUuid =
+                cancelledAlias.localAccountUuid ?? _db.scope.accountUuid
+            ..isDeleted = true
+            ..pendingSync = true;
+          await _db.saveTransaction(transaction);
+          if (cancelledAlias.uuid != transaction.uuid) {
+            await _db.saveTransaction(
+              cancelledAlias
+                ..pendingSync = false
+                ..syncError = null,
+            );
+          }
+          continue;
+        }
+        if (current != null &&
+            current.isDeleted &&
+            current.version >= transaction.version) {
+          transaction.isDeleted = true;
+          continue;
+        }
+        transaction.ledgerUuid = ledgerUuid;
+        transaction.localAccountUuid = _db.scope.accountUuid;
+        await _db.saveTransaction(transaction);
+      }
+    });
     return all;
   }
 
@@ -403,31 +541,68 @@ class RemoteTransactionRepository implements TransactionRepository {
       ..syncError = null;
   }
 
-  Future<void> _saveSyncedTransaction(
+  Future<bool> _saveSyncedTransaction(
     TransactionRecord local,
     TransactionRecord remote,
-  ) async {
-    local.isDeleted = true;
-    await _db.saveTransaction(local);
-
+  ) => _mutateCache(() async {
+    final cached = (await _db.getTransactionsForLedger(
+      local.ledgerUuid,
+      includeDeleted: true,
+    )).where((record) => record.uuid == local.uuid).firstOrNull;
+    final cancelled = cached?.isDeleted == true;
+    final newerEdit =
+        !cancelled && cached != null && !_sameContent(local, cached);
+    if (newerEdit) {
+      remote
+        ..amount = cached.amount
+        ..type = cached.type
+        ..payerPersonUuid = cached.payerPersonUuid
+        ..currencyCode = cached.currencyCode
+        ..category = cached.category
+        ..note = cached.note
+        ..personUuids = List.of(cached.personUuids)
+        ..createdAt = cached.createdAt;
+    }
+    if (local.uuid != remote.uuid) {
+      await _db.saveTransaction(
+        local
+          ..isDeleted = true
+          ..pendingSync = false
+          ..syncError = null,
+      );
+    }
     await _db.saveTransaction(
       remote
         ..ledgerUuid = local.ledgerUuid
         ..localAccountUuid = local.localAccountUuid ?? _db.scope.accountUuid
         ..clientOperationId = local.clientOperationId
-        ..pendingSync = false
+        ..isDeleted = cancelled
+        ..pendingSync = cancelled || newerEdit
         ..syncError = null,
     );
-  }
+    return cancelled;
+  });
 
-  Future<void> _saveDeletedTransaction(TransactionRecord transaction) {
-    return _db.saveTransaction(
-      transaction
-        ..isDeleted = true
-        ..pendingSync = false
-        ..syncError = null,
-    );
-  }
+  bool _sameContent(TransactionRecord left, TransactionRecord right) =>
+      left.amount == right.amount &&
+      left.type == right.type &&
+      left.payerPersonUuid == right.payerPersonUuid &&
+      left.currencyCode == right.currencyCode &&
+      left.category == right.category &&
+      left.note == right.note &&
+      left.createdAt == right.createdAt &&
+      left.personUuids.length == right.personUuids.length &&
+      left.personUuids.every(right.personUuids.contains);
+
+  Future<void> _saveDeletedTransaction(TransactionRecord transaction) =>
+      _mutateCache(
+        () => _db.saveTransaction(
+          transaction
+            ..isDeleted = true
+            ..pendingSync = false
+            ..syncError = null,
+        ),
+      );
 
   List<TransactionRecord> _mergeTransactions(
     List<TransactionRecord> remoteTransactions,
@@ -437,9 +612,11 @@ class RemoteTransactionRepository implements TransactionRepository {
         .map((transaction) => transaction.clientOperationId)
         .whereType<String>()
         .toSet();
+    final pendingUuids = pending.map((record) => record.uuid).toSet();
     final merged = remoteTransactions
         .where(
           (transaction) =>
+              !pendingUuids.contains(transaction.uuid) &&
               !pendingOperationIds.contains(transaction.clientOperationId),
         )
         .toList();

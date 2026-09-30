@@ -12,6 +12,8 @@ import '../../../../core/models/person_transaction_stats.dart';
 import '../../../../core/models/transaction_record.dart';
 import '../../../../core/network/friendly_error.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/transaction_date.dart';
+import '../../../statistics/presentation/widgets/transaction_date_controls.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../transactions/presentation/widgets/transaction_detail_sheet.dart';
 import '../../../transactions/presentation/providers/transaction_provider.dart';
@@ -21,14 +23,25 @@ import '../widgets/share_ledger_image_widget.dart';
 
 enum _DetailTransactionTypeFilter { all, expense, income }
 
-enum _DetailTimeFilter { all, week, month, year }
+enum _DetailTimeFilter { all, week, month, year, custom }
 
 enum _DetailSyncFilter { all, pending, failed }
 
 class LedgerDashboardPage extends ConsumerStatefulWidget {
-  const LedgerDashboardPage({super.key, required this.ledger});
+  const LedgerDashboardPage({
+    super.key,
+    required this.ledger,
+    this.initialCategory,
+    this.initialTransactionType,
+    this.initialDateRange,
+    this.initialDisplayCurrency,
+  });
 
   final Ledger ledger;
+  final String? initialCategory;
+  final int? initialTransactionType;
+  final TransactionDateRange? initialDateRange;
+  final String? initialDisplayCurrency;
 
   @override
   ConsumerState<LedgerDashboardPage> createState() =>
@@ -45,10 +58,20 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
   String? _categoryFilter;
   bool _isGeneratingImage = false;
   String _displayCurrency = 'CNY';
+  TransactionDateRange? _dateRange;
 
   @override
   void initState() {
     super.initState();
+    _categoryFilter = widget.initialCategory;
+    _typeFilter = switch (widget.initialTransactionType) {
+      0 => _DetailTransactionTypeFilter.expense,
+      1 => _DetailTransactionTypeFilter.income,
+      _ => _DetailTransactionTypeFilter.all,
+    };
+    _dateRange = widget.initialDateRange;
+    if (_dateRange != null) _timeFilter = _DetailTimeFilter.custom;
+    _displayCurrency = widget.initialDisplayCurrency ?? 'CNY';
     WidgetsBinding.instance.addPostFrameCallback((_) => _silentSyncPending());
   }
 
@@ -101,9 +124,7 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
               Text('分享账本', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 6),
               Text(
-                _selectedFilterPersonUuids.isEmpty
-                    ? '选择导出的图片内容'
-                    : '当前已按人员筛选，将按当前筛选结果导出',
+                _hasActiveFilters ? '将按当前搜索和筛选结果导出' : '选择导出的图片内容',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -349,6 +370,14 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                     ),
               );
           final balance = totalIncome - totalExpense;
+          final dayGroups = groupTransactionsByDay(
+            filteredTransactions,
+            amountOf: (t) =>
+                transactionAmountForDisplay(t, widget.ledger, _displayCurrency),
+          );
+          final groupsByDate = {
+            for (final group in dayGroups) group.date: group,
+          };
 
           final personStats = calculatePersonTransactionStats(
             filteredTransactions,
@@ -362,9 +391,24 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
 
           final colorScheme = Theme.of(context).colorScheme;
 
-          return Column(
-            children: [
-              Padding(
+          return peopleAsyncValue.when(
+            loading: () => const AppLoadingState(
+              title: '正在加载人员',
+              message: '准备账本人员和结余数据',
+              icon: Icons.group_outlined,
+            ),
+            error: (e, st) => AppEmptyState(
+              icon: Icons.error_outline_rounded,
+              title: '加载人员失败',
+              message: FriendlyError.message(e, fallback: '暂时无法加载账本人员，请稍后重试。'),
+            ),
+            data: (peoplePool) {
+              final personMap = peopleByUuid(peoplePool);
+              final peopleInLedger = _dashboardPersonIds(
+                transactions,
+              ).map((pid) => personOrFallback(personMap, pid)).toList();
+
+              final summaryOverview = Padding(
                 padding: const EdgeInsets.fromLTRB(
                   AppTheme.pagePadding,
                   8,
@@ -413,7 +457,7 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                           child: Text(
                             formatMoney(_displayCurrency, balance),
                             style: Theme.of(context).textTheme.displayMedium
-                                ?.copyWith(fontWeight: FontWeight.w900),
+                                ?.copyWith(fontWeight: AppTheme.emphasisWeight),
                           ),
                         ),
                         const SizedBox(height: 20),
@@ -448,280 +492,301 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                     ),
                   ),
                 ),
-              ),
-              Expanded(
-                child: peopleAsyncValue.when(
-                  loading: () => const AppLoadingState(
-                    title: '正在加载人员',
-                    message: '准备账本人员和结余数据',
-                    icon: Icons.group_outlined,
-                  ),
-                  error: (e, st) => AppEmptyState(
-                    icon: Icons.error_outline_rounded,
-                    title: '加载人员失败',
-                    message: FriendlyError.message(
-                      e,
-                      fallback: '暂时无法加载账本人员，请稍后重试。',
+              );
+              final peopleOverview = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
+                    child: AppSectionHeader(
+                      title: '人员结余',
+                      trailing: SizedBox(
+                        height: 32,
+                        child: AnimatedSwitcher(
+                          duration: AppMotion.fast,
+                          child: _selectedFilterPersonUuids.isEmpty
+                              ? const SizedBox(
+                                  key: ValueKey('empty-filter-action'),
+                                  width: 1,
+                                )
+                              : TextButton(
+                                  key: const ValueKey('clear-filter-action'),
+                                  style: TextButton.styleFrom(
+                                    minimumSize: const Size(0, 32),
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                    ),
+                                  ),
+                                  onPressed: () {
+                                    setState(_selectedFilterPersonUuids.clear);
+                                  },
+                                  child: const Text('清除筛选'),
+                                ),
+                        ),
+                      ),
                     ),
                   ),
-                  data: (peoplePool) {
-                    final personMap = peopleByUuid(peoplePool);
-                    final peopleInLedger = _dashboardPersonIds(
-                      transactions,
-                    ).map((pid) => personOrFallback(personMap, pid)).toList();
-
-                    return CustomScrollView(
-                      slivers: [
-                        if (peopleInLedger.isNotEmpty)
-                          SliverToBoxAdapter(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    16,
-                                    2,
-                                    16,
-                                    10,
-                                  ),
-                                  child: AppSectionHeader(
-                                    title: '人员结余',
-                                    trailing: SizedBox(
-                                      height: 32,
-                                      child: AnimatedSwitcher(
-                                        duration: AppMotion.fast,
-                                        child:
-                                            _selectedFilterPersonUuids.isEmpty
-                                            ? const SizedBox(
-                                                key: ValueKey(
-                                                  'empty-filter-action',
-                                                ),
-                                                width: 1,
-                                              )
-                                            : TextButton(
-                                                key: const ValueKey(
-                                                  'clear-filter-action',
-                                                ),
-                                                style: TextButton.styleFrom(
-                                                  minimumSize: const Size(
-                                                    0,
-                                                    32,
-                                                  ),
-                                                  tapTargetSize:
-                                                      MaterialTapTargetSize
-                                                          .shrinkWrap,
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 10,
-                                                      ),
-                                                ),
-                                                onPressed: () {
-                                                  setState(
-                                                    _selectedFilterPersonUuids
-                                                        .clear,
-                                                  );
-                                                },
-                                                child: const Text('清除筛选'),
-                                              ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                SizedBox(
-                                  height: 112,
-                                  child: ListView.separated(
-                                    scrollDirection: Axis.horizontal,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                    ),
-                                    itemCount: peopleInLedger.length,
-                                    separatorBuilder: (context, index) =>
-                                        const SizedBox(width: 10),
-                                    itemBuilder: (context, index) {
-                                      final p = peopleInLedger[index];
-                                      final pBalance =
-                                          personBalances[p.uuid] ?? 0.0;
-                                      return AppAnimatedEntry(
-                                        delay: Duration(
-                                          milliseconds:
-                                              90 + (index < 6 ? index : 6) * 35,
-                                        ),
-                                        child: AppPersonBalanceCard(
-                                          avatar: p.avatar,
-                                          name: p.isDeleted
-                                              ? '${p.name}（已删除）'
-                                              : p.name,
-                                          balance: formatMoney(
-                                            _displayCurrency,
-                                            pBalance,
-                                            signed: true,
-                                          ),
-                                          isPositive: pBalance >= 0,
-                                          isSelected: _selectedFilterPersonUuids
-                                              .contains(p.uuid),
-                                          onTap: () =>
-                                              _toggleFilterSelection(p.uuid),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                                if (personStats.settlements.isNotEmpty) ...[
-                                  const SizedBox(height: 12),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                    ),
-                                    child: AppSectionCard(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.stretch,
-                                        children: [
-                                          Text(
-                                            '代付结算',
-                                            style: Theme.of(
-                                              context,
-                                            ).textTheme.titleMedium,
-                                          ),
-                                          const SizedBox(height: 10),
-                                          ...personStats.settlements
-                                              .take(5)
-                                              .map((settlement) {
-                                                final from = personOrFallback(
-                                                  personMap,
-                                                  settlement.fromPersonUuid,
-                                                );
-                                                final to = personOrFallback(
-                                                  personMap,
-                                                  settlement.toPersonUuid,
-                                                );
-                                                return Padding(
-                                                  padding:
-                                                      const EdgeInsets.only(
-                                                        bottom: 8,
-                                                      ),
-                                                  child: AppSettlementTile(
-                                                    fromAvatar: from.avatar,
-                                                    fromName: from.isDeleted
-                                                        ? '${from.name}（已删除）'
-                                                        : from.name,
-                                                    toAvatar: to.avatar,
-                                                    toName: to.isDeleted
-                                                        ? '${to.name}（已删除）'
-                                                        : to.name,
-                                                    amount: formatMoney(
-                                                      _displayCurrency,
-                                                      settlement.amount,
-                                                    ),
-                                                  ),
-                                                );
-                                              }),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                                const SizedBox(height: 12),
-                              ],
+                  SizedBox(
+                    height: 112,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: peopleInLedger.length,
+                      separatorBuilder: (context, index) =>
+                          const SizedBox(width: 10),
+                      itemBuilder: (context, index) {
+                        final p = peopleInLedger[index];
+                        final pBalance = personBalances[p.uuid] ?? 0.0;
+                        return AppAnimatedEntry(
+                          delay: Duration(
+                            milliseconds: 90 + (index < 6 ? index : 6) * 35,
+                          ),
+                          child: AppPersonBalanceCard(
+                            avatar: p.avatar,
+                            name: p.isDeleted ? '${p.name}（已删除）' : p.name,
+                            balance: formatMoney(
+                              _displayCurrency,
+                              pBalance,
+                              signed: true,
                             ),
+                            isPositive: pBalance >= 0,
+                            isSelected: _selectedFilterPersonUuids.contains(
+                              p.uuid,
+                            ),
+                            onTap: () => _toggleFilterSelection(p.uuid),
                           ),
-                        SliverToBoxAdapter(
-                          child: _TransactionFilterToolbar(
-                            searchController: _searchController,
-                            activeCount: _activeFilterCount,
-                            onSearchChanged: (_) => setState(() {}),
-                            onClear: _hasActiveFilters
-                                ? _clearTransactionFilters
-                                : null,
-                            onFilterTap: () =>
-                                _showTransactionFilterSheet(transactions),
-                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  if (personStats.settlements.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: AppSectionCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              '代付结算',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 10),
+                            ...personStats.settlements.take(5).map((
+                              settlement,
+                            ) {
+                              final from = personOrFallback(
+                                personMap,
+                                settlement.fromPersonUuid,
+                              );
+                              final to = personOrFallback(
+                                personMap,
+                                settlement.toPersonUuid,
+                              );
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: AppSettlementTile(
+                                  fromAvatar: from.avatar,
+                                  fromName: from.isDeleted
+                                      ? '${from.name}（已删除）'
+                                      : from.name,
+                                  toAvatar: to.avatar,
+                                  toName: to.isDeleted
+                                      ? '${to.name}（已删除）'
+                                      : to.name,
+                                  amount: formatMoney(
+                                    _displayCurrency,
+                                    settlement.amount,
+                                  ),
+                                ),
+                              );
+                            }),
+                          ],
                         ),
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                            child: AppSectionHeader(
-                              title: '流水明细',
-                              trailing: Text(
-                                '${filteredTransactions.length} 条',
-                                style: Theme.of(context).textTheme.labelMedium
-                                    ?.copyWith(
-                                      color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                ],
+              );
+
+              return CustomScrollView(
+                slivers: [
+                  SliverPersistentHeader(
+                    pinned: true,
+                    delegate: _LedgerFilterHeader(
+                      height: _hasActiveFilters ? 96 : 64,
+                      child: ColoredBox(
+                        color: colorScheme.surface,
+                        child: Column(
+                          children: [
+                            _TransactionFilterToolbar(
+                              searchController: _searchController,
+                              activeCount: _activeFilterCount,
+                              onSearchChanged: (_) => setState(() {}),
+                              onClear: _hasActiveFilters
+                                  ? _clearTransactionFilters
+                                  : null,
+                              onFilterTap: () =>
+                                  _showTransactionFilterSheet(transactions),
+                            ),
+                            if (_hasActiveFilters)
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  0,
+                                  16,
+                                  8,
+                                ),
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    _filterDescription,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  SliverToBoxAdapter(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        if (peopleInLedger.isEmpty) return summaryOverview;
+                        if (constraints.maxWidth >= 840) {
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(child: summaryOverview),
+                              Expanded(child: peopleOverview),
+                            ],
+                          );
+                        }
+                        return Column(
+                          children: [summaryOverview, peopleOverview],
+                        );
+                      },
+                    ),
+                  ),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                      child: AppSectionHeader(
+                        title: '流水明细',
+                        trailing: Text(
+                          '${filteredTransactions.length} 条',
+                          style: Theme.of(context).textTheme.labelMedium
+                              ?.copyWith(color: colorScheme.onSurfaceVariant),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (filteredTransactions.isEmpty)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: AppEmptyState(
+                        icon: Icons.receipt_long_outlined,
+                        title: _hasActiveFilters ? '无匹配流水' : '暂无记账流水',
+                        message: _hasActiveFilters
+                            ? '调整搜索或筛选条件后再查看。'
+                            : '保存一条记账后，这里会显示明细。',
+                        action: _hasActiveFilters
+                            ? TextButton(
+                                onPressed: _clearTransactionFilters,
+                                child: const Text('清除筛选'),
+                              )
+                            : null,
+                      ),
+                    )
+                  else
+                    SliverList.builder(
+                      itemCount: filteredTransactions.length,
+                      itemBuilder: (context, index) {
+                        final t = filteredTransactions[index];
+                        final dateStr = transactionRowDate(
+                          t.createdAt,
+                          DateTime.now(),
+                        );
+                        final peopleStr = avatarsForPeople(
+                          personMap,
+                          t.personUuids,
+                        );
+
+                        final delayMs = (index < 8 ? index : 8) * 28;
+                        final day = transactionDay(t.createdAt);
+                        final startsDay =
+                            index == 0 ||
+                            transactionDay(
+                                  filteredTransactions[index - 1].createdAt,
+                                ) !=
+                                day;
+                        final group = groupsByDate[day]!;
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (startsDay)
+                              _TransactionDayHeader(
+                                label: transactionDayLabel(day, DateTime.now()),
+                                expense: formatMoney(
+                                  _displayCurrency,
+                                  group.expense,
+                                ),
+                                income: formatMoney(
+                                  _displayCurrency,
+                                  group.income,
+                                ),
+                              ),
+                            AppAnimatedEntry(
+                              delay: Duration(milliseconds: delayMs),
+                              child: AppTransactionTile(
+                                selected: false,
+                                category: t.category,
+                                date: dateStr,
+                                people: peopleStr,
+                                note: t.note,
+                                createdByText: t.createdByNickname,
+                                createdByAvatar: t.createdByAvatar,
+                                amount: formatTransactionPrimaryAmount(t),
+                                convertedAmount:
+                                    formatTransactionConvertedAmount(
+                                      t,
+                                      widget.ledger,
                                     ),
+                                isExpense: t.type == 0,
+                                syncStatus: _syncStatusFor(t),
+                                syncError: t.syncError,
+                                onLongPress: null,
+                                onTap: () {
+                                  showModalBottomSheet(
+                                    context: context,
+                                    isScrollControlled: true,
+                                    backgroundColor: Colors.transparent,
+                                    builder: (context) =>
+                                        TransactionDetailSheet(
+                                          transaction: t,
+                                          peoplePool: peoplePool,
+                                          ledger: widget.ledger,
+                                        ),
+                                  );
+                                },
                               ),
                             ),
-                          ),
-                        ),
-                        if (filteredTransactions.isEmpty)
-                          SliverFillRemaining(
-                            hasScrollBody: false,
-                            child: AppEmptyState(
-                              icon: Icons.receipt_long_outlined,
-                              title: _selectedFilterPersonUuids.isEmpty
-                                  ? '暂无记账流水'
-                                  : '没有匹配的流水',
-                              message: _selectedFilterPersonUuids.isEmpty
-                                  ? '保存一条记账后，这里会显示明细。'
-                                  : '切换人员筛选后再查看。',
-                            ),
-                          )
-                        else
-                          SliverList.builder(
-                            itemCount: filteredTransactions.length,
-                            itemBuilder: (context, index) {
-                              final t = filteredTransactions[index];
-                              final dateStr =
-                                  '${t.createdAt.month.toString().padLeft(2, '0')}-${t.createdAt.day.toString().padLeft(2, '0')} ${t.createdAt.hour.toString().padLeft(2, '0')}:${t.createdAt.minute.toString().padLeft(2, '0')}';
-                              final peopleStr = avatarsForPeople(
-                                personMap,
-                                t.personUuids,
-                              );
-
-                              final delayMs = (index < 8 ? index : 8) * 28;
-                              return AppAnimatedEntry(
-                                delay: Duration(milliseconds: delayMs),
-                                child: AppTransactionTile(
-                                  selected: false,
-                                  category: t.category,
-                                  date: dateStr,
-                                  people: peopleStr,
-                                  note: t.note,
-                                  createdByText: t.createdByNickname,
-                                  createdByAvatar: t.createdByAvatar,
-                                  amount: formatTransactionPrimaryAmount(t),
-                                  convertedAmount:
-                                      formatTransactionConvertedAmount(
-                                        t,
-                                        widget.ledger,
-                                      ),
-                                  isExpense: t.type == 0,
-                                  syncStatus: _syncStatusFor(t),
-                                  syncError: t.syncError,
-                                  onLongPress: null,
-                                  onTap: () {
-                                    showModalBottomSheet(
-                                      context: context,
-                                      isScrollControlled: true,
-                                      backgroundColor: Colors.transparent,
-                                      builder: (context) =>
-                                          TransactionDetailSheet(
-                                            transaction: t,
-                                            peoplePool: peoplePool,
-                                            ledger: widget.ledger,
-                                          ),
-                                    );
-                                  },
-                                ),
-                              );
-                            },
-                          ),
-                        const SliverToBoxAdapter(child: SizedBox(height: 24)),
-                      ],
-                    );
-                  },
-                ),
-              ),
-            ],
+                          ],
+                        );
+                      },
+                    ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                ],
+              );
+            },
           );
         },
       ),
@@ -773,16 +838,39 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
   }
 
   bool _matchesTimeFilter(TransactionRecord transaction, DateTime now) {
-    return switch (_timeFilter) {
-      _DetailTimeFilter.all => true,
-      _DetailTimeFilter.week =>
-        now.difference(transaction.createdAt).inDays <= 7,
-      _DetailTimeFilter.month =>
-        transaction.createdAt.year == now.year &&
-            transaction.createdAt.month == now.month,
-      _DetailTimeFilter.year => transaction.createdAt.year == now.year,
-    };
+    final range =
+        _dateRange ??
+        switch (_timeFilter) {
+          _DetailTimeFilter.all => null,
+          _DetailTimeFilter.week => TransactionDateRange.week(now),
+          _DetailTimeFilter.month => TransactionDateRange.month(now),
+          _DetailTimeFilter.year => TransactionDateRange.year(now),
+          _DetailTimeFilter.custom => null,
+        };
+    return range == null || range.contains(transaction.createdAt);
   }
+
+  String get _filterDescription => [
+    ?_categoryFilter,
+    if (_typeFilter != _DetailTransactionTypeFilter.all)
+      _typeFilter == _DetailTransactionTypeFilter.expense ? '支出' : '收入',
+    if (_dateRange != null)
+      _dateRange!.label
+    else if (_timeFilter != _DetailTimeFilter.all)
+      switch (_timeFilter) {
+        _DetailTimeFilter.week => '近7天',
+        _DetailTimeFilter.month => '本月',
+        _DetailTimeFilter.year => '本年',
+        _ => '',
+      },
+    if (_selectedFilterPersonUuids.isNotEmpty)
+      '${_selectedFilterPersonUuids.length}位人员',
+    if (_searchController.text.trim().isNotEmpty)
+      '搜索：${_searchController.text.trim()}',
+    if (_syncFilter != _DetailSyncFilter.all)
+      _syncFilter == _DetailSyncFilter.failed ? '同步失败' : '待同步',
+    _displayCurrency,
+  ].join(' · ');
 
   bool _matchesCategoryFilter(TransactionRecord transaction) {
     final category = _categoryFilter;
@@ -827,6 +915,7 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
       _searchController.clear();
       _typeFilter = _DetailTransactionTypeFilter.all;
       _timeFilter = _DetailTimeFilter.all;
+      _dateRange = null;
       _categoryFilter = null;
       _syncFilter = _DetailSyncFilter.all;
     });
@@ -843,6 +932,7 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
       builder: (context) => _TransactionFilterSheet(
         typeFilter: _typeFilter,
         timeFilter: _timeFilter,
+        dateRange: _dateRange,
         categoryFilter: _categoryFilter,
         syncFilter: _syncFilter,
         categories: _availableCategories(transactions),
@@ -852,6 +942,7 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
     setState(() {
       _typeFilter = selection.typeFilter;
       _timeFilter = selection.timeFilter;
+      _dateRange = selection.dateRange;
       _categoryFilter = selection.categoryFilter;
       _syncFilter = selection.syncFilter;
     });
@@ -877,6 +968,53 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
     };
     return ids.toList();
   }
+}
+
+class _LedgerFilterHeader extends SliverPersistentHeaderDelegate {
+  _LedgerFilterHeader({required this.height, required this.child});
+  final double height;
+  final Widget child;
+  @override
+  double get minExtent => height;
+  @override
+  double get maxExtent => height;
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) => child;
+  @override
+  bool shouldRebuild(covariant _LedgerFilterHeader oldDelegate) => true;
+}
+
+class _TransactionDayHeader extends StatelessWidget {
+  const _TransactionDayHeader({
+    required this.label,
+    required this.expense,
+    required this.income,
+  });
+  final String label;
+  final String expense;
+  final String income;
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+    child: Wrap(
+      alignment: WrapAlignment.spaceBetween,
+      spacing: 12,
+      runSpacing: 4,
+      children: [
+        Text(label, style: Theme.of(context).textTheme.titleSmall),
+        Text(
+          '支出 $expense · 收入 $income',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _TransactionFilterToolbar extends StatelessWidget {
@@ -968,7 +1106,7 @@ class _TransactionFilterToolbar extends StatelessWidget {
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         color: colorScheme.onPrimary,
                         fontSize: 10,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: AppTheme.emphasisWeight,
                       ),
                     ),
                   ),
@@ -993,12 +1131,14 @@ class _TransactionFilterSelection {
   const _TransactionFilterSelection({
     required this.typeFilter,
     required this.timeFilter,
+    this.dateRange,
     required this.categoryFilter,
     required this.syncFilter,
   });
 
   final _DetailTransactionTypeFilter typeFilter;
   final _DetailTimeFilter timeFilter;
+  final TransactionDateRange? dateRange;
   final String? categoryFilter;
   final _DetailSyncFilter syncFilter;
 }
@@ -1007,6 +1147,7 @@ class _TransactionFilterSheet extends StatefulWidget {
   const _TransactionFilterSheet({
     required this.typeFilter,
     required this.timeFilter,
+    this.dateRange,
     required this.categoryFilter,
     required this.syncFilter,
     required this.categories,
@@ -1014,6 +1155,7 @@ class _TransactionFilterSheet extends StatefulWidget {
 
   final _DetailTransactionTypeFilter typeFilter;
   final _DetailTimeFilter timeFilter;
+  final TransactionDateRange? dateRange;
   final String? categoryFilter;
   final _DetailSyncFilter syncFilter;
   final List<String> categories;
@@ -1026,6 +1168,7 @@ class _TransactionFilterSheet extends StatefulWidget {
 class _TransactionFilterSheetState extends State<_TransactionFilterSheet> {
   late _DetailTransactionTypeFilter _typeFilter;
   late _DetailTimeFilter _timeFilter;
+  TransactionDateRange? _dateRange;
   late String? _categoryFilter;
   late _DetailSyncFilter _syncFilter;
 
@@ -1034,6 +1177,7 @@ class _TransactionFilterSheetState extends State<_TransactionFilterSheet> {
     super.initState();
     _typeFilter = widget.typeFilter;
     _timeFilter = widget.timeFilter;
+    _dateRange = widget.dateRange;
     _categoryFilter = widget.categoryFilter;
     _syncFilter = widget.syncFilter;
   }
@@ -1042,143 +1186,173 @@ class _TransactionFilterSheetState extends State<_TransactionFilterSheet> {
   Widget build(BuildContext context) {
     return SafeArea(
       top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              '筛选流水',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: 14),
-            _FilterGroup(
-              title: '收支类型',
-              child: SegmentedButton<_DetailTransactionTypeFilter>(
-                showSelectedIcon: false,
-                segments: const [
-                  ButtonSegment(
-                    value: _DetailTransactionTypeFilter.all,
-                    label: Text('全部'),
-                  ),
-                  ButtonSegment(
-                    value: _DetailTransactionTypeFilter.expense,
-                    label: Text('支出'),
-                  ),
-                  ButtonSegment(
-                    value: _DetailTransactionTypeFilter.income,
-                    label: Text('收入'),
-                  ),
-                ],
-                selected: {_typeFilter},
-                onSelectionChanged: (values) {
-                  setState(() => _typeFilter = values.single);
-                },
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                '筛选流水',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: AppTheme.emphasisWeight,
+                ),
               ),
-            ),
-            const SizedBox(height: 14),
-            _FilterGroup(
-              title: '时间范围',
-              child: SegmentedButton<_DetailTimeFilter>(
-                showSelectedIcon: false,
-                segments: const [
-                  ButtonSegment(
-                    value: _DetailTimeFilter.all,
-                    label: Text('全部'),
-                  ),
-                  ButtonSegment(
-                    value: _DetailTimeFilter.week,
-                    label: Text('7 天'),
-                  ),
-                  ButtonSegment(
-                    value: _DetailTimeFilter.month,
-                    label: Text('本月'),
-                  ),
-                  ButtonSegment(
-                    value: _DetailTimeFilter.year,
-                    label: Text('本年'),
-                  ),
-                ],
-                selected: {_timeFilter},
-                onSelectionChanged: (values) {
-                  setState(() => _timeFilter = values.single);
-                },
-              ),
-            ),
-            const SizedBox(height: 14),
-            _FilterGroup(
-              title: '同步状态',
-              child: SegmentedButton<_DetailSyncFilter>(
-                showSelectedIcon: false,
-                segments: const [
-                  ButtonSegment(
-                    value: _DetailSyncFilter.all,
-                    label: Text('全部'),
-                  ),
-                  ButtonSegment(
-                    value: _DetailSyncFilter.pending,
-                    label: Text('待同步'),
-                  ),
-                  ButtonSegment(
-                    value: _DetailSyncFilter.failed,
-                    label: Text('失败'),
-                  ),
-                ],
-                selected: {_syncFilter},
-                onSelectionChanged: (values) {
-                  setState(() => _syncFilter = values.single);
-                },
-              ),
-            ),
-            if (widget.categories.isNotEmpty) ...[
               const SizedBox(height: 14),
               _FilterGroup(
-                title: '分类',
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    FilterChip(
-                      label: const Text('全部'),
-                      selected: _categoryFilter == null,
-                      onSelected: (_) => setState(() => _categoryFilter = null),
+                title: '收支类型',
+                child: SegmentedButton<_DetailTransactionTypeFilter>(
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(
+                      value: _DetailTransactionTypeFilter.all,
+                      label: Text('全部'),
                     ),
-                    for (final category in widget.categories)
-                      FilterChip(
-                        label: Text(category),
-                        selected: _categoryFilter == category,
-                        onSelected: (_) {
-                          setState(() => _categoryFilter = category);
-                        },
-                      ),
+                    ButtonSegment(
+                      value: _DetailTransactionTypeFilter.expense,
+                      label: Text('支出'),
+                    ),
+                    ButtonSegment(
+                      value: _DetailTransactionTypeFilter.income,
+                      label: Text('收入'),
+                    ),
                   ],
+                  selected: {_typeFilter},
+                  onSelectionChanged: (values) {
+                    setState(() => _typeFilter = values.single);
+                  },
                 ),
               ),
-            ],
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _reset,
-                    child: const Text('重置'),
-                  ),
+              const SizedBox(height: 14),
+              _FilterGroup(
+                title: '时间范围',
+                child: SegmentedButton<_DetailTimeFilter>(
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(
+                      value: _DetailTimeFilter.all,
+                      label: Text('全部'),
+                    ),
+                    ButtonSegment(
+                      value: _DetailTimeFilter.week,
+                      label: Text('7 天'),
+                    ),
+                    ButtonSegment(
+                      value: _DetailTimeFilter.month,
+                      label: Text('本月'),
+                    ),
+                    ButtonSegment(
+                      value: _DetailTimeFilter.year,
+                      label: Text('本年'),
+                    ),
+                  ],
+                  emptySelectionAllowed: true,
+                  selected:
+                      _timeFilter == _DetailTimeFilter.custom ||
+                          (_timeFilter == _DetailTimeFilter.month &&
+                              _dateRange != null &&
+                              (_dateRange!.start.year != DateTime.now().year ||
+                                  _dateRange!.start.month !=
+                                      DateTime.now().month))
+                      ? <_DetailTimeFilter>{}
+                      : {_timeFilter},
+                  onSelectionChanged: (values) {
+                    if (values.isEmpty) return;
+                    setState(() {
+                      _timeFilter = values.single;
+                      _dateRange = null;
+                    });
+                  },
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  flex: 2,
-                  child: FilledButton.icon(
-                    onPressed: _apply,
-                    icon: const Icon(Icons.check_rounded),
-                    label: const Text('应用筛选'),
+              ),
+              TransactionDateControls(
+                month: _dateRange?.start ?? DateTime.now(),
+                customRange: _timeFilter == _DetailTimeFilter.custom
+                    ? _dateRange
+                    : null,
+                onMonthChanged: (month) => setState(() {
+                  _timeFilter = _DetailTimeFilter.month;
+                  _dateRange = TransactionDateRange.month(month);
+                }),
+                onCustomChanged: (range) => setState(() {
+                  _timeFilter = _DetailTimeFilter.custom;
+                  _dateRange = range;
+                }),
+              ),
+              const SizedBox(height: 14),
+              _FilterGroup(
+                title: '同步状态',
+                child: SegmentedButton<_DetailSyncFilter>(
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(
+                      value: _DetailSyncFilter.all,
+                      label: Text('全部'),
+                    ),
+                    ButtonSegment(
+                      value: _DetailSyncFilter.pending,
+                      label: Text('待同步'),
+                    ),
+                    ButtonSegment(
+                      value: _DetailSyncFilter.failed,
+                      label: Text('失败'),
+                    ),
+                  ],
+                  selected: {_syncFilter},
+                  onSelectionChanged: (values) {
+                    setState(() => _syncFilter = values.single);
+                  },
+                ),
+              ),
+              if (widget.categories.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                _FilterGroup(
+                  title: '分类',
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      FilterChip(
+                        label: const Text('全部'),
+                        selected: _categoryFilter == null,
+                        onSelected: (_) =>
+                            setState(() => _categoryFilter = null),
+                      ),
+                      for (final category in widget.categories)
+                        FilterChip(
+                          label: Text(category),
+                          selected: _categoryFilter == category,
+                          onSelected: (_) {
+                            setState(() => _categoryFilter = category);
+                          },
+                        ),
+                    ],
                   ),
                 ),
               ],
-            ),
-          ],
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _reset,
+                      child: const Text('重置'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 2,
+                    child: FilledButton.icon(
+                      onPressed: _apply,
+                      icon: const Icon(Icons.check_rounded),
+                      label: const Text('应用筛选'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1188,6 +1362,7 @@ class _TransactionFilterSheetState extends State<_TransactionFilterSheet> {
     setState(() {
       _typeFilter = _DetailTransactionTypeFilter.all;
       _timeFilter = _DetailTimeFilter.all;
+      _dateRange = null;
       _categoryFilter = null;
       _syncFilter = _DetailSyncFilter.all;
     });
@@ -1198,6 +1373,7 @@ class _TransactionFilterSheetState extends State<_TransactionFilterSheet> {
       _TransactionFilterSelection(
         typeFilter: _typeFilter,
         timeFilter: _timeFilter,
+        dateRange: _dateRange,
         categoryFilter: _categoryFilter,
         syncFilter: _syncFilter,
       ),
@@ -1220,7 +1396,7 @@ class _FilterGroup extends StatelessWidget {
           title,
           style: Theme.of(
             context,
-          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+          ).textTheme.titleSmall?.copyWith(fontWeight: AppTheme.headingWeight),
         ),
         const SizedBox(height: 8),
         child,
@@ -1273,7 +1449,7 @@ class _ShareOptionTile extends StatelessWidget {
                     Text(
                       title,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
+                        fontWeight: AppTheme.headingWeight,
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -1301,34 +1477,13 @@ class _ShareOptionTile extends StatelessWidget {
 
 class _LedgerAppBarTitle extends StatelessWidget {
   const _LedgerAppBarTitle({required this.ledger});
-
   final Ledger ledger;
 
   @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          ledger.name,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: textTheme.titleLarge,
-        ),
-        Text(
-          ledger.displayCode,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: textTheme.labelSmall?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => Text(
+    ledger.name,
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    style: Theme.of(context).textTheme.titleLarge,
+  );
 }

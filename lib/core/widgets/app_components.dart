@@ -56,14 +56,17 @@ class _AppPressableState extends State<AppPressable> {
 
   @override
   Widget build(BuildContext context) {
+    final reducedMotion = MediaQuery.disableAnimationsOf(context);
     return Listener(
       behavior: HitTestBehavior.deferToChild,
       onPointerDown: widget.enabled ? (_) => _setPressed(true) : null,
       onPointerUp: widget.enabled ? (_) => _setPressed(false) : null,
       onPointerCancel: widget.enabled ? (_) => _setPressed(false) : null,
       child: AnimatedScale(
-        scale: widget.enabled && _pressed ? widget.pressedScale : 1,
-        duration: widget.duration,
+        scale: !reducedMotion && widget.enabled && _pressed
+            ? widget.pressedScale
+            : 1,
+        duration: reducedMotion ? Duration.zero : widget.duration,
         curve: widget.curve,
         child: widget.child,
       ),
@@ -399,6 +402,7 @@ class _AppAnimatedEntryState extends State<AppAnimatedEntry>
 
   @override
   Widget build(BuildContext context) {
+    if (MediaQuery.disableAnimationsOf(context)) return widget.child;
     return FadeTransition(
       opacity: _opacity,
       child: SlideTransition(
@@ -423,6 +427,9 @@ class AppAnimatedIndexedStack extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final motionDuration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : duration;
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -434,17 +441,17 @@ class AppAnimatedIndexedStack extends StatelessWidget {
                 excluding: i != index,
                 child: AnimatedOpacity(
                   opacity: i == index ? 1 : 0,
-                  duration: duration,
+                  duration: motionDuration,
                   curve: AppMotion.standard,
                   child: AnimatedSlide(
                     offset: i == index
                         ? Offset.zero
                         : Offset(i < index ? -0.018 : 0.018, 0),
-                    duration: duration,
+                    duration: motionDuration,
                     curve: AppMotion.emphasized,
                     child: AnimatedScale(
                       scale: i == index ? 1 : 0.992,
-                      duration: duration,
+                      duration: motionDuration,
                       curve: AppMotion.emphasized,
                       child: TickerMode(
                         enabled: i == index,
@@ -474,7 +481,9 @@ class AppAnimatedSwitcher extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedSwitcher(
-      duration: duration,
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : duration,
       switchInCurve: AppMotion.emphasized,
       switchOutCurve: AppMotion.standard,
       transitionBuilder: (child, animation) {
@@ -567,7 +576,7 @@ class AppLoadingState extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.titleSmall
-                              ?.copyWith(fontWeight: FontWeight.w800),
+                              ?.copyWith(fontWeight: AppTheme.headingWeight),
                         ),
                         if (message != null) ...[
                           const SizedBox(height: 4),
@@ -724,10 +733,10 @@ class AppSectionCard extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: colorScheme.shadow.withValues(alpha: 0.07),
-            blurRadius: 24,
-            spreadRadius: -8,
-            offset: const Offset(0, 10),
+            color: colorScheme.shadow.withValues(alpha: 0.035),
+            blurRadius: 16,
+            spreadRadius: -6,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -805,7 +814,7 @@ class AppMetricTile extends StatelessWidget {
               value,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 color: color,
-                fontWeight: FontWeight.w800,
+                fontWeight: AppTheme.headingWeight,
               ),
             ),
           ),
@@ -872,7 +881,7 @@ class AppPersonBalanceCard extends StatelessWidget {
                   balance,
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
                     color: amountColor,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: AppTheme.headingWeight,
                   ),
                 ),
               ),
@@ -1114,7 +1123,7 @@ class _LedgerPersonChip extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: colorScheme.onSurface,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: AppTheme.headingWeight,
                 ),
               ),
             ),
@@ -1203,7 +1212,7 @@ class AppSettlementTile extends StatelessWidget {
                     '应付金额',
                     style: textTheme.labelMedium?.copyWith(
                       color: colorScheme.primary,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: AppTheme.headingWeight,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -1216,7 +1225,7 @@ class AppSettlementTile extends StatelessWidget {
                         maxLines: 1,
                         style: textTheme.titleMedium?.copyWith(
                           color: colorScheme.primary,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: AppTheme.emphasisWeight,
                         ),
                       ),
                     ),
@@ -1403,6 +1412,132 @@ class AppTransactionTile extends StatelessWidget {
         : AppColors.of(context).income;
     final hasNote = note != null && note!.isNotEmpty;
 
+    final details = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Flexible(
+              child: Text(
+                category,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ),
+            if (people.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  people,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            Flexible(
+              child: Text(
+                date,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            if (syncStatus != null) ...[
+              const SizedBox(width: 8),
+              _TransactionSyncChip(
+                status: syncStatus!,
+                errorText: syncError,
+                compact: compactSyncStatus,
+              ),
+            ],
+          ],
+        ),
+        if (hasNote) ...[
+          const SizedBox(height: 4),
+          Text(
+            note!,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+        if (createdByText != null && createdByText!.isNotEmpty) ...[
+          const SizedBox(height: 5),
+          Row(
+            children: [
+              if (createdByAvatar != null && createdByAvatar!.isNotEmpty) ...[
+                Text(createdByAvatar!, style: const TextStyle(fontSize: 13)),
+                const SizedBox(width: 4),
+              ] else ...[
+                Icon(
+                  Icons.person_outline_rounded,
+                  size: 13,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 4),
+              ],
+              Flexible(
+                child: Text(
+                  '由 $createdByText 添加',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+    final value = ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 132),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: Text(
+              amount,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                color: amountColor,
+                fontWeight: AppTheme.headingWeight,
+              ),
+            ),
+          ),
+          if (convertedAmount != null && convertedAmount!.isNotEmpty) ...[
+            const SizedBox(height: 3),
+            Text(
+              convertedAmount!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: _AnimatedTapSurface(
@@ -1419,144 +1554,38 @@ class AppTransactionTile extends StatelessWidget {
         onLongPress: onLongPress,
         child: Padding(
           padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              leading ?? _TypeBadge(isExpense: isExpense, color: amountColor),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            category,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.titleSmall,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 300;
+              return Row(
+                children: [
+                  leading ??
+                      _TypeBadge(isExpense: isExpense, color: amountColor),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: compact
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              details,
+                              const SizedBox(height: 8),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: value,
+                              ),
+                            ],
+                          )
+                        : Row(
+                            children: [
+                              Expanded(child: details),
+                              const SizedBox(width: 12),
+                              value,
+                            ],
                           ),
-                        ),
-                        if (people.isNotEmpty) ...[
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Text(
-                              people,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            date,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: colorScheme.onSurfaceVariant),
-                          ),
-                        ),
-                        if (syncStatus != null) ...[
-                          const SizedBox(width: 8),
-                          _TransactionSyncChip(
-                            status: syncStatus!,
-                            errorText: syncError,
-                            compact: compactSyncStatus,
-                          ),
-                        ],
-                      ],
-                    ),
-                    if (hasNote) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        note!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ],
-                    if (createdByText != null && createdByText!.isNotEmpty) ...[
-                      const SizedBox(height: 5),
-                      Row(
-                        children: [
-                          if (createdByAvatar != null &&
-                              createdByAvatar!.isNotEmpty) ...[
-                            Text(
-                              createdByAvatar!,
-                              style: const TextStyle(fontSize: 13),
-                            ),
-                            const SizedBox(width: 4),
-                          ] else ...[
-                            Icon(
-                              Icons.person_outline_rounded,
-                              size: 13,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                            const SizedBox(width: 4),
-                          ],
-                          Flexible(
-                            child: Text(
-                              '由 $createdByText 添加',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.labelSmall
-                                  ?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 132),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerRight,
-                      child: Text(
-                        amount,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: amountColor,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                    if (convertedAmount != null &&
-                        convertedAmount!.isNotEmpty) ...[
-                      const SizedBox(height: 3),
-                      Text(
-                        convertedAmount!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.right,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),

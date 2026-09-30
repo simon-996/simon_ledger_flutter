@@ -29,9 +29,7 @@ void main() {
     );
     await tester.pump();
 
-    final rateField = tester.widget<TextField>(_rateFieldFinder());
-    expect(rateField.enabled, isFalse);
-    expect(rateField.controller!.text, '1');
+    expect(_rateFieldFinder(), findsNothing);
     expect(find.text('人民币账本汇率固定为 1'), findsOneWidget);
   });
 
@@ -57,9 +55,8 @@ void main() {
     );
     await tester.pump();
 
-    final rateField = tester.widget<TextField>(_rateFieldFinder());
-    expect(rateField.enabled, isFalse);
-    expect(rateField.controller!.text, '1');
+    expect(_rateFieldFinder(), findsNothing);
+    expect(find.text('人民币账本汇率固定为 1'), findsOneWidget);
   });
 
   testWidgets('foreign currency ledger allows editing exchange rate', (
@@ -86,6 +83,21 @@ void main() {
     expect(rateField.enabled, isTrue);
     expect(rateField.controller!.text, '1');
     expect(find.text('1 USD = ? CNY'), findsOneWidget);
+    await tester.enterText(
+      find.byWidgetPredicate(
+        (w) => w is TextField && w.decoration?.labelText == '账本名称',
+      ),
+      '外币账本',
+    );
+    await tester.enterText(_rateFieldFinder(), 'NaN');
+    await tester.pump();
+    await tester.tap(find.text('创建账本'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<TextField>(_rateFieldFinder()).decoration?.errorText,
+      '请输入大于 0 的有效汇率',
+    );
+    expect(find.byType(CreateLedgerSheet), findsOneWidget);
   });
 
   testWidgets('editing ledger shows newly added person immediately', (

@@ -26,10 +26,16 @@ class BookkeepingTab extends ConsumerStatefulWidget {
     super.key,
     required this.ledgers,
     this.isActive = true,
+    this.onCreateLedger,
+    this.onOpenLedger,
+    this.bottomNavigationReserve = 70,
   });
 
   final List<Ledger> ledgers;
   final bool isActive;
+  final VoidCallback? onCreateLedger;
+  final ValueChanged<Ledger>? onOpenLedger;
+  final double bottomNavigationReserve;
 
   @override
   ConsumerState<BookkeepingTab> createState() => _BookkeepingTabState();
@@ -43,10 +49,29 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
   String? _payerPersonUuid;
   int _transactionType = 0;
   bool _savingTransaction = false;
-  bool _successDialogVisible = false;
+  DateTime? _date;
+  bool _validationActive = false;
+  final _amountAnchor = GlobalKey();
+  final _categoryAnchor = GlobalKey();
+  final _peopleAnchor = GlobalKey();
+
+  String? get _amountError {
+    final amount = double.tryParse(_amountController.text);
+    return _validationActive &&
+            (amount == null || !amount.isFinite || amount <= 0)
+        ? '请输入大于 0 的有效金额'
+        : null;
+  }
+
+  String? get _peopleError =>
+      _validationActive && _selectedPersonIds.isEmpty ? '请至少选择一个参与人员' : null;
+  String? get _categoryError =>
+      _validationActive &&
+          (_selectedCategory == null || _selectedCategory!.trim().isEmpty)
+      ? '请选择分类'
+      : null;
   bool _highlightLedgerSelector = false;
   bool _amountFocusRequestedForEntry = false;
-  double _lastKeyboardBottom = 0;
   int _ledgerSelectorAttentionRequest = 0;
 
   final _amountController = TextEditingController();
@@ -280,88 +305,72 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     super.dispose();
   }
 
-  void _showSuccessAnimation(
-    double amount,
-    String currency,
-    String category,
-    String ledgerName,
-    int transactionType,
-    Iterable<Person> people,
-    double keyboardBottom,
-  ) {
-    _successDialogVisible = true;
-    showGeneralDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
-      barrierColor: Theme.of(context).colorScheme.scrim.withValues(
-        alpha: AppTheme.modalBarrierOpacity,
-      ),
-      transitionDuration: const Duration(milliseconds: 420),
-      pageBuilder: (context, animation, secondaryAnimation) {
-        return SafeArea(
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(20, 24, 20, 24 + keyboardBottom),
-            child: Align(
-              alignment: keyboardBottom > 0
-                  ? Alignment.bottomCenter
-                  : Alignment.center,
-              child: _BookkeepingSuccessCard(
-                amount: amount,
-                currency: currency,
-                category: category,
-                ledgerName: ledgerName,
-                transactionType: transactionType,
-                people: people.toList(),
+  void _showSavedNotice(TransactionRecord record, Ledger? ledger) {
+    final savedScope = ref.read(activeLocalDataScopeProvider);
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 6),
+        content: Row(
+          children: [
+            Expanded(child: Text(record.type == 1 ? '收入已记下' : '支出已记下')),
+            if (ledger != null && widget.onOpenLedger != null)
+              TextButton(
+                style: TextButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.inversePrimary,
+                ),
+                onPressed: () => widget.onOpenLedger!(ledger),
+                child: const Text('查看'),
               ),
-            ),
-          ),
-        );
-      },
-      transitionBuilder: (context, animation, secondaryAnimation, child) {
-        final curved = CurvedAnimation(
-          parent: animation,
-          curve: AppMotion.emphasized,
-          reverseCurve: Curves.easeInCubic,
-        );
-        final scale = Tween<double>(begin: 0.94, end: 1).animate(curved);
-        final offset = Tween<Offset>(
-          begin: const Offset(0, 0.04),
-          end: Offset.zero,
-        ).animate(curved);
-
-        return FadeTransition(
-          opacity: animation,
-          child: SlideTransition(
-            position: offset,
-            child: ScaleTransition(scale: scale, child: child),
-          ),
-        );
-      },
-    ).whenComplete(() {
-      _successDialogVisible = false;
-    });
-
-    Future.delayed(const Duration(milliseconds: 1400), () {
-      if (!mounted || !_successDialogVisible) return;
-      final navigator = Navigator.of(context, rootNavigator: true);
-      if (!navigator.canPop()) return;
-      _successDialogVisible = false;
-      navigator.pop();
-    });
+          ],
+        ),
+        action: SnackBarAction(
+          label: '撤销',
+          onPressed: () async {
+            if (!mounted) return;
+            if (ref.read(activeLocalDataScopeProvider) != savedScope) {
+              AppNotice.error(context, '当前账户已变化，请在原账户查看这笔记录。');
+              return;
+            }
+            try {
+              await ref
+                  .read(transactionProvider(record.ledgerUuid).notifier)
+                  .deleteTransaction(record.uuid);
+              if (mounted &&
+                  ref.read(activeLocalDataScopeProvider) == savedScope) {
+                ref.invalidate(transactionProvider(record.ledgerUuid));
+                AppNotice.success(context, '已撤销记账');
+              }
+            } catch (error) {
+              if (mounted) {
+                AppNotice.error(
+                  context,
+                  FriendlyError.message(error, fallback: '撤销失败，请稍后重试。'),
+                );
+              }
+            }
+          },
+        ),
+      ),
+    );
   }
 
   void _saveTransaction(List<Person> peoplePool) async {
     if (_savingTransaction) return;
 
+    setState(() => _validationActive = true);
     final amount = double.tryParse(_amountController.text);
-    if (amount == null || amount <= 0) {
-      AppNotice.error(context, '请输入大于 0 的有效金额');
+    if (_amountError != null) {
+      revealTransactionField(_amountAnchor, focus: _amountFocusNode);
       return;
     }
-
-    if (_selectedPersonIds.isEmpty) {
-      AppNotice.error(context, '请至少选择一个参与人员');
+    if (_peopleError != null) {
+      revealTransactionField(_peopleAnchor);
+      return;
+    }
+    if (_categoryError != null) {
+      revealTransactionField(_categoryAnchor);
       return;
     }
 
@@ -375,39 +384,42 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
       return;
     }
 
-    final personMap = peopleByUuid(peoplePool);
-    final selectedPeople = _selectedPersonIds
-        .map((pid) => personOrFallback(personMap, pid))
-        .toList();
-    TransactionRecord? savedRecord;
+    final transactionType = _transactionType;
+    final currentUser = ref.read(currentUserProvider).value;
+    final savedScope = ref.read(activeLocalDataScopeProvider);
+    final notifier = ref.read(transactionProvider(ledgerId).notifier);
+    final savedRecord = TransactionRecord()
+      ..uuid = DateTime.now().microsecondsSinceEpoch.toString()
+      ..ledgerUuid = ledgerId
+      ..type = transactionType
+      ..payerPersonUuid = transactionType == 0 ? _payerPersonUuid : null
+      ..amount = amount!
+      ..currencyCode = currency
+      ..category = category
+      ..personUuids = _selectedPersonIds.toList()
+      ..note = _noteController.text.trim()
+      ..createdAt = _date ?? DateTime.now();
     setState(() => _savingTransaction = true);
+    FocusScope.of(context).unfocus();
     try {
       final profile = await ref.read(localProfileProvider.future);
-      final currentUser = ref.read(currentUserProvider).value;
-      savedRecord = TransactionRecord()
-        ..uuid = DateTime.now().microsecondsSinceEpoch.toString()
-        ..ledgerUuid = ledgerId
-        ..type = _transactionType
-        ..payerPersonUuid = _transactionType == 0 ? _payerPersonUuid : null
-        ..amount = amount
-        ..currencyCode = currency
-        ..category = category
-        ..personUuids = _selectedPersonIds.toList()
-        ..note = _noteController.text.trim()
+      if (!mounted || ref.read(activeLocalDataScopeProvider) != savedScope) {
+        return;
+      }
+      savedRecord
         ..createdByUserUuid = currentUser?.uuid
         ..createdByNickname =
             currentUser?.nickname ?? profile.normalizedNickname
-        ..createdByAvatar = currentUser?.avatar ?? profile.personAvatar
-        ..createdAt = DateTime.now();
+        ..createdByAvatar = currentUser?.avatar ?? profile.personAvatar;
 
-      await ref
-          .read(transactionProvider(ledgerId).notifier)
-          .addTransaction(savedRecord);
-      await _rememberCategory(_transactionType, category);
+      await notifier.addTransaction(savedRecord);
+      await _rememberCategory(transactionType, category);
     } catch (e) {
-      final record = savedRecord;
-      if (record != null && await _isTransactionSavedLocally(record)) {
-        await _rememberCategory(_transactionType, category);
+      if (!mounted || ref.read(activeLocalDataScopeProvider) != savedScope) {
+        return;
+      }
+      if (await _isTransactionSavedLocally(savedRecord)) {
+        await _rememberCategory(transactionType, category);
         ref.invalidate(transactionProvider(ledgerId));
         ref.invalidate(ledgerSyncStatusProvider(ledgerId));
       } else {
@@ -424,19 +436,16 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
       }
     }
 
-    if (!mounted) return;
-    _showSuccessAnimation(
-      amount,
-      currency,
-      category,
-      ledger?.name ?? '当前账本',
-      _transactionType,
-      selectedPeople,
-      _lastKeyboardBottom,
-    );
-    _lastKeyboardBottom = 0;
+    if (!mounted || ref.read(activeLocalDataScopeProvider) != savedScope) {
+      return;
+    }
+    _showSavedNotice(savedRecord, ledger);
     _amountController.clear();
     _noteController.clear();
+    setState(() {
+      _date = null;
+      _validationActive = false;
+    });
     FocusScope.of(context).unfocus();
   }
 
@@ -559,8 +568,9 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
         icon: Icons.edit_note_rounded,
         title: widget.ledgers.isEmpty ? '还没有可记账的账本' : '当前没有可记账的账本',
         message: widget.ledgers.isEmpty
-            ? '先到“账本”页面创建账本，再回来记录收支。'
+            ? '创建账本后，即可记录第一笔收支。'
             : '你对现有共享账本只有查看权限，可以联系管理员调整权限，或创建自己的账本。',
+        action: widget.onCreateLedger == null ? null : FilledButton.icon(onPressed: widget.onCreateLedger, icon: const Icon(Icons.add_rounded), label: Text(widget.ledgers.isEmpty ? '创建第一本账本' : '创建账本')),
       );
     }
 
@@ -585,6 +595,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     final ledgerPeopleById = ref
         .watch(cachedPeopleProvider)
         .maybeWhen(data: peopleByUuid, orElse: () => const <String, Person>{});
+    final recentTransactions = selectedLedger == null ? <TransactionRecord>[] : (ref.watch(transactionProvider(selectedLedger.uuid)).value ?? const <TransactionRecord>[]).where((record) => !record.isDeleted).toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     final syncStatus = selectedLedger == null
         ? null
         : ref.watch(ledgerSyncStatusProvider(selectedLedger.uuid)).value;
@@ -596,11 +607,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
         builder: (context) {
           final colorScheme = Theme.of(context).colorScheme;
           final keyboardBottom = MediaQuery.viewInsetsOf(context).bottom;
-          if (keyboardBottom > 0) {
-            _lastKeyboardBottom = keyboardBottom;
-          }
-          final navigationReserve =
-              Theme.of(context).navigationBarTheme.height ?? 70;
+          final navigationReserve = widget.bottomNavigationReserve;
           final keyboardLift = keyboardBottom > navigationReserve
               ? keyboardBottom - navigationReserve
               : 0.0;
@@ -609,7 +616,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(
-                child: SingleChildScrollView(
+                child: AbsorbPointer(absorbing: _savingTransaction, child: SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(
                     AppTheme.pagePadding,
                     AppTheme.pagePadding,
@@ -658,6 +665,9 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                       AppAnimatedEntry(
                         delay: const Duration(milliseconds: 60),
                         child: _BookkeepingAmountPanel(
+                          key: _amountAnchor,
+                          errorText: _amountError,
+                          enabled: !_savingTransaction,
                           selectedType: _transactionType,
                           onTypeChanged: (type) {
                             _setAndPersist(() {
@@ -675,7 +685,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                           onCurrencyChanged: (currency) {
                             _setAndPersist(() => _selectedCurrency = currency);
                           },
-                          onAmountChanged: _limitAmountPrecision,
+                          onAmountChanged: (value) { _limitAmountPrecision(value); setState(() {}); },
                         ),
                       ),
                       const SizedBox(height: 14),
@@ -701,6 +711,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                               ),
                               const SizedBox(height: 12),
                               CategorySelector(
+                                key: _categoryAnchor,
                                 categories: _currentCategories,
                                 selectedCategory:
                                     _selectedCategory ??
@@ -713,6 +724,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                                 },
                                 onAddCategory: _addCurrentCategory,
                               ),
+                              TransactionFieldError(message: _categoryError),
                             ],
                           ),
                         ),
@@ -735,7 +747,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                             ),
                             data: (peoplePool) {
                               if (selectedLedger.personUuids.isEmpty) {
-                                return const SizedBox.shrink();
+                                return Column(key: _peopleAnchor, children: [const Text('请先为账本添加人员'), TransactionFieldError(message: _peopleError)]);
                               }
 
                               final personMap = peopleByUuid(peoplePool);
@@ -743,7 +755,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                                   .where(personMap.containsKey)
                                   .toList();
                               if (activePersonIds.isEmpty) {
-                                return const SizedBox.shrink();
+                                return Column(key: _peopleAnchor, children: [const Text('请先为账本添加有效人员'), TransactionFieldError(message: _peopleError)]);
                               }
                               _sanitizeVisiblePeopleSelection(activePersonIds);
                               final personChoices = activePersonIds.map((pid) {
@@ -756,9 +768,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                               }).toList();
                               return AppAnimatedSwitcher(
                                 child: AppSectionCard(
-                                  key: ValueKey(
-                                    'people-${selectedLedger.uuid}',
-                                  ),
+                                  key: _peopleAnchor,
                                   child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.stretch,
@@ -776,8 +786,8 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                                                 _payerPersonUuid != null,
                                             description:
                                                 _payerPersonUuid == null
-                                                ? '使用人员将平均分摊该支出金额。'
-                                                : '付款人先垫付，总额由使用人员平均分摊。',
+                                                ? '谁付款 · 共同钱包'
+                                                : '谁付款 · 选择垫付人',
                                             onChanged: (paidByPerson) {
                                               _setAndPersist(() {
                                                 if (paidByPerson) {
@@ -796,8 +806,8 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                                       ),
                                       AppSectionHeader(
                                         title: _transactionType == 0
-                                            ? '使用人员'
-                                            : '参与人员',
+                                            ? '谁承担'
+                                            : '谁收款',
                                         trailing: TextButton(
                                           onPressed: () {
                                             _setAndPersist(() {
@@ -833,6 +843,8 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                                           });
                                         },
                                       ),
+                                      TransactionFieldError(message: _peopleError),
+                                      TransactionSplitSummary(type: _transactionType, amount: double.tryParse(_amountController.text), currency: _selectedCurrency ?? 'CNY', participantCount: _selectedPersonIds.length, payerName: _payerPersonUuid == null ? null : personMap[_payerPersonUuid]?.name),
                                       TransactionAnimatedVisibility(
                                         visible:
                                             _transactionType == 0 &&
@@ -862,7 +874,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                                                     CrossAxisAlignment.stretch,
                                                 children: [
                                                   Text(
-                                                    '付款人',
+                                                    '谁付款',
                                                     style: Theme.of(
                                                       context,
                                                     ).textTheme.titleSmall,
@@ -892,9 +904,11 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                           ),
                         ),
                       if (selectedLedger != null) const SizedBox(height: 14),
+                      TransactionDateControl(date: _date, onChanged: (date) => setState(() => _date = date)),
                       AppAnimatedEntry(
                         delay: const Duration(milliseconds: 220),
                         child: TextField(
+                          enabled: !_savingTransaction,
                           controller: _noteController,
                           decoration: const InputDecoration(
                             labelText: '备注（选填）',
@@ -904,10 +918,20 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                           minLines: 1,
                         ),
                       ),
+                      if (selectedLedger != null && recentTransactions.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        AppSectionHeader(title: '最近记录', trailing: widget.onOpenLedger == null ? null : TextButton(onPressed: () => widget.onOpenLedger!(selectedLedger), child: const Text('查看流水'))),
+                        for (final record in recentTransactions.take(3)) ListTile(
+                          dense: true, contentPadding: EdgeInsets.zero,
+                          title: Text(record.category), subtitle: Text('${record.createdAt.month}月${record.createdAt.day}日${record.note.isEmpty ? '' : ' · ${record.note}'}', maxLines: 1, overflow: TextOverflow.ellipsis),
+                          trailing: Text('${record.type == 1 ? '+' : '−'} ${record.currencyCode} ${record.amount.toStringAsFixed(2)}'),
+                          onTap: widget.onOpenLedger == null ? null : () => widget.onOpenLedger!(selectedLedger),
+                        ),
+                      ],
                       const SizedBox(height: 24),
                     ],
                   ),
-                ),
+                )),
               ),
               AnimatedPadding(
                 duration: AppMotion.fast,
@@ -1051,11 +1075,6 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     _selectedPersonIds.retainWhere(activePersonIdSet.contains);
     changed = changed || beforeCount != _selectedPersonIds.length;
 
-    if (_selectedPersonIds.isEmpty) {
-      _selectedPersonIds.add(activePersonIds.first);
-      changed = true;
-    }
-
     if (_payerPersonUuid != null &&
         !activePersonIdSet.contains(_payerPersonUuid)) {
       _payerPersonUuid = null;
@@ -1072,6 +1091,9 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
 
 class _BookkeepingAmountPanel extends StatelessWidget {
   const _BookkeepingAmountPanel({
+    super.key,
+    this.errorText,
+    required this.enabled,
     required this.selectedType,
     required this.onTypeChanged,
     required this.amountController,
@@ -1082,6 +1104,8 @@ class _BookkeepingAmountPanel extends StatelessWidget {
     required this.onAmountChanged,
   });
 
+  final String? errorText;
+  final bool enabled;
   final int selectedType;
   final ValueChanged<int> onTypeChanged;
   final TextEditingController amountController;
@@ -1099,17 +1123,10 @@ class _BookkeepingAmountPanel extends StatelessWidget {
       key: const ValueKey('bookkeeping-amount-panel'),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.7),
+          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: colorScheme.shadow.withValues(alpha: 0.06),
-            blurRadius: 26,
-            offset: const Offset(0, 14),
-          ),
-        ],
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
@@ -1124,19 +1141,22 @@ class _BookkeepingAmountPanel extends StatelessWidget {
             TransactionResponsivePair(
               breakpoint: 0,
               first: SizedBox(
-                height: 58,
+                height: errorText == null ? 58 : 118,
                 child: TextField(
                   key: const ValueKey('bookkeeping-amount-input'),
+                  enabled: enabled,
                   controller: amountController,
                   focusNode: amountFocusNode,
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
+                    fontWeight: AppTheme.emphasisWeight,
                   ),
                   decoration: InputDecoration(
                     labelText: '金额',
+                    errorText: errorText,
+                    errorMaxLines: 3,
                     hintText: '0.00',
                     hintStyle: Theme.of(context).textTheme.titleMedium
                         ?.copyWith(
@@ -1149,7 +1169,7 @@ class _BookkeepingAmountPanel extends StatelessWidget {
                     prefixStyle: Theme.of(context).textTheme.labelLarge
                         ?.copyWith(
                           color: colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: AppTheme.emphasisWeight,
                         ),
                   ),
                   onChanged: onAmountChanged,
@@ -1163,226 +1183,6 @@ class _BookkeepingAmountPanel extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _BookkeepingSuccessCard extends StatelessWidget {
-  const _BookkeepingSuccessCard({
-    required this.amount,
-    required this.currency,
-    required this.category,
-    required this.ledgerName,
-    required this.transactionType,
-    required this.people,
-  });
-
-  final double amount;
-  final String currency;
-  final String category;
-  final String ledgerName;
-  final int transactionType;
-  final List<Person> people;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final isIncome = transactionType == 1;
-    final toneColor = transactionAccentColor(context, transactionType);
-    final amountPrefix = isIncome ? '+' : '-';
-    final visiblePeople = people.take(3).toList();
-    final hiddenPeopleCount = people.length - visiblePeople.length;
-
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 344),
-      child: Card(
-        margin: EdgeInsets.zero,
-        elevation: 20,
-        shadowColor: colorScheme.shadow.withValues(alpha: 0.2),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(30),
-          side: BorderSide(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.76),
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _SuccessCheckBadge(color: toneColor),
-              const SizedBox(height: 14),
-              Text(
-                isIncome ? '收入已记下' : '支出已记下',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                '已保存到 $ledgerName',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 14),
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: toneColor.withValues(alpha: 0.09),
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: toneColor.withValues(alpha: 0.14)),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
-                  ),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      '$amountPrefix $currency ${amount.toStringAsFixed(2)}',
-                      style: Theme.of(context).textTheme.headlineMedium
-                          ?.copyWith(
-                            color: toneColor,
-                            fontWeight: FontWeight.w900,
-                          ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                alignment: WrapAlignment.center,
-                children: [
-                  _SuccessInfoChip(
-                    icon: Icons.category_outlined,
-                    label: category,
-                  ),
-                  for (final person in visiblePeople)
-                    _SuccessInfoChip(avatar: person.avatar, label: person.name),
-                  if (hiddenPeopleCount > 0)
-                    _SuccessInfoChip(label: '+$hiddenPeopleCount 人'),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.offline_pin_rounded,
-                    size: 15,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 5),
-                  Text(
-                    '本机已保存，可以继续记账',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SuccessCheckBadge extends StatelessWidget {
-  const _SuccessCheckBadge({required this.color});
-
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0, end: 1),
-      duration: const Duration(milliseconds: 520),
-      curve: Curves.easeOutBack,
-      builder: (context, value, child) {
-        return Transform.scale(scale: value, child: child);
-      },
-      child: Container(
-        width: 62,
-        height: 62,
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: color.withValues(alpha: 0.18)),
-          boxShadow: [
-            BoxShadow(
-              color: color.withValues(alpha: 0.16),
-              blurRadius: 22,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: Center(
-          child: Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: colorScheme.surface,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(Icons.check_rounded, size: 30, color: color),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SuccessInfoChip extends StatelessWidget {
-  const _SuccessInfoChip({required this.label, this.icon, this.avatar});
-
-  final String label;
-  final IconData? icon;
-  final String? avatar;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final avatarText = avatar;
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 136),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            Icon(icon, size: 15, color: colorScheme.onSurfaceVariant),
-            const SizedBox(width: 5),
-          ] else if (avatarText != null && avatarText.isNotEmpty) ...[
-            Text(avatarText, style: const TextStyle(fontSize: 13)),
-            const SizedBox(width: 5),
-          ],
-          Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(
-                context,
-              ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1500,13 +1300,13 @@ class _QuickEntryHeader extends StatelessWidget {
                             : colorScheme.onSurface,
                         fontWeight: ledger == null
                             ? FontWeight.w600
-                            : FontWeight.w800,
+                            : AppTheme.emphasisWeight,
                       ),
                     ),
                     if (ledger != null) ...[
                       const SizedBox(height: 2),
                       Text(
-                        '${currencyCode ?? 'CNY'} · ${ledger!.displayCode}',
+                        '${currencyCode ?? 'CNY'} · ${ledger!.isLocalOnly ? '本地保存' : '云端同步'}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -1597,7 +1397,7 @@ class _LedgerPickerSheetState extends State<_LedgerPickerSheet> {
                     child: Text(
                       '选择所属账本',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
+                        fontWeight: AppTheme.headingWeight,
                       ),
                     ),
                   ),
@@ -1771,7 +1571,7 @@ class _LedgerPickerItem extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w900),
+                            ?.copyWith(fontWeight: AppTheme.headingWeight),
                       ),
                     ),
                     const SizedBox(width: 8),

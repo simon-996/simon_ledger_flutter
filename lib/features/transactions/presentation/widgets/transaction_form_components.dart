@@ -70,35 +70,41 @@ class _TransactionTypeButton extends StatelessWidget {
     final accent = transactionAccentColor(context, value);
     final mutedColor = colorScheme.onSurfaceVariant;
 
-    return AnimatedContainer(
-      key: ValueKey('transaction-type-option-$value'),
-      duration: AppMotion.fast,
-      curve: AppMotion.standard,
-      height: 48,
-      decoration: BoxDecoration(
-        color: selected
-            ? accent.withValues(alpha: 0.12)
-            : colorScheme.surfaceContainerHigh.withValues(alpha: 0.52),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: selected ? null : () => onChanged(value),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 20, color: selected ? accent : mutedColor),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: selected ? accent : mutedColor,
-                  fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: AnimatedContainer(
+        key: ValueKey('transaction-type-option-$value'),
+        duration: AppMotion.fast,
+        curve: AppMotion.standard,
+        height: 48,
+        decoration: BoxDecoration(
+          color: selected
+              ? accent.withValues(alpha: 0.12)
+              : colorScheme.surfaceContainerHigh.withValues(alpha: 0.3),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: selected ? null : () => onChanged(value),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 20, color: selected ? accent : mutedColor),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: selected ? accent : mutedColor,
+                    fontWeight: selected
+                        ? AppTheme.emphasisWeight
+                        : FontWeight.w500,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -184,44 +190,50 @@ class _PaymentModeOption extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final mutedColor = colorScheme.onSurfaceVariant;
 
-    return AnimatedContainer(
-      key: ValueKey('payment-mode-option-$label'),
-      duration: AppMotion.fast,
-      curve: AppMotion.standard,
-      height: 44,
-      decoration: BoxDecoration(
-        color: selected
-            ? colorScheme.primary.withValues(alpha: 0.12)
-            : colorScheme.surfaceContainerHigh.withValues(alpha: 0.52),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 18,
-                color: selected ? colorScheme.primary : mutedColor,
-              ),
-              const SizedBox(width: 7),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: selected ? colorScheme.primary : mutedColor,
-                    fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: AnimatedContainer(
+        key: ValueKey('payment-mode-option-$label'),
+        duration: AppMotion.fast,
+        curve: AppMotion.standard,
+        height: 44,
+        decoration: BoxDecoration(
+          color: selected
+              ? colorScheme.primary.withValues(alpha: 0.12)
+              : colorScheme.surfaceContainerHigh.withValues(alpha: 0.3),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color: selected ? colorScheme.primary : mutedColor,
+                ),
+                const SizedBox(width: 7),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: selected ? colorScheme.primary : mutedColor,
+                      fontWeight: selected
+                          ? AppTheme.emphasisWeight
+                          : FontWeight.w500,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -278,23 +290,35 @@ class CurrencySelector extends StatelessWidget {
   Widget build(BuildContext context) {
     if (currencies.length == 1) {
       final currency = currencies.first;
-      return SizedBox(
-        width: double.infinity,
-        height: 56,
-        child: _CurrencyQuickItem(
-          currency: currency,
-          selected: currency == selectedCurrency,
-          fillWidth: true,
-          onTap: () {
-            if (currency != selectedCurrency) {
-              onChanged(currency);
-            }
-          },
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Text(
+          '$currency · ${_currencyName(currency)}',
+          style: Theme.of(context).textTheme.bodySmall,
         ),
       );
     }
+    if (currencies.length > 4) {
+      return OutlinedButton.icon(
+        key: const ValueKey('currency-picker'),
+        icon: const Icon(Icons.currency_exchange_rounded, size: 18),
+        label: Text('$selectedCurrency · ${_currencyName(selectedCurrency)}'),
+        onPressed: () async {
+          final choice = await showModalBottomSheet<String>(
+            context: context,
+            isScrollControlled: true,
+            showDragHandle: true,
+            builder: (_) => _CurrencySearchSheet(
+              currencies: currencies,
+              selected: selectedCurrency,
+            ),
+          );
+          if (choice != null && choice != selectedCurrency) onChanged(choice);
+        },
+      );
+    }
 
-    if (currencies.length == 2) {
+    if (currencies.length <= 4) {
       return SizedBox(
         height: 56,
         child: Row(
@@ -320,28 +344,7 @@ class CurrencySelector extends StatelessWidget {
       );
     }
 
-    return SizedBox(
-      height: 56,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        clipBehavior: Clip.hardEdge,
-        itemCount: currencies.length,
-        separatorBuilder: (context, index) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final currency = currencies[index];
-          return _CurrencyQuickItem(
-            currency: currency,
-            selected: currency == selectedCurrency,
-            fillWidth: false,
-            onTap: () {
-              if (currency != selectedCurrency) {
-                onChanged(currency);
-              }
-            },
-          );
-        },
-      ),
-    );
+    return const SizedBox.shrink();
   }
 }
 
@@ -362,96 +365,82 @@ class _CurrencyQuickItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final label = currency.trim().toUpperCase();
-    final displayName = _currencyDisplayName(label);
+    final displayName = _currencyName(label);
     final mutedColor = colorScheme.onSurfaceVariant;
 
-    return AnimatedContainer(
-      key: ValueKey('currency-option-$label'),
-      width: fillWidth ? double.infinity : null,
-      duration: AppMotion.fast,
-      curve: AppMotion.standard,
-      decoration: BoxDecoration(
-        color: selected
-            ? colorScheme.primary.withValues(alpha: 0.12)
-            : colorScheme.surfaceContainerHigh.withValues(alpha: 0.52),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: onTap,
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: fillWidth ? 8 : 12,
-              vertical: 8,
-            ),
-            child: Row(
-              mainAxisSize: fillWidth ? MainAxisSize.max : MainAxisSize.min,
-              mainAxisAlignment: fillWidth
-                  ? MainAxisAlignment.center
-                  : MainAxisAlignment.start,
-              children: [
-                Flexible(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: selected ? colorScheme.primary : mutedColor,
-                          fontWeight: selected
-                              ? FontWeight.w800
-                              : FontWeight.w500,
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: AnimatedContainer(
+        key: ValueKey('currency-option-$label'),
+        width: fillWidth ? double.infinity : null,
+        duration: AppMotion.fast,
+        curve: AppMotion.standard,
+        decoration: BoxDecoration(
+          color: selected
+              ? colorScheme.primary.withValues(alpha: 0.12)
+              : colorScheme.surfaceContainerHigh.withValues(alpha: 0.3),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: onTap,
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: fillWidth ? 8 : 12,
+                vertical: 8,
+              ),
+              child: Row(
+                mainAxisSize: fillWidth ? MainAxisSize.max : MainAxisSize.min,
+                mainAxisAlignment: fillWidth
+                    ? MainAxisAlignment.center
+                    : MainAxisAlignment.start,
+                children: [
+                  Flexible(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(
+                                color: selected
+                                    ? colorScheme.primary
+                                    : mutedColor,
+                                fontWeight: selected
+                                    ? AppTheme.emphasisWeight
+                                    : FontWeight.w500,
+                              ),
                         ),
-                      ),
-                      Text(
-                        displayName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: selected
-                              ? colorScheme.onSurfaceVariant
-                              : mutedColor,
-                          fontWeight: selected
-                              ? FontWeight.w600
-                              : FontWeight.w500,
+                        Text(
+                          displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: selected
+                                    ? colorScheme.onSurfaceVariant
+                                    : mutedColor,
+                                fontWeight: selected
+                                    ? FontWeight.w600
+                                    : FontWeight.w500,
+                              ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
       ),
     );
-  }
-
-  String _currencyDisplayName(String code) {
-    return switch (code) {
-      'CNY' => '人民币',
-      'USD' => '美元',
-      'EUR' => '欧元',
-      'GBP' => '英镑',
-      'JPY' => '日元',
-      'HKD' => '港币',
-      'TWD' => '新台币',
-      'MOP' => '澳门元',
-      'SGD' => '新加坡元',
-      'THB' => '泰铢',
-      'MYR' => '马来西亚林吉特',
-      'KRW' => '韩元',
-      'AUD' => '澳元',
-      'CAD' => '加元',
-      'NZD' => '新西兰元',
-      'CHF' => '瑞士法郎',
-      _ => code,
-    };
   }
 }
 
@@ -556,12 +545,12 @@ class _AddCategoryQuickItem extends StatelessWidget {
         curve: AppMotion.standard,
         decoration: BoxDecoration(
           color: accent.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
             onTap: onTap,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -574,7 +563,7 @@ class _AddCategoryQuickItem extends StatelessWidget {
                     '自定义',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
                       color: accent,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: AppTheme.emphasisWeight,
                     ),
                   ),
                 ],
@@ -636,7 +625,7 @@ class _CategoryCreateSheetState extends State<_CategoryCreateSheet> {
                     child: Text(
                       '添加${widget.isIncome ? '收入' : '支出'}分类',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
+                        fontWeight: AppTheme.headingWeight,
                       ),
                     ),
                   ),
@@ -704,38 +693,44 @@ class _CategoryQuickItem extends StatelessWidget {
     final accent = transactionAccentColor(context, isIncome ? 1 : 0);
     final mutedColor = colorScheme.onSurfaceVariant;
 
-    return AnimatedContainer(
-      key: ValueKey('category-option-$category'),
-      duration: AppMotion.fast,
-      curve: AppMotion.standard,
-      decoration: BoxDecoration(
-        color: selected
-            ? accent.withValues(alpha: 0.12)
-            : colorScheme.surfaceContainerHigh.withValues(alpha: 0.52),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 18, color: selected ? accent : mutedColor),
-                const SizedBox(width: 6),
-                Text(
-                  category,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: selected ? accent : mutedColor,
-                    fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: AnimatedContainer(
+        key: ValueKey('category-option-$category'),
+        duration: AppMotion.fast,
+        curve: AppMotion.standard,
+        decoration: BoxDecoration(
+          color: selected
+              ? accent.withValues(alpha: 0.12)
+              : colorScheme.surfaceContainerHigh.withValues(alpha: 0.3),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 18, color: selected ? accent : mutedColor),
+                  const SizedBox(width: 6),
+                  Text(
+                    category,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: selected ? accent : mutedColor,
+                      fontWeight: selected
+                          ? AppTheme.emphasisWeight
+                          : FontWeight.w500,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -770,18 +765,7 @@ class TransactionSaveButton extends StatelessWidget {
         duration: AppMotion.fast,
         curve: AppMotion.standard,
         height: 54,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: enabled
-              ? [
-                  BoxShadow(
-                    color: colorScheme.primary.withValues(alpha: 0.18),
-                    blurRadius: 16,
-                    offset: const Offset(0, 8),
-                  ),
-                ]
-              : const [],
-        ),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(18)),
         child: FilledButton(
           onPressed: onPressed,
           style: FilledButton.styleFrom(
@@ -791,9 +775,9 @@ class TransactionSaveButton extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 18),
             disabledBackgroundColor: colorScheme.surfaceContainerHighest,
             disabledForegroundColor: colorScheme.onSurfaceVariant,
-            textStyle: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+            textStyle: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: AppTheme.headingWeight,
+            ),
           ),
           child: AnimatedSwitcher(
             duration: AppMotion.fast,
@@ -882,4 +866,226 @@ Widget transactionTopFadeSlideTransition(
     opacity: animation,
     child: SlideTransition(position: offset, child: child),
   );
+}
+
+String _currencyName(String code) {
+  return switch (code) {
+    'CNY' => '人民币',
+    'USD' => '美元',
+    'EUR' => '欧元',
+    'GBP' => '英镑',
+    'JPY' => '日元',
+    'HKD' => '港币',
+    'TWD' => '新台币',
+    'MOP' => '澳门元',
+    'SGD' => '新加坡元',
+    'THB' => '泰铢',
+    'MYR' => '马来西亚林吉特',
+    'KRW' => '韩元',
+    'AUD' => '澳元',
+    'CAD' => '加元',
+    'NZD' => '新西兰元',
+    'CHF' => '瑞士法郎',
+    _ => code,
+  };
+}
+
+class _CurrencySearchSheet extends StatefulWidget {
+  const _CurrencySearchSheet({
+    required this.currencies,
+    required this.selected,
+  });
+  final List<String> currencies;
+  final String selected;
+  @override
+  State<_CurrencySearchSheet> createState() => _CurrencySearchSheetState();
+}
+
+class _CurrencySearchSheetState extends State<_CurrencySearchSheet> {
+  String _query = '';
+  @override
+  Widget build(BuildContext context) {
+    final choices = widget.currencies
+        .where(
+          (code) => '$code ${_currencyName(code)}'.toLowerCase().contains(
+            _query.toLowerCase(),
+          ),
+        )
+        .toList();
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        0,
+        20,
+        MediaQuery.viewInsetsOf(context).bottom + 20,
+      ),
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * .55,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('选择币种', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 12),
+            TextField(
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: '搜索币种',
+                prefixIcon: Icon(Icons.search),
+              ),
+              onChanged: (value) => setState(() => _query = value),
+            ),
+            Expanded(
+              child: choices.isEmpty
+                  ? const Center(child: Text('没有匹配的币种'))
+                  : ListView(
+                      children: [
+                        for (final code in choices)
+                          Semantics(
+                            selected: code == widget.selected,
+                            button: true,
+                            child: ListTile(
+                              title: Text('$code · ${_currencyName(code)}'),
+                              trailing: code == widget.selected
+                                  ? const Icon(Icons.check_rounded)
+                                  : null,
+                              onTap: () => Navigator.pop(context, code),
+                            ),
+                          ),
+                      ],
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Changing the day keeps the time of an existing record or AI draft.
+DateTime transactionDateOnDay(DateTime day, DateTime previous) {
+  final time = previous.toLocal();
+  return DateTime(
+    day.year,
+    day.month,
+    day.day,
+    time.hour,
+    time.minute,
+    time.second,
+    time.millisecond,
+    time.microsecond,
+  );
+}
+
+class TransactionDateControl extends StatelessWidget {
+  const TransactionDateControl({
+    super.key,
+    required this.date,
+    required this.onChanged,
+    this.enabled = true,
+  });
+  final DateTime? date;
+  final ValueChanged<DateTime> onChanged;
+  final bool enabled;
+  @override
+  Widget build(BuildContext context) {
+    final value = (date ?? DateTime.now()).toLocal();
+    final label =
+        '${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: TextButton.icon(
+        key: const ValueKey('transaction-date-control'),
+        icon: const Icon(Icons.event_outlined, size: 18),
+        label: Text('日期 · $label'),
+        onPressed: !enabled
+            ? null
+            : () async {
+                final now = DateTime.now();
+                final initial = value.isAfter(now) ? now : value;
+                final day = await showDatePicker(
+                  context: context,
+                  initialDate: initial,
+                  firstDate: DateTime(
+                    initial.year < 2000 ? initial.year : 2000,
+                  ),
+                  lastDate: now,
+                );
+                if (day != null && context.mounted) {
+                  onChanged(transactionDateOnDay(day, value));
+                }
+              },
+      ),
+    );
+  }
+}
+
+class TransactionFieldError extends StatelessWidget {
+  const TransactionFieldError({super.key, required this.message});
+  final String? message;
+  @override
+  Widget build(BuildContext context) => message == null
+      ? const SizedBox.shrink()
+      : Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Semantics(
+            liveRegion: true,
+            child: Text(
+              message!,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.error,
+              ),
+            ),
+          ),
+        );
+}
+
+void revealTransactionField(GlobalKey key, {FocusNode? focus}) {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    final context = key.currentContext;
+    if (context == null || !context.mounted) return;
+    focus?.requestFocus();
+    Scrollable.ensureVisible(
+      context,
+      duration: MediaQuery.maybeOf(context)?.disableAnimations == true
+          ? Duration.zero
+          : const Duration(milliseconds: 220),
+      alignment: .15,
+    );
+  });
+}
+
+class TransactionSplitSummary extends StatelessWidget {
+  const TransactionSplitSummary({
+    super.key,
+    required this.type,
+    required this.amount,
+    required this.currency,
+    required this.participantCount,
+    this.payerName,
+  });
+  final int type;
+  final double? amount;
+  final String currency;
+  final int participantCount;
+  final String? payerName;
+  @override
+  Widget build(BuildContext context) {
+    final valid = amount != null && amount!.isFinite && amount! > 0;
+    final split = valid && participantCount > 0
+        ? (amount! / participantCount).toStringAsFixed(2)
+        : '—';
+    final payer = type == 1 ? '收入分配' : '${payerName ?? '共同钱包'}付款';
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Semantics(
+        liveRegion: true,
+        child: Text(
+          '$payer · $participantCount 人${type == 1 ? '收款' : '承担'} · 每人 $currency $split',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ),
+    );
+  }
 }
