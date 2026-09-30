@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/models/ledger.dart';
+import '../../../../core/models/ai_draft.dart';
 import '../../../../core/models/money.dart';
 import '../../../../core/models/person.dart';
 import '../../../../core/models/person_lookup.dart';
@@ -11,12 +12,14 @@ import '../../../../core/network/friendly_error.dart';
 import '../../../../core/preferences/bookkeeping_preference.dart';
 import '../../../../core/preferences/last_selected_ledger_preference.dart';
 import '../../../../core/preferences/transaction_category_preference.dart';
+import '../../../../core/services/ai_draft_queue.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
 import '../providers/transaction_provider.dart';
 import 'transaction_form_components.dart';
+import 'ai_bookkeeping_flow.dart';
 
 class BookkeepingTab extends ConsumerStatefulWidget {
   const BookkeepingTab({
@@ -448,6 +451,82 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     });
   }
 
+  Future<void> _openAiFlow(Ledger ledger, {required bool canParse,
+      required bool canTranscribe}) async {
+    final List<Person> people;
+    try {
+      people = await ref.read(personProvider(
+        includeDeleted: false, ledgerUuid: ledger.uuid).future);
+    } catch (error) {
+      if (mounted) {
+        AppNotice.error(context,
+          FriendlyError.message(error, fallback: '无法读取账本人员，请稍后重试。'));
+      }
+      return;
+    }
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => FractionallySizedBox(
+        heightFactor: 0.9,
+        child: AiBookkeepingFlow(
+          ledger: ledger,
+          people: people,
+          queue: ref.read(aiDraftQueueProvider),
+          repository: ref.read(aiBookkeepingRepositoryProvider),
+          canParse: canParse,
+          canTranscribe: canTranscribe,
+          onSave: (item, draft) => _saveAiDraft(ledger, item, draft),
+        ),
+      ),
+    );
+    ref.invalidate(aiPendingDraftsProvider(ledger.uuid));
+    ref.invalidate(aiCapabilityProvider(ledger.remoteSyncUuid));
+  }
+
+  Future<void> _saveAiDraft(Ledger ledger, AiDraftItem item, AiDraft draft) async {
+    final currentLedgers = await ref.read(databaseProvider).getAllLedgers();
+    final current = currentLedgers.where((value) => value.uuid == ledger.uuid).firstOrNull;
+    if (current == null || !isAiBookkeepingEligible(current,
+        ref.read(activeLocalDataScopeProvider).isAccount)) {
+      throw StateError('账本记账权限已变化');
+    }
+    final activePeople = await ref.read(databaseProvider).getAllPeople();
+    final activeIds = activePeople.where((person) => !person.isDeleted &&
+      current.personUuids.contains(person.uuid)).map((person) => person.uuid).toSet();
+    if (draft.personUuids.isEmpty || !activeIds.containsAll(draft.personUuids) ||
+        (draft.payerPersonUuid != null && !activeIds.contains(draft.payerPersonUuid)) ||
+        !supportedCurrenciesForLedger(current).contains(draft.currencyCode) ||
+        draft.categorySuggestion == null || draft.categorySuggestion!.trim().isEmpty) {
+      throw StateError('草稿中的人员、币种或分类已失效');
+    }
+    final profile = await ref.read(localProfileProvider.future);
+    final user = ref.read(currentUserProvider).value;
+    final record = TransactionRecord()
+      ..uuid = item.uuid
+      ..clientOperationId = item.operationId
+      ..ledgerUuid = ledger.uuid
+      ..type = draft.type
+      ..payerPersonUuid = draft.type == 0 ? draft.payerPersonUuid : null
+      ..amount = draft.amount
+      ..currencyCode = draft.currencyCode
+      ..category = draft.categorySuggestion!.trim()
+      ..personUuids = draft.personUuids
+      ..note = draft.note ?? ''
+      ..createdByUserUuid = user?.uuid
+      ..createdByNickname = user?.nickname ?? profile.normalizedNickname
+      ..createdByAvatar = user?.avatar ?? profile.personAvatar
+      ..createdAt = draft.happenedAt ?? DateTime.now();
+    try {
+      await ref.read(transactionProvider(ledger.uuid).notifier).addTransaction(record);
+    } catch (_) {
+      if (!await _isTransactionSavedLocally(record)) rethrow;
+    }
+    await _rememberCategory(draft.type, record.category);
+  }
+
   Future<void> _rememberCategory(int transactionType, String category) async {
     try {
       final categories = await TransactionCategoryPreference.markRecentlyUsed(
@@ -478,6 +557,14 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     }
 
     final selectedLedger = _selectedLedger;
+    final aiEligible = selectedLedger != null && isAiBookkeepingEligible(
+      selectedLedger, ref.watch(activeLocalDataScopeProvider).isAccount);
+    final aiCapability = aiEligible
+        ? ref.watch(aiCapabilityProvider(selectedLedger.remoteSyncUuid)).value
+        : null;
+    final aiPending = aiEligible
+        ? ref.watch(aiPendingDraftsProvider(selectedLedger.uuid)).value ?? const <AiDraftItem>[]
+        : const <AiDraftItem>[];
     final currencyOptions = selectedLedger == null
         ? const ['CNY']
         : supportedCurrenciesForLedger(selectedLedger);
@@ -543,6 +630,18 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                           },
                         ),
                       ),
+                      if (aiEligible && (aiCapability?.textAvailable == true || aiPending.isNotEmpty)) ...[
+                        const SizedBox(height: 10),
+                        OutlinedButton.icon(
+                          onPressed: () => _openAiFlow(selectedLedger,
+                            canParse: aiCapability?.textAvailable == true,
+                            canTranscribe: aiCapability?.voiceAvailable == true),
+                          icon: const Icon(Icons.auto_awesome_outlined),
+                          label: Text(aiPending.isNotEmpty
+                              ? '继续确认 ${aiPending.length} 笔 AI 草稿'
+                              : 'AI 记账'),
+                        ),
+                      ],
                       if (syncStatus?.hasPending == true) ...[
                         const SizedBox(height: 10),
                         _BookkeepingSyncBanner(status: syncStatus!),
