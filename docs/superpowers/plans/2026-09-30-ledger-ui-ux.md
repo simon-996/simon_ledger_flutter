@@ -57,7 +57,7 @@ setState(() => _currentIndex = 0);
 - [x] Review specification coverage, cross-component contracts, date arithmetic, currency formatting and undo behavior.
 - [x] Run `flutter analyze` and `flutter test`; fix actual regressions and meaningful review findings.
 - [x] Run `flutter build web --dart-define=API_BASE_URL=http://127.0.0.1:18080` and inspect populated narrow/wide screens.
-- [ ] Commit, fast-forward master, verify merged result and restart local web preview with healthy API.
+- [x] Commit, fast-forward master, verify merged result and restart local web preview with healthy API.
 
 All Flutter verification commands use `$env:TEMP='D:\workplace\projects\simon-ledger\.tmp\flutter-color-check'; $env:TMP=$env:TEMP` because C drive has insufficient free space. No package upgrades or unrelated refactors.
 
@@ -72,3 +72,10 @@ All Flutter verification commands use `$env:TEMP='D:\workplace\projects\simon-le
 - 所有新增样式继续通过 ColorScheme / AppColors 使用全局语义颜色。
 
 分析额外设置 `LOCALAPPDATA` 到 D 盘临时目录，避开本机 C 盘 Dart 性能日志清理异常。
+
+## 交付记录
+
+- 实现提交 `2bb389b` 已 fast-forward 合并到 master；合并后再次运行全套测试，331 项通过。
+- master 预览已重启在 `http://127.0.0.1:5317/`；页面 HTTP 200。
+- API `http://127.0.0.1:18080/api/health` 返回 HTTP 200。
+- 预览使用本地 Web 渲染资源，避免远程渲染资源加载导致白屏。
