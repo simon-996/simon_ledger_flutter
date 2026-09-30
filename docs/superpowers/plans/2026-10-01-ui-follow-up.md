@@ -10,7 +10,7 @@
 - [x] Reproduce English built-in date controls in a real SimonLedgerApp widget test.
 - [x] Add SDK localization dependency and app-level zh_CN locale/delegates.
 - [x] Verify single-day picker actions and dismissal, and range picker start/end/close labels in Chinese.
-- [ ] Run relevant tests, static analysis, full suite and Web build; merge master and restart preview.
+- [x] Run relevant tests, static analysis, full suite and Web build; merge master and restart preview.
 
 This is follow-up correction within the previously approved Chinese UI and shared date-control design.
 
@@ -23,3 +23,10 @@ This is follow-up correction within the previously approved Chinese UI and share
 - Static analysis: no issues found.
 - Independent code review: no blocking findings; dependency changes match the installed Flutter SDK.
 - Web release build with local resources and API port 18080: succeeded.
+
+## Local delivery
+
+- Change commit b31b547 fast-forward merged into master.
+- Master dependencies resolved successfully.
+- Preview restarted from master at http://127.0.0.1:5317/ and visually checked in the existing browser tab.
+- Preview and API health endpoint http://127.0.0.1:18080/api/health both returned HTTP 200.
