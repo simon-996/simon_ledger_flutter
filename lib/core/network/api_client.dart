@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 
 import '../models/conflict_record.dart';
@@ -72,6 +74,18 @@ class ApiClient {
         data: data,
         options: _options(idempotencyKey),
       ),
+      fromJson: fromJson,
+    );
+  }
+
+  Future<T> postBytes<T>(
+    String path, {
+    required Uint8List data,
+    T Function(Object? json)? fromJson,
+  }) {
+    return _request(
+      () => _dio.post<Object?>(path, data: data,
+        options: Options(contentType: 'application/octet-stream')),
       fromJson: fromJson,
     );
   }

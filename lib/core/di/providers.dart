@@ -7,11 +7,13 @@ import '../network/api_client.dart';
 import '../network/token_store.dart';
 import '../preferences/local_profile_store.dart';
 import '../repositories/auth_repository.dart';
+import '../repositories/ai_bookkeeping_repository.dart';
 import '../repositories/invite_repository.dart';
 import '../repositories/ledger_repository.dart';
 import '../repositories/person_repository.dart';
 import '../repositories/transaction_repository.dart';
 import '../services/cloud_import_service.dart';
+import '../services/ai_draft_queue.dart';
 import '../services/conflict_coordinator.dart';
 import '../services/conflict_snapshot_codec.dart';
 import '../services/conflict_store.dart';
@@ -71,6 +73,27 @@ final apiClientProvider = Provider<ApiClient>((ref) {
       ref.read(authSessionExpiredProvider.notifier).markExpired();
     },
   );
+});
+
+final aiBookkeepingRepositoryProvider = Provider<AiBookkeepingRepository>((ref) {
+  return AiBookkeepingRepository(ref.watch(apiClientProvider));
+});
+
+final aiDraftQueueProvider = Provider<AiDraftQueue>((ref) {
+  final database = ref.watch(databaseProvider);
+  return AiDraftQueue(
+    scope: ref.watch(activeLocalDataScopeProvider),
+    loadTransactions: (ledgerUuid) =>
+        database.getTransactionsForLedger(ledgerUuid, includeDeleted: true),
+  );
+});
+
+final aiCapabilityProvider = FutureProvider.family<AiCapability, String>((ref, ledgerUuid) {
+  return ref.watch(aiBookkeepingRepositoryProvider).capability(ledgerUuid);
+});
+
+final aiPendingDraftsProvider = FutureProvider.family<List<AiDraftItem>, String>((ref, ledgerUuid) {
+  return ref.watch(aiDraftQueueProvider).load(ledgerUuid);
 });
 
 final conflictStoreProvider = Provider<ConflictStore>((ref) {

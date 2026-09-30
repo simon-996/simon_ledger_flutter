@@ -5,6 +5,8 @@
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>NSPhotoLibraryAddUsageDescription</key>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>用于语音记账，将录音转为文字后由你复核，不会自动保存流水。</string>
 	<string>我们需要相册权限来保存账本分享图片</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>我们需要相册权限来保存账本分享图片</string>
