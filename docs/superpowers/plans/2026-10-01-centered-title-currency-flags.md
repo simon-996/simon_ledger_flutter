@@ -7,7 +7,7 @@
 - [x] Reproduce long-title offset at mobile width using the application theme; verify center after correction.
 - [x] Add shared currency presentation and wire ledger dropdown, single/quick/search transaction selectors, dashboard/statistics currency switches.
 - [x] Verify known/unknown codes, selection/search and narrow layouts; run full tests, analyze, build and review.
-- [ ] Merge master and restart preview; inspect changed controls.
+- [x] Merge master and restart preview; inspect changed controls.
 
 User explicitly requested both corrections. Flags are identity markers in currency controls, not heading decoration.
 
@@ -22,3 +22,11 @@ User explicitly requested both corrections. Flags are identity markers in curren
 - Bookkeeping normal/1.5 scale and AI review screenshots inspected at 390px: visible flags and readable currency labels.
 - Source package: https://pub.dev/packages/country_flags (MIT; local SVG-derived image assets).
 - Web release build: succeeded.
+
+## Delivery
+
+- Commit 734f4a3 fast-forward merged into master.
+- Master dependencies resolved; preview fully restarted at http://127.0.0.1:5317/.
+- Preview and API health endpoint both returned HTTP 200.
+- Actual browser currency dropdown inspected: CNY, USD, EUR, JPY, THB flags render correctly with retained text labels.
+- Screenshot: D:/workplace/projects/simon-ledger/.tmp/ux-currency-flags/currency-dropdown-master.jpg.
