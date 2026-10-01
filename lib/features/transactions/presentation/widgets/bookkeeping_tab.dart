@@ -843,7 +843,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                                         },
                                       ),
                                       TransactionFieldError(message: _peopleError),
-                                      TransactionSplitSummary(type: _transactionType, amount: double.tryParse(_amountController.text), currency: _selectedCurrency ?? 'CNY', participantCount: _selectedPersonIds.length, payerName: _payerPersonUuid == null ? null : personMap[_payerPersonUuid]?.name),
+                                      TransactionSplitSummary(ledger: selectedLedger, type: _transactionType, amount: double.tryParse(_amountController.text), currency: _selectedCurrency ?? 'CNY', participantCount: _selectedPersonIds.length, payerName: _payerPersonUuid == null ? null : personMap[_payerPersonUuid]?.name),
                                       TransactionAnimatedVisibility(
                                         visible:
                                             _transactionType == 0 &&

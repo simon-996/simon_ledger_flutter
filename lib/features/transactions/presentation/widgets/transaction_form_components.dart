@@ -4,6 +4,8 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../../core/widgets/currency_widgets.dart';
 
+export 'transaction_split_summary.dart';
+
 Color transactionAccentColor(BuildContext context, int transactionType) {
   return AppColors.of(context).transaction(transactionType);
 }
@@ -1045,40 +1047,4 @@ void revealTransactionField(GlobalKey key, {FocusNode? focus}) {
       alignment: .15,
     );
   });
-}
-
-class TransactionSplitSummary extends StatelessWidget {
-  const TransactionSplitSummary({
-    super.key,
-    required this.type,
-    required this.amount,
-    required this.currency,
-    required this.participantCount,
-    this.payerName,
-  });
-  final int type;
-  final double? amount;
-  final String currency;
-  final int participantCount;
-  final String? payerName;
-  @override
-  Widget build(BuildContext context) {
-    final valid = amount != null && amount!.isFinite && amount! > 0;
-    final split = valid && participantCount > 0
-        ? (amount! / participantCount).toStringAsFixed(2)
-        : '—';
-    final payer = type == 1 ? '收入分配' : '${payerName ?? '共同钱包'}付款';
-    return Padding(
-      padding: const EdgeInsets.only(top: 10),
-      child: Semantics(
-        liveRegion: true,
-        child: Text(
-          '$payer · $participantCount 人${type == 1 ? '收款' : '承担'} · 每人 $currency $split',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-      ),
-    );
-  }
 }

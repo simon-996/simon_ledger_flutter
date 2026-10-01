@@ -553,6 +553,7 @@ class _AiDraftReviewState extends State<AiDraftReview> {
                         ],
                       ],
                       TransactionSplitSummary(
+                        ledger: widget.ledger,
                         type: _type,
                         amount: double.tryParse(_amount.text),
                         currency: _currency,

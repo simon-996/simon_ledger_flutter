@@ -61,6 +61,42 @@ void main() {
       OnboardingPreference.completedKey: true,
     }),
   );
+  testWidgets('multi currency totals fit bookkeeping with real Chinese fonts', (
+    tester,
+  ) async {
+    final data = await _fixture();
+    data.ledger.baseCurrencyCode = 'USD';
+    data.ledger.exchangeRateToCNY = 7.2;
+    await data.database.saveLedger(data.ledger);
+    await BookkeepingDraftPreference.write(
+      BookkeepingDraft(
+        ledgerUuid: data.ledger.uuid,
+        transactionType: 0,
+        category: '餐饮',
+        currencyCode: 'USD',
+        personUuids: ['xiaowang', 'xiaoli'],
+      ),
+    );
+    final boundary = GlobalKey();
+    await _mount(tester, data.database, boundary, const HomePage(), width: 390);
+    await tester.enterText(
+      find.byKey(const ValueKey('bookkeeping-amount-input')),
+      '100',
+    );
+    await tester.pumpAndSettle();
+    final lastAmount = find.text('每人 ≈ CNY 360.00');
+    await tester.ensureVisible(lastAmount);
+    await tester.pumpAndSettle();
+    expect(find.text('总额 USD 100.00'), findsOneWidget);
+    expect(find.text('每人 USD 50.00'), findsOneWidget);
+    expect(find.text('总额 ≈ CNY 720.00'), findsOneWidget);
+    expect(lastAmount, findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.runAsync(
+      () => _capture(boundary, 'bookkeeping-multi-currency-390'),
+    );
+  });
+
   for (final width in [390.0, 1280.0]) {
     testWidgets(
       'populated bookkeeping with Chinese fonts fits ${width.toInt()}px shell',

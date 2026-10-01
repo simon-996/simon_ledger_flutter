@@ -526,6 +526,7 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                                       message: _peopleError,
                                     ),
                                     TransactionSplitSummary(
+                                      ledger: widget.ledger,
                                       type: _transactionType,
                                       amount: double.tryParse(
                                         _amountController.text,

@@ -322,11 +322,58 @@ void main() {
     await tester.ensureVisible(find.text('全选'));
     await tester.tap(find.text('全选'));
     await tester.pumpAndSettle();
-    expect(find.text('共同钱包付款 · 2 人承担 · 每人 CNY 15.00'), findsOneWidget);
+    expect(find.text('共同钱包付款 · 2 人承担'), findsOneWidget);
     await tester.tap(find.text('收入'));
     await tester.pumpAndSettle();
-    expect(find.text('收入分配 · 2 人收款 · 每人 CNY 15.00'), findsOneWidget);
+    expect(find.text('收入分配 · 2 人收款'), findsOneWidget);
   });
+  testWidgets(
+    'bookkeeping shows totals and per person amounts in both currencies',
+    (tester) async {
+      final database = DatabaseService();
+      final ledger = await fixture(database);
+      ledger.baseCurrencyCode = 'USD';
+      ledger.exchangeRateToCNY = 7.2;
+      await database.saveLedger(ledger);
+      await mount(tester, database, BookkeepingTab(ledgers: [ledger]));
+      await tester.tap(find.byKey(const ValueKey('currency-picker')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('USD · 美元').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('bookkeeping-amount-input')),
+        '100',
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('全选'));
+      await tester.tap(find.text('全选'));
+      await tester.pumpAndSettle();
+      expect(find.text('总额 USD 100.00'), findsOneWidget);
+      expect(find.text('每人 USD 50.00'), findsOneWidget);
+      expect(find.text('总额 ≈ CNY 720.00'), findsOneWidget);
+      expect(find.text('每人 ≈ CNY 360.00'), findsOneWidget);
+      await tester.enterText(
+        find.byKey(const ValueKey('bookkeeping-amount-input')),
+        '50',
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('总额 USD 50.00'), findsOneWidget);
+      expect(find.text('每人 ≈ CNY 180.00'), findsOneWidget);
+      await tester.ensureVisible(find.byKey(const ValueKey('currency-picker')));
+      await tester.tap(find.byKey(const ValueKey('currency-picker')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('CNY · 人民币').last);
+      await tester.pumpAndSettle();
+      expect(find.text('总额 CNY 50.00'), findsOneWidget);
+      expect(find.text('每人 ≈ USD 3.47'), findsOneWidget);
+      await tester.ensureVisible(find.text('小李'));
+      await tester.tap(find.text('小李'));
+      await tester.pumpAndSettle();
+      expect(find.text('每人 CNY 50.00'), findsOneWidget);
+      expect(find.text('每人 ≈ USD 6.94'), findsOneWidget);
+    },
+  );
+
   testWidgets('empty state creates first ledger directly', (tester) async {
     var creates = 0;
     await mount(
