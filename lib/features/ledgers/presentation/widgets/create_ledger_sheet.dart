@@ -13,6 +13,21 @@ import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../people_pool/presentation/widgets/person_edit_dialog.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
 
+double? _validEnteredRate(String text) {
+  final value = double.tryParse(text.trim());
+  if (value == null || !value.isFinite || value <= 0) return null;
+  final reciprocal = 1 / value;
+  return reciprocal.isFinite && reciprocal > 0 ? value : null;
+}
+
+String _rateEquation(String from, String to, double value) {
+  final display = value >= 0.000001 && value < 1000000000
+      ? value.toStringAsFixed(6).replaceFirst(RegExp(r'\.?0+$'), '')
+      : value.toStringAsPrecision(6);
+  final relation = double.tryParse(display) == value ? '=' : '≈';
+  return '1 $from $relation $display $to';
+}
+
 class CreateLedgerResult {
   const CreateLedgerResult({
     required this.name,
@@ -49,6 +64,7 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
   final FocusNode _rateFocus = FocusNode();
   final GlobalKey _rateFieldKey = GlobalKey();
   String? _rateError;
+  bool _rateIsInverse = false;
   late String _baseCurrencyCode;
 
   final Set<String> _selectedPersonIds = {};
@@ -90,6 +106,17 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
       return value.toStringAsFixed(0);
     }
     return value.toString();
+  }
+
+  void _changeRateDirection(bool inverse) {
+    if (_rateIsInverse == inverse) return;
+    final entered = _validEnteredRate(_rateController.text);
+    setState(() {
+      _rateIsInverse = inverse;
+      if (entered != null) {
+        _rateController.text = _formatRateInput(1 / entered);
+      }
+    });
   }
 
   Future<void> _addNewPerson() async {
@@ -379,17 +406,17 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
                               rateFocus: _rateFocus,
                               rateFieldKey: _rateFieldKey,
                               rateError: _rateError,
-                              onRateChanged: (_) {
-                                if (_rateError != null) {
-                                  setState(() => _rateError = null);
-                                }
-                              },
+                              rateIsInverse: _rateIsInverse,
+                              onDirectionChanged: _changeRateDirection,
+                              onRateChanged: (_) =>
+                                  setState(() => _rateError = null),
                               onCurrencyChanged: (value) {
                                 if (value == null) return;
                                 setState(() {
                                   _baseCurrencyCode = value;
                                   _rateError = null;
                                   if (value == 'CNY') {
+                                    _rateIsInverse = false;
                                     _rateController.text = '1';
                                   }
                                 });
@@ -503,9 +530,14 @@ class _CreateLedgerSheetState extends ConsumerState<CreateLedgerSheet> {
     final name = _nameController.text.trim();
     if (name.isEmpty) return;
 
+    final enteredRate = _validEnteredRate(_rateController.text);
     final rate = _baseCurrencyCode == 'CNY'
         ? 1.0
-        : double.tryParse(_rateController.text);
+        : enteredRate == null
+        ? null
+        : _rateIsInverse
+        ? 1 / enteredRate
+        : enteredRate;
     if (rate == null || !rate.isFinite || rate <= 0) {
       setState(() => _rateError = '请输入大于 0 的有效汇率');
       _rateFocus.requestFocus();
@@ -1112,6 +1144,8 @@ class _CurrencyRateFields extends StatelessWidget {
     required this.rateFocus,
     required this.rateFieldKey,
     required this.rateError,
+    required this.rateIsInverse,
+    required this.onDirectionChanged,
     required this.onRateChanged,
     required this.onCurrencyChanged,
   });
@@ -1121,6 +1155,8 @@ class _CurrencyRateFields extends StatelessWidget {
   final FocusNode rateFocus;
   final GlobalKey rateFieldKey;
   final String? rateError;
+  final bool rateIsInverse;
+  final ValueChanged<bool> onDirectionChanged;
   final ValueChanged<String> onRateChanged;
   final ValueChanged<String?> onCurrencyChanged;
 
@@ -1175,33 +1211,68 @@ class _CurrencyRateFields extends StatelessWidget {
           );
         }
 
-        final rateField = TextField(
+        final from = rateIsInverse ? 'CNY' : baseCurrencyCode;
+        final to = rateIsInverse ? baseCurrencyCode : 'CNY';
+        final entered = _validEnteredRate(rateController.text);
+        final rateField = KeyedSubtree(
           key: rateFieldKey,
-          controller: rateController,
-          focusNode: rateFocus,
-          onChanged: onRateChanged,
-          enabled: !isCny,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(
-            labelText: '对人民币汇率',
-            errorText: rateError,
-            prefixIcon: const Icon(Icons.currency_exchange_rounded),
-            helperText: isCny ? '人民币账本汇率固定为 1' : '1 $baseCurrencyCode = ? CNY',
+          child: TextField(
+            key: const ValueKey('ledger-exchange-rate-input'),
+            controller: rateController,
+            focusNode: rateFocus,
+            onChanged: onRateChanged,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(
+              labelText: '$from 对 $to 汇率',
+              prefixText: '1 $from = ',
+              suffixText: to,
+              errorText: rateError,
+              helperText: entered == null
+                  ? '输入大于 0 的有效汇率后显示换算结果'
+                  : _rateEquation(from, to, entered),
+              helperMaxLines: 2,
+              errorMaxLines: 2,
+            ),
           ),
         );
-
-        if (constraints.maxWidth < 390) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [currencyField, const SizedBox(height: 12), rateField],
-          );
-        }
-
-        return Row(
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(flex: 4, child: currencyField),
-            const SizedBox(width: 12),
-            Expanded(flex: 5, child: rateField),
+            currencyField,
+            const SizedBox(height: 12),
+            Text('汇率填写方式', style: Theme.of(context).textTheme.labelLarge),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ChoiceChip(
+                  key: const ValueKey('rate-direction-forward'),
+                  label: Text('$baseCurrencyCode → CNY'),
+                  showCheckmark: false,
+                  selected: !rateIsInverse,
+                  onSelected: (_) => onDirectionChanged(false),
+                ),
+                ChoiceChip(
+                  key: const ValueKey('rate-direction-inverse'),
+                  label: Text('CNY → $baseCurrencyCode'),
+                  showCheckmark: false,
+                  selected: rateIsInverse,
+                  onSelected: (_) => onDirectionChanged(true),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            rateField,
+            if (entered != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                _rateEquation(to, from, 1 / entered),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
           ],
         );
       },

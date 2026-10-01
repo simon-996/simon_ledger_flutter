@@ -80,9 +80,12 @@ void main() {
     await tester.pumpAndSettle();
 
     final rateField = tester.widget<TextField>(_rateFieldFinder());
-    expect(rateField.enabled, isTrue);
+    expect(rateField.enabled, isNot(false));
     expect(rateField.controller!.text, '1');
-    expect(find.text('1 USD = ? CNY'), findsOneWidget);
+    await tester.enterText(_rateFieldFinder(), '7.2');
+    await tester.pump();
+    expect(find.text('1 USD = 7.2 CNY'), findsOneWidget);
+    expect(find.text('1 CNY ≈ 0.138889 USD'), findsOneWidget);
     await tester.enterText(
       find.byWidgetPredicate(
         (w) => w is TextField && w.decoration?.labelText == '账本名称',
@@ -100,6 +103,144 @@ void main() {
     expect(find.byType(CreateLedgerSheet), findsOneWidget);
   });
 
+  testWidgets(
+    'reverse rate entry saves normalized rate and switching preserves its meaning',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      CreateLedgerResult? result;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            databaseProvider.overrideWithValue(DatabaseService()),
+            authTokenProvider.overrideWith((ref) async => null),
+          ],
+          child: MaterialApp(
+            home: Builder(
+              builder: (context) => Scaffold(
+                body: TextButton(
+                  onPressed: () async {
+                    result = await showModalBottomSheet<CreateLedgerResult>(
+                      context: context,
+                      isScrollControlled: true,
+                      builder: (_) => const CreateLedgerSheet(),
+                    );
+                  },
+                  child: const Text('打开'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('打开'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byWidgetPredicate(
+          (w) => w is TextField && w.decoration?.labelText == '账本名称',
+        ),
+        '反向汇率账本',
+      );
+      await tester.tap(find.text('CNY · 人民币'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('USD · 美元').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(_rateFieldFinder(), '7.2');
+      await tester.pump();
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('rate-direction-inverse')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('rate-direction-inverse')));
+      await tester.pump();
+      expect(
+        double.parse(
+          tester.widget<TextField>(_rateFieldFinder()).controller!.text,
+        ),
+        closeTo(1 / 7.2, 1e-12),
+      );
+      for (final invalid in ['', '0', '-1', 'NaN', 'Infinity', '1e-320']) {
+        await tester.enterText(_rateFieldFinder(), invalid);
+        await tester.pump();
+        await tester.tap(find.text('创建账本'));
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<TextField>(_rateFieldFinder()).decoration?.errorText,
+          '请输入大于 0 的有效汇率',
+        );
+        expect(result, isNull);
+      }
+      await tester.enterText(_rateFieldFinder(), '0.125');
+      await tester.pump();
+      expect(find.text('1 CNY = 0.125 USD'), findsOneWidget);
+      expect(find.text('1 USD = 8 CNY'), findsOneWidget);
+      await tester.tap(find.text('创建账本'));
+      await tester.pumpAndSettle();
+      expect(result!.exchangeRateToCNY, 8);
+      expect(result!.baseCurrencyCode, 'USD');
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'editing rate handles direction and CNY reset at narrow large text',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await tester.binding.setSurfaceSize(const Size(280, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final ledger = Ledger()
+        ..uuid = 'edit-rate'
+        ..name = '旅行账本'
+        ..baseCurrencyCode = 'JPY'
+        ..exchangeRateToCNY = 0.05;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            databaseProvider.overrideWithValue(DatabaseService()),
+            authTokenProvider.overrideWith((ref) async => null),
+          ],
+          child: MaterialApp(
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: TextScaler.linear(1.5)),
+              child: child!,
+            ),
+            home: Scaffold(body: CreateLedgerSheet(existingLedger: ledger)),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('1 JPY = 0.05 CNY'), findsOneWidget);
+      final inverse = find.byKey(const ValueKey('rate-direction-inverse'));
+      await tester.ensureVisible(inverse);
+      await tester.pumpAndSettle();
+      await tester.tap(inverse);
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextField>(_rateFieldFinder()).controller!.text,
+        '20',
+      );
+      expect(find.text('1 CNY = 20 JPY'), findsOneWidget);
+      await tester.enterText(_rateFieldFinder(), '');
+      await tester.pumpAndSettle();
+      expect(find.text('1 CNY = 20 JPY'), findsNothing);
+      await tester.enterText(_rateFieldFinder(), '0.125');
+      await tester.pumpAndSettle();
+      final currency = find.text('JPY · 日元');
+      await tester.ensureVisible(currency);
+      await tester.pumpAndSettle();
+      await tester.tap(currency);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('CNY · 人民币').last);
+      await tester.pumpAndSettle();
+      expect(_rateFieldFinder(), findsNothing);
+      expect(inverse, findsNothing);
+      expect(find.text('人民币账本汇率固定为 1'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets('editing ledger shows newly added person immediately', (
     tester,
   ) async {
@@ -392,8 +533,5 @@ void main() {
   });
 }
 
-Finder _rateFieldFinder() {
-  return find.byWidgetPredicate(
-    (widget) => widget is TextField && widget.decoration?.labelText == '对人民币汇率',
-  );
-}
+Finder _rateFieldFinder() =>
+    find.byKey(const ValueKey('ledger-exchange-rate-input'));
