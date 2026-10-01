@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,6 +11,7 @@ import 'package:simon_ledger_flutter/core/di/providers.dart';
 import 'package:simon_ledger_flutter/core/models/ledger.dart';
 import 'package:simon_ledger_flutter/core/models/local_profile.dart';
 import 'package:simon_ledger_flutter/core/models/person.dart';
+import 'package:simon_ledger_flutter/core/theme/app_theme.dart';
 import 'package:simon_ledger_flutter/core/network/token_store.dart';
 import 'package:simon_ledger_flutter/core/repositories/auth_repository.dart';
 import 'package:simon_ledger_flutter/features/auth/presentation/providers/auth_provider.dart';
@@ -241,6 +243,71 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+  for (final (width, scale) in [(489.0, 1.0), (280.0, 1.5)]) {
+    testWidgets('rate direction labels and equations fit at $width / $scale', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({});
+      await tester.binding.setSurfaceSize(Size(width, 1000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final ledger = Ledger()
+        ..uuid = 'rate-layout'
+        ..name = '旅行账本'
+        ..baseCurrencyCode = 'USD'
+        ..exchangeRateToCNY = 7.2;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            databaseProvider.overrideWithValue(DatabaseService()),
+            authTokenProvider.overrideWith((ref) async => null),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.lightTheme,
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: TextScaler.linear(scale)),
+              child: child!,
+            ),
+            home: Scaffold(body: CreateLedgerSheet(existingLedger: ledger)),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final forward = find.text('1 USD = 7.2 CNY');
+      final inverse = find.text('1 CNY ≈ 0.138889 USD');
+      expect(
+        tester.getTopLeft(forward).dx,
+        closeTo(tester.getTopLeft(inverse).dx, 0.1),
+      );
+      for (final key in ['rate-direction-forward', 'rate-direction-inverse']) {
+        final option = find.byKey(ValueKey(key));
+        final label = find.descendant(of: option, matching: find.byType(Text));
+        final paragraph = tester.renderObject<RenderParagraph>(label);
+        expect(paragraph.overflow, TextOverflow.visible);
+        expect(paragraph.didExceedMaxLines, isFalse);
+        final optionRect = tester.getRect(option);
+        final labelRect = tester.getRect(label);
+        expect(labelRect.left, greaterThanOrEqualTo(optionRect.left));
+        expect(labelRect.right, lessThanOrEqualTo(optionRect.right));
+        expect(labelRect.top - optionRect.top, greaterThanOrEqualTo(4));
+        expect(optionRect.bottom - labelRect.bottom, greaterThanOrEqualTo(4));
+      }
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('rate-direction-inverse')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('rate-direction-inverse')));
+      await tester.enterText(_rateFieldFinder(), '0.125');
+      await tester.pumpAndSettle();
+      expect(
+        tester.getTopLeft(find.text('1 CNY = 0.125 USD')).dx,
+        closeTo(tester.getTopLeft(find.text('1 USD = 8 CNY')).dx, 0.1),
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('editing ledger shows newly added person immediately', (
     tester,
   ) async {

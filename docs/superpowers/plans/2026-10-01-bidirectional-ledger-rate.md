@@ -27,3 +27,11 @@ User explicitly authorized realtime preview and either rate-entry direction.
 - Existing API health at http://127.0.0.1:18080/api/health returned HTTP 200.
 - Browser verified live 7.2 forward entry, automatic inverse on direction switch, and 0.125 reverse entry yielding canonical rate 8. No ledger was created during browser verification.
 - Screenshot: D:/workplace/projects/simon-ledger/.tmp/ux-rates/rate-inverse-master.jpg.
+
+## Follow-up: direction and preview layout
+
+User reported clipped entry direction labels and misaligned rate equations. Chip labels inherit a single-line fade constraint; trying multiline chip labels exposed a narrow / large-text chip layout assertion. Use naturally sized outlined selection buttons with wrapping text, minimum 48px target and explicit selected semantics. Both equations now share one helper column, style and inset. Colors come from the global theme.
+
+- Regression checks first failed with a 20px difference between equation left edges.
+- 13 create/edit ledger tests now pass, including label bounds / clipping / aligned equations at 489px normal text and 280px / 1.5x text, plus existing numeric and inverse-save checks.
+- Flutter analyze: no issues. Independent review found no blocking issues in selection semantics, keyboard activation or helper/error layout.

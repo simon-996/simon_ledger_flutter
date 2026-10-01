@@ -1227,10 +1227,21 @@ class _CurrencyRateFields extends StatelessWidget {
               prefixText: '1 $from = ',
               suffixText: to,
               errorText: rateError,
-              helperText: entered == null
-                  ? '输入大于 0 的有效汇率后显示换算结果'
-                  : _rateEquation(from, to, entered),
-              helperMaxLines: 2,
+              helper: DefaultTextStyle(
+                style: Theme.of(context).textTheme.bodySmall!.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: entered == null
+                      ? [const Text('输入大于 0 的有效汇率后显示换算结果')]
+                      : [
+                          Text(_rateEquation(from, to, entered)),
+                          const SizedBox(height: 4),
+                          Text(_rateEquation(to, from, 1 / entered)),
+                        ],
+                ),
+              ),
               errorMaxLines: 2,
             ),
           ),
@@ -1246,36 +1257,70 @@ class _CurrencyRateFields extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                ChoiceChip(
+                _RateDirectionOption(
                   key: const ValueKey('rate-direction-forward'),
-                  label: Text('$baseCurrencyCode → CNY'),
-                  showCheckmark: false,
+                  label: '$baseCurrencyCode → CNY',
                   selected: !rateIsInverse,
-                  onSelected: (_) => onDirectionChanged(false),
+                  onPressed: () => onDirectionChanged(false),
                 ),
-                ChoiceChip(
+                _RateDirectionOption(
                   key: const ValueKey('rate-direction-inverse'),
-                  label: Text('CNY → $baseCurrencyCode'),
-                  showCheckmark: false,
+                  label: 'CNY → $baseCurrencyCode',
                   selected: rateIsInverse,
-                  onSelected: (_) => onDirectionChanged(true),
+                  onPressed: () => onDirectionChanged(true),
                 ),
               ],
             ),
             const SizedBox(height: 12),
             rateField,
-            if (entered != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                _rateEquation(to, from, 1 / entered),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
           ],
         );
       },
+    );
+  }
+}
+
+class _RateDirectionOption extends StatelessWidget {
+  const _RateDirectionOption({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Semantics(
+      selected: selected,
+      child: OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: selected ? colors.primary : colors.onSurfaceVariant,
+          backgroundColor: selected
+              ? colors.primaryContainer
+              : colors.surfaceContainerLowest,
+          side: BorderSide(
+            color: selected ? colors.primary : colors.outlineVariant,
+          ),
+          minimumSize: const Size(0, 48),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+          ),
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          softWrap: true,
+          overflow: TextOverflow.visible,
+          style: const TextStyle(height: 1.4),
+        ),
+      ),
     );
   }
 }
