@@ -8,9 +8,57 @@ import 'package:simon_ledger_flutter/core/models/ledger.dart';
 import 'package:simon_ledger_flutter/core/models/person.dart';
 import 'package:simon_ledger_flutter/core/models/transaction_record.dart';
 import 'package:simon_ledger_flutter/core/utils/transaction_date.dart';
+import 'package:simon_ledger_flutter/core/theme/app_theme.dart';
 import 'package:simon_ledger_flutter/features/ledgers/presentation/screens/ledger_dashboard_page.dart';
 
 void main() {
+  testWidgets('long ledger title stays centered between toolbar actions', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final database = DatabaseService();
+    final ledger = Ledger()
+      ..uuid = 'title-ledger'
+      ..name = '和朋友一起出行的旅行生活账本'
+      ..baseCurrencyCode = 'CNY';
+    await database.saveLedger(ledger);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          authTokenProvider.overrideWith((ref) async => null),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.lightTheme,
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => LedgerDashboardPage(ledger: ledger),
+                  ),
+                ),
+                child: const Text('打开'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('打开'));
+    await tester.pumpAndSettle();
+    final title = find.descendant(
+      of: find.byType(AppBar),
+      matching: find.text(ledger.name),
+    );
+    expect(tester.getCenter(title).dx, closeTo(195, 0.5));
+    expect(find.byType(BackButton), findsOneWidget);
+    expect(find.byTooltip('刷新'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'day totals convert currency and custom drilldown includes late end date',
     (tester) async {

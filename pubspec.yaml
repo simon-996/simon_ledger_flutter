@@ -50,6 +50,7 @@ dependencies:
   sliver_tools: ^0.2.12
   connectivity_plus: ^7.1.1
   app_links: ^7.1.1
+  country_flags: ^4.1.2
 
 dev_dependencies:
   flutter_test:

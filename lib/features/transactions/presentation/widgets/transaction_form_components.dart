@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
+import '../../../../core/widgets/currency_widgets.dart';
 
 Color transactionAccentColor(BuildContext context, int transactionType) {
   return AppColors.of(context).transaction(transactionType);
@@ -292,59 +293,70 @@ class CurrencySelector extends StatelessWidget {
       final currency = currencies.first;
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Text(
-          '$currency · ${_currencyName(currency)}',
+        child: CurrencyLabel(
+          code: currency,
           style: Theme.of(context).textTheme.bodySmall,
         ),
       );
     }
-    if (currencies.length > 4) {
-      return OutlinedButton.icon(
-        key: const ValueKey('currency-picker'),
-        icon: const Icon(Icons.currency_exchange_rounded, size: 18),
-        label: Text('$selectedCurrency · ${_currencyName(selectedCurrency)}'),
-        onPressed: () async {
-          final choice = await showModalBottomSheet<String>(
-            context: context,
-            isScrollControlled: true,
-            showDragHandle: true,
-            builder: (_) => _CurrencySearchSheet(
-              currencies: currencies,
-              selected: selectedCurrency,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (currencies.length > 4 ||
+            constraints.maxWidth < currencies.length * 88) {
+          return OutlinedButton.icon(
+            key: const ValueKey('currency-picker'),
+            icon: CurrencyFlag(code: selectedCurrency),
+            label: Text(
+              '$selectedCurrency · ${currencyName(selectedCurrency)}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            onPressed: () async {
+              final choice = await showModalBottomSheet<String>(
+                context: context,
+                isScrollControlled: true,
+                showDragHandle: true,
+                builder: (_) => _CurrencySearchSheet(
+                  currencies: currencies,
+                  selected: selectedCurrency,
+                ),
+              );
+              if (choice != null && choice != selectedCurrency) {
+                onChanged(choice);
+              }
+            },
+          );
+        }
+
+        if (currencies.length <= 4) {
+          return SizedBox(
+            height: 56,
+            child: Row(
+              children: [
+                for (var index = 0; index < currencies.length; index++) ...[
+                  if (index > 0) const SizedBox(width: 8),
+                  Expanded(
+                    child: _CurrencyQuickItem(
+                      currency: currencies[index],
+                      selected: currencies[index] == selectedCurrency,
+                      fillWidth: true,
+                      onTap: () {
+                        final currency = currencies[index];
+                        if (currency != selectedCurrency) {
+                          onChanged(currency);
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ],
             ),
           );
-          if (choice != null && choice != selectedCurrency) onChanged(choice);
-        },
-      );
-    }
+        }
 
-    if (currencies.length <= 4) {
-      return SizedBox(
-        height: 56,
-        child: Row(
-          children: [
-            for (var index = 0; index < currencies.length; index++) ...[
-              if (index > 0) const SizedBox(width: 8),
-              Expanded(
-                child: _CurrencyQuickItem(
-                  currency: currencies[index],
-                  selected: currencies[index] == selectedCurrency,
-                  fillWidth: true,
-                  onTap: () {
-                    final currency = currencies[index];
-                    if (currency != selectedCurrency) {
-                      onChanged(currency);
-                    }
-                  },
-                ),
-              ),
-            ],
-          ],
-        ),
-      );
-    }
-
-    return const SizedBox.shrink();
+        return const SizedBox.shrink();
+      },
+    );
   }
 }
 
@@ -365,7 +377,7 @@ class _CurrencyQuickItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final label = currency.trim().toUpperCase();
-    final displayName = _currencyName(label);
+    final displayName = currencyName(label);
     final mutedColor = colorScheme.onSurfaceVariant;
 
     return Semantics(
@@ -398,6 +410,8 @@ class _CurrencyQuickItem extends StatelessWidget {
                     ? MainAxisAlignment.center
                     : MainAxisAlignment.start,
                 children: [
+                  CurrencyFlag(code: currency, width: 18),
+                  const SizedBox(width: 6),
                   Flexible(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -868,28 +882,6 @@ Widget transactionTopFadeSlideTransition(
   );
 }
 
-String _currencyName(String code) {
-  return switch (code) {
-    'CNY' => '人民币',
-    'USD' => '美元',
-    'EUR' => '欧元',
-    'GBP' => '英镑',
-    'JPY' => '日元',
-    'HKD' => '港币',
-    'TWD' => '新台币',
-    'MOP' => '澳门元',
-    'SGD' => '新加坡元',
-    'THB' => '泰铢',
-    'MYR' => '马来西亚林吉特',
-    'KRW' => '韩元',
-    'AUD' => '澳元',
-    'CAD' => '加元',
-    'NZD' => '新西兰元',
-    'CHF' => '瑞士法郎',
-    _ => code,
-  };
-}
-
 class _CurrencySearchSheet extends StatefulWidget {
   const _CurrencySearchSheet({
     required this.currencies,
@@ -907,7 +899,7 @@ class _CurrencySearchSheetState extends State<_CurrencySearchSheet> {
   Widget build(BuildContext context) {
     final choices = widget.currencies
         .where(
-          (code) => '$code ${_currencyName(code)}'.toLowerCase().contains(
+          (code) => '$code ${currencyName(code)}'.toLowerCase().contains(
             _query.toLowerCase(),
           ),
         )
@@ -944,7 +936,8 @@ class _CurrencySearchSheetState extends State<_CurrencySearchSheet> {
                             selected: code == widget.selected,
                             button: true,
                             child: ListTile(
-                              title: Text('$code · ${_currencyName(code)}'),
+                              leading: CurrencyFlag(code: code),
+                              title: Text('$code · ${currencyName(code)}'),
                               trailing: code == widget.selected
                                   ? const Icon(Icons.check_rounded)
                                   : null,

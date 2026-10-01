@@ -1,9 +1,66 @@
 import 'package:flutter/material.dart';
+import 'package:country_flags/country_flags.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:simon_ledger_flutter/core/theme/app_theme.dart';
+import 'package:simon_ledger_flutter/core/widgets/currency_widgets.dart';
 import 'package:simon_ledger_flutter/features/transactions/presentation/widgets/transaction_form_components.dart';
 
 void main() {
+  testWidgets('compact four currency selector preserves readable options', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(280, 650));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    var selected = 'CNY';
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CurrencySelector(
+            currencies: const ['CNY', 'USD', 'EUR', 'GBP'],
+            selectedCurrency: selected,
+            onChanged: (value) => selected = value,
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('currency-picker')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('欧元'));
+    await tester.pumpAndSettle();
+    expect(selected, 'EUR');
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets(
+    'currency flags use union and regional flags with unknown fallback',
+    (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                CurrencyLabel(code: 'EUR'),
+                CurrencyLabel(code: 'HKD'),
+                CurrencyLabel(code: 'MOP'),
+                CurrencyLabel(code: 'TWD'),
+                CurrencyLabel(code: 'ZZZ'),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widgetList<CountryFlag>(find.byType(CountryFlag))
+            .map((flag) => flag.flagCode),
+        ['eu', 'hk', 'mo', 'tw'],
+      );
+      expect(find.textContaining('ZZZ'), findsOneWidget);
+      expect(find.byIcon(Icons.currency_exchange_rounded), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('one currency is an informative static label', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -17,6 +74,7 @@ void main() {
       ),
     );
     expect(find.textContaining('人民币'), findsOneWidget);
+    expect(tester.widget<CountryFlag>(find.byType(CountryFlag)).flagCode, 'cn');
     expect(find.byType(InkWell), findsNothing);
   });
 
@@ -39,6 +97,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'GBP');
     await tester.pumpAndSettle();
+    final flag = find.byType(CountryFlag);
+    expect(tester.widget<CountryFlag>(flag.last).flagCode, 'gb');
+    expect(
+      tester.getCenter(flag.last).dx,
+      lessThan(tester.getCenter(find.textContaining('英镑')).dx),
+    );
     await tester.tap(find.textContaining('英镑'));
     await tester.pumpAndSettle();
     expect(selected, 'GBP');

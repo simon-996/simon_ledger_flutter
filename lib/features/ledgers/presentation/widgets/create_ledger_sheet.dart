@@ -7,6 +7,7 @@ import '../../../../core/models/person.dart';
 import '../../../../core/network/friendly_error.dart';
 import '../../../../core/repositories/auth_repository.dart';
 import '../../../../core/widgets/app_components.dart';
+import '../../../../core/widgets/currency_widgets.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../people_pool/presentation/widgets/person_edit_dialog.dart';
@@ -1131,17 +1132,29 @@ class _CurrencyRateFields extends StatelessWidget {
         final currencyField = DropdownButtonFormField<String>(
           key: ValueKey('ledger-currency-$baseCurrencyCode'),
           initialValue: baseCurrencyCode,
-          decoration: const InputDecoration(
-            labelText: '默认币种',
-            prefixIcon: Icon(Icons.payments_outlined),
-          ),
+          decoration: const InputDecoration(labelText: '默认币种'),
           isExpanded: true,
           items: const [
-            DropdownMenuItem(value: 'CNY', child: Text('CNY 人民币')),
-            DropdownMenuItem(value: 'USD', child: Text('USD 美元')),
-            DropdownMenuItem(value: 'EUR', child: Text('EUR 欧元')),
-            DropdownMenuItem(value: 'JPY', child: Text('JPY 日元')),
-            DropdownMenuItem(value: 'THB', child: Text('THB 泰铢')),
+            DropdownMenuItem(
+              value: 'CNY',
+              child: CurrencyLabel(code: 'CNY'),
+            ),
+            DropdownMenuItem(
+              value: 'USD',
+              child: CurrencyLabel(code: 'USD'),
+            ),
+            DropdownMenuItem(
+              value: 'EUR',
+              child: CurrencyLabel(code: 'EUR'),
+            ),
+            DropdownMenuItem(
+              value: 'JPY',
+              child: CurrencyLabel(code: 'JPY'),
+            ),
+            DropdownMenuItem(
+              value: 'THB',
+              child: CurrencyLabel(code: 'THB'),
+            ),
           ],
           onChanged: onCurrencyChanged,
         );

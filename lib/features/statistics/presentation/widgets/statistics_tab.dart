@@ -17,6 +17,7 @@ import '../../../ledgers/presentation/screens/ledger_dashboard_page.dart';
 import 'transaction_date_controls.dart';
 import 'statistics_date_preference.dart';
 import '../../../../core/widgets/app_components.dart';
+import '../../../../core/widgets/currency_widgets.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
 import '../../../transactions/presentation/providers/transaction_provider.dart';
 import '../../../transactions/presentation/widgets/transaction_detail_sheet.dart';
@@ -852,8 +853,10 @@ class _SummaryChartCard extends StatelessWidget {
               showSelectedIcon: false,
               segments: displayCurrencies
                   .map(
-                    (currency) =>
-                        ButtonSegment(value: currency, label: Text(currency)),
+                    (currency) => ButtonSegment(
+                      value: currency,
+                      label: CurrencyLabel(code: currency, showName: false),
+                    ),
                   )
                   .toList(),
               selected: {selectedCurrency},

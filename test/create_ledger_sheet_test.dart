@@ -74,9 +74,9 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.text('CNY 人民币'));
+    await tester.tap(find.text('CNY · 人民币'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('USD 美元').last);
+    await tester.tap(find.text('USD · 美元').last);
     await tester.pumpAndSettle();
 
     final rateField = tester.widget<TextField>(_rateFieldFinder());

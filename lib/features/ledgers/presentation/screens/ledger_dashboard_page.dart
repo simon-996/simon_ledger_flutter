@@ -15,6 +15,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/transaction_date.dart';
 import '../../../statistics/presentation/widgets/transaction_date_controls.dart';
 import '../../../../core/widgets/app_components.dart';
+import '../../../../core/widgets/currency_widgets.dart';
 import '../../../transactions/presentation/widgets/transaction_detail_sheet.dart';
 import '../../../transactions/presentation/providers/transaction_provider.dart';
 import '../../../people_pool/presentation/providers/person_provider.dart';
@@ -292,32 +293,40 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
 
     return Scaffold(
       appBar: AppBar(
+        centerTitle: true,
+        leadingWidth: 96,
+        leading: Navigator.of(context).canPop()
+            ? const Align(alignment: Alignment.centerLeft, child: BackButton())
+            : const SizedBox.shrink(),
         title: _LedgerAppBarTitle(ledger: widget.ledger),
         actions: [
-          peopleAsyncValue.when(
-            data: (peoplePool) => transactionsAsyncValue.when(
-              data: (transactions) => _isGeneratingImage
-                  ? const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: Center(
-                        child: SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+          SizedBox(
+            width: 48,
+            child: peopleAsyncValue.when(
+              data: (peoplePool) => transactionsAsyncValue.when(
+                data: (transactions) => _isGeneratingImage
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: Center(
+                          child: SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
                         ),
+                      )
+                    : IconButton(
+                        tooltip: '分享账本图片',
+                        icon: const Icon(Icons.share),
+                        onPressed: () =>
+                            _showShareOptions(transactions, peoplePool),
                       ),
-                    )
-                  : IconButton(
-                      tooltip: '分享账本图片',
-                      icon: const Icon(Icons.share),
-                      onPressed: () =>
-                          _showShareOptions(transactions, peoplePool),
-                    ),
+                loading: () => const SizedBox(),
+                error: (err, st) => const SizedBox(),
+              ),
               loading: () => const SizedBox(),
               error: (err, st) => const SizedBox(),
             ),
-            loading: () => const SizedBox(),
-            error: (err, st) => const SizedBox(),
           ),
           IconButton(
             tooltip: '刷新',
@@ -438,7 +447,10 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                                   .map(
                                     (currency) => ButtonSegment(
                                       value: currency,
-                                      label: Text(currency),
+                                      label: CurrencyLabel(
+                                        code: currency,
+                                        showName: false,
+                                      ),
                                     ),
                                   )
                                   .toList(),
