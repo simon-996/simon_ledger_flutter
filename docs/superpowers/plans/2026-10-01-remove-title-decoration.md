@@ -25,6 +25,6 @@ No new behavior is added. Existing interaction tests and visual checks verify th
 ## Delivery
 
 - af813a9 fast-forward merged into master.
-- Preview restarted at http://127.0.0.1:5317/; create-ledger heading visibly has no decorative icon or icon gutter.
+- Create-ledger heading visibly has no decorative icon or icon gutter. Hot restart updated the page but then timed out and exited; recovered by a full Flutter web-server restart.
 - Preview and API health both returned HTTP 200.
 - Screenshot: D:/workplace/projects/simon-ledger/.tmp/ux-title-removal/create-ledger-master.jpg.
