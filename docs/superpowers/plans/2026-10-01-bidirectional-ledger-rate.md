@@ -1,7 +1,7 @@
 # Live Bidirectional Ledger Rate
 
 **Goal:** Show the entered exchange rate immediately and allow either foreign-to-CNY or CNY-to-foreign entry.
-**Architecture:** Keep the existing saved exchangeRateToCNY contract. A direction switch reciprocates valid full-precision input; both equations update while typing. Normalize reverse input on save. CNY stays fixed at 1; invalid/empty/non-finite reciprocal values cannot save or show a stale preview. Editing uses the same component.
+**Architecture:** Keep the existing saved exchangeRateToCNY contract. A direction switch reciprocates valid full-precision input; the inverse equation updates while typing; the entered direction is shown in the input. Normalize reverse input on save. CNY stays fixed at 1; invalid/empty/non-finite reciprocal values cannot save or show a stale preview. Editing uses the same component.
 **Tech Stack:** Flutter / Riverpod / existing widget tests.
 
 - [x] Reproduce static '?' helper, then verify live valid/invalid previews.
@@ -37,3 +37,7 @@ User reported clipped entry direction labels and misaligned rate equations. Chip
 - Flutter analyze: no issues. Independent review found no blocking issues in selection semantics, keyboard activation or helper/error layout.
 - Merged fix fa2a9e5 into master and restarted web-server successfully; frontend and API both returned HTTP 200.
 - Actual 489px browser preview verified complete direction labels, both selected states, and equal left alignment of the two equations. Screenshot: D:/workplace/projects/simon-ledger/.tmp/ux-rates/rate-layout-fixed-master.jpg. No ledger was created.
+
+## Follow-up: inverse preview only
+
+The input already displays the entered A-to-B equation. The helper now displays only B-to-A and follows direction changes; empty/invalid input still shows the existing hint. Updated create/edit ledger assertions pass: 13 widget tests, including narrow / large-text controls and normalized inverse saves.

@@ -86,7 +86,7 @@ void main() {
     expect(rateField.controller!.text, '1');
     await tester.enterText(_rateFieldFinder(), '7.2');
     await tester.pump();
-    expect(find.text('1 USD = 7.2 CNY'), findsOneWidget);
+    expect(find.text('1 USD = 7.2 CNY'), findsNothing);
     expect(find.text('1 CNY ≈ 0.138889 USD'), findsOneWidget);
     await tester.enterText(
       find.byWidgetPredicate(
@@ -175,7 +175,7 @@ void main() {
       }
       await tester.enterText(_rateFieldFinder(), '0.125');
       await tester.pump();
-      expect(find.text('1 CNY = 0.125 USD'), findsOneWidget);
+      expect(find.text('1 CNY = 0.125 USD'), findsNothing);
       expect(find.text('1 USD = 8 CNY'), findsOneWidget);
       await tester.tap(find.text('创建账本'));
       await tester.pumpAndSettle();
@@ -214,7 +214,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('1 JPY = 0.05 CNY'), findsOneWidget);
+      expect(find.text('1 JPY = 0.05 CNY'), findsNothing);
+      expect(find.text('1 CNY = 20 JPY'), findsOneWidget);
       final inverse = find.byKey(const ValueKey('rate-direction-inverse'));
       await tester.ensureVisible(inverse);
       await tester.pumpAndSettle();
@@ -224,10 +225,11 @@ void main() {
         tester.widget<TextField>(_rateFieldFinder()).controller!.text,
         '20',
       );
-      expect(find.text('1 CNY = 20 JPY'), findsOneWidget);
+      expect(find.text('1 CNY = 20 JPY'), findsNothing);
+      expect(find.text('1 JPY = 0.05 CNY'), findsOneWidget);
       await tester.enterText(_rateFieldFinder(), '');
       await tester.pumpAndSettle();
-      expect(find.text('1 CNY = 20 JPY'), findsNothing);
+      expect(find.text('1 JPY = 0.05 CNY'), findsNothing);
       await tester.enterText(_rateFieldFinder(), '0.125');
       await tester.pumpAndSettle();
       final currency = find.text('JPY · 日元');
@@ -244,7 +246,7 @@ void main() {
     },
   );
   for (final (width, scale) in [(489.0, 1.0), (280.0, 1.5)]) {
-    testWidgets('rate direction labels and equations fit at $width / $scale', (
+    testWidgets('rate direction and inverse preview fit at $width / $scale', (
       tester,
     ) async {
       SharedPreferences.setMockInitialValues({});
@@ -276,9 +278,11 @@ void main() {
       await tester.pumpAndSettle();
       final forward = find.text('1 USD = 7.2 CNY');
       final inverse = find.text('1 CNY ≈ 0.138889 USD');
+      expect(forward, findsNothing);
+      expect(inverse, findsOneWidget);
       expect(
-        tester.getTopLeft(forward).dx,
-        closeTo(tester.getTopLeft(inverse).dx, 0.1),
+        tester.renderObject<RenderParagraph>(inverse).didExceedMaxLines,
+        isFalse,
       );
       for (final key in ['rate-direction-forward', 'rate-direction-inverse']) {
         final option = find.byKey(ValueKey(key));
@@ -300,10 +304,8 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('rate-direction-inverse')));
       await tester.enterText(_rateFieldFinder(), '0.125');
       await tester.pumpAndSettle();
-      expect(
-        tester.getTopLeft(find.text('1 CNY = 0.125 USD')).dx,
-        closeTo(tester.getTopLeft(find.text('1 USD = 8 CNY')).dx, 0.1),
-      );
+      expect(find.text('1 CNY = 0.125 USD'), findsNothing);
+      expect(find.text('1 USD = 8 CNY'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }

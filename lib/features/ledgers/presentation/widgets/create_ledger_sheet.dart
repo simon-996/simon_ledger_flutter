@@ -1231,15 +1231,10 @@ class _CurrencyRateFields extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodySmall!.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: entered == null
-                      ? [const Text('输入大于 0 的有效汇率后显示换算结果')]
-                      : [
-                          Text(_rateEquation(from, to, entered)),
-                          const SizedBox(height: 4),
-                          Text(_rateEquation(to, from, 1 / entered)),
-                        ],
+                child: Text(
+                  entered == null
+                      ? '输入大于 0 的有效汇率后显示换算结果'
+                      : _rateEquation(to, from, 1 / entered),
                 ),
               ),
               errorMaxLines: 2,
