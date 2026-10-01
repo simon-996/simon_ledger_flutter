@@ -35,3 +35,5 @@ User reported clipped entry direction labels and misaligned rate equations. Chip
 - Regression checks first failed with a 20px difference between equation left edges.
 - 13 create/edit ledger tests now pass, including label bounds / clipping / aligned equations at 489px normal text and 280px / 1.5x text, plus existing numeric and inverse-save checks.
 - Flutter analyze: no issues. Independent review found no blocking issues in selection semantics, keyboard activation or helper/error layout.
+- Merged fix fa2a9e5 into master and restarted web-server successfully; frontend and API both returned HTTP 200.
+- Actual 489px browser preview verified complete direction labels, both selected states, and equal left alignment of the two equations. Screenshot: D:/workplace/projects/simon-ledger/.tmp/ux-rates/rate-layout-fixed-master.jpg. No ledger was created.
