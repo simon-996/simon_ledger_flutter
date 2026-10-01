@@ -1965,17 +1965,6 @@ class _AuthWelcomeSheet extends StatelessWidget {
                 padding: const EdgeInsets.all(18),
                 child: Row(
                   children: [
-                    CircleAvatar(
-                      radius: 24,
-                      backgroundColor: colorScheme.primary,
-                      foregroundColor: colorScheme.onPrimary,
-                      child: Icon(
-                        isRegister
-                            ? Icons.person_add_alt_rounded
-                            : Icons.login_rounded,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2003,17 +1992,14 @@ class _AuthWelcomeSheet extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             const _AuthWelcomeItem(
-              icon: Icons.cloud_upload_outlined,
               title: '导入本地账本',
               message: '把本机账本加入云端，已有记录不会丢失。',
             ),
             const _AuthWelcomeItem(
-              icon: Icons.group_add_outlined,
               title: '加入共享账本',
               message: '收到邀请后可以直接加入协作账本。',
             ),
             const _AuthWelcomeItem(
-              icon: Icons.sync_rounded,
               title: '离线继续使用',
               message: '网络失败时先保存在本地，恢复后再同步。',
             ),
@@ -2030,13 +2016,8 @@ class _AuthWelcomeSheet extends StatelessWidget {
 }
 
 class _AuthWelcomeItem extends StatelessWidget {
-  const _AuthWelcomeItem({
-    required this.icon,
-    required this.title,
-    required this.message,
-  });
+  const _AuthWelcomeItem({required this.title, required this.message});
 
-  final IconData icon;
   final String title;
   final String message;
 
@@ -2049,16 +2030,6 @@ class _AuthWelcomeItem extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.62),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, size: 20, color: colorScheme.primary),
-          ),
-          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

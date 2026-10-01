@@ -635,7 +635,6 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                           ledger: selectedLedger,
                           peopleById: ledgerPeopleById,
                           currencyCode: _selectedCurrency,
-                          isIncome: _transactionType == 1,
                           highlight: _highlightLedgerSelector,
                           onLedgerChanged: (ledgerUuid) {
                             setState(() {
@@ -1238,7 +1237,6 @@ class _QuickEntryHeader extends StatelessWidget {
     required this.ledger,
     required this.peopleById,
     required this.currencyCode,
-    required this.isIncome,
     required this.highlight,
     required this.onLedgerChanged,
   });
@@ -1247,14 +1245,12 @@ class _QuickEntryHeader extends StatelessWidget {
   final Ledger? ledger;
   final Map<String, Person> peopleById;
   final String? currencyCode;
-  final bool isIncome;
   final bool highlight;
   final ValueChanged<String> onLedgerChanged;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final accent = isIncome ? AppColors.of(context).income : AppColors.of(context).expense;
     final mutedColor = colorScheme.onSurfaceVariant;
 
     return Material(
@@ -1270,22 +1266,6 @@ class _QuickEntryHeader extends StatelessWidget {
               : colorScheme.outlineVariant.withValues(alpha: 0.46),
           child: Row(
             children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(
-                  isIncome
-                      ? Icons.savings_outlined
-                      : Icons.receipt_long_outlined,
-                  size: 20,
-                  color: accent,
-                ),
-              ),
-              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

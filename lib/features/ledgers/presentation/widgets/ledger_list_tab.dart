@@ -472,16 +472,6 @@ class _DeleteLedgerConfirmPanelState extends State<_DeleteLedgerConfirmPanel> {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: actionContainerColor,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(icon, color: onActionContainerColor),
-                    ),
-                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,

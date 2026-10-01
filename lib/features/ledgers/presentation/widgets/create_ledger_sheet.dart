@@ -794,19 +794,6 @@ class _SheetHeader extends StatelessWidget {
       children: [
         Row(
           children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: colorScheme.primaryContainer.withValues(alpha: 0.86),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Icon(
-                isEditing ? Icons.edit_note_rounded : Icons.menu_book_rounded,
-                color: colorScheme.primary,
-              ),
-            ),
-            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

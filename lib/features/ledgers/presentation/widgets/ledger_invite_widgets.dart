@@ -103,7 +103,6 @@ class _LedgerInviteShareSheetState
     );
     return [
       _SheetHeader(
-        icon: Icons.ios_share_rounded,
         title: '邀请好友加入',
         subtitle: invite.ledgerName,
         trailing: TextButton(
@@ -178,7 +177,6 @@ class _LedgerInviteShareSheetState
     final hasExistingInvite = _invite != null;
     return [
       _SheetHeader(
-        icon: Icons.autorenew_rounded,
         title: hasExistingInvite ? '重新生成邀请码' : '生成邀请码',
         subtitle: hasExistingInvite ? '新邀请码生成后，旧邀请码会失效。' : '设置有效期和可使用次数。',
       ),
@@ -413,13 +411,11 @@ class _NoWrapButtonLabel extends StatelessWidget {
 
 class _SheetHeader extends StatelessWidget {
   const _SheetHeader({
-    required this.icon,
     required this.title,
     required this.subtitle,
     this.trailing,
   });
 
-  final IconData icon;
   final String title;
   final String subtitle;
   final Widget? trailing;
@@ -429,16 +425,6 @@ class _SheetHeader extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     return Row(
       children: [
-        Container(
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(
-            color: colorScheme.primaryContainer,
-            borderRadius: BorderRadius.circular(13),
-          ),
-          child: Icon(icon, size: 20, color: colorScheme.onPrimaryContainer),
-        ),
-        const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

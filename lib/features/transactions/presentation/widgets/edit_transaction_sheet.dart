@@ -286,10 +286,7 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _EditSheetHeader(
-                ledger: widget.ledger,
-                transactionType: _transactionType,
-              ),
+              _EditSheetHeader(ledger: widget.ledger),
               const SizedBox(height: 14),
               Flexible(
                 child: SingleChildScrollView(
@@ -677,33 +674,16 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
 }
 
 class _EditSheetHeader extends StatelessWidget {
-  const _EditSheetHeader({required this.ledger, required this.transactionType});
+  const _EditSheetHeader({required this.ledger});
 
   final Ledger ledger;
-  final int transactionType;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final isIncome = transactionType == 1;
-    final accent = transactionAccentColor(context, transactionType);
 
     return Row(
       children: [
-        Container(
-          width: 46,
-          height: 46,
-          decoration: BoxDecoration(
-            color: accent.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: accent.withValues(alpha: 0.18)),
-          ),
-          child: Icon(
-            isIncome ? Icons.savings_outlined : Icons.receipt_long_outlined,
-            color: accent,
-          ),
-        ),
-        const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

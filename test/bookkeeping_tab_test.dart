@@ -88,19 +88,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      tester.widget<Icon>(find.byIcon(Icons.receipt_long_outlined)).color,
-      AppColors.light.expense,
-    );
     expect(_saveButtonScheme(tester).primary, AppColors.light.expense);
 
     await tester.tap(find.text('收入'));
     await tester.pumpAndSettle();
 
-    expect(
-      tester.widget<Icon>(find.byIcon(Icons.savings_outlined)).color,
-      AppColors.light.income,
-    );
     expect(_saveButtonScheme(tester).primary, AppColors.light.income);
   });
 

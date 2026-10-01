@@ -1294,8 +1294,6 @@ class _StatsFilterPanel extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.query_stats_rounded, color: colorScheme.primary),
-                  const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
