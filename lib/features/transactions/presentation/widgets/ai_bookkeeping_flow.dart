@@ -65,8 +65,6 @@ class AiBookkeepingFlow extends StatefulWidget {
 class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
   final _text = TextEditingController();
   List<AiDraftItem> _items = [];
-  int _confirmed = 0;
-  int _skipped = 0;
   bool _busy = false;
   bool _loaded = false;
   bool _restoreFailed = false;
@@ -136,20 +134,18 @@ class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
       )
       .toList();
 
-  Future<bool> _confirmDisclosure({bool voice = false}) async {
+  Future<bool> _confirmDisclosure() async {
     final prefs = await SharedPreferences.getInstance();
     final key =
-        'ai_bookkeeping_disclosure.v2.${widget.queue.scope.storageKey}.${voice ? 'voice' : 'text'}';
+        'ai_bookkeeping_disclosure.v2.${widget.queue.scope.storageKey}.text';
     if (prefs.getBool(key) == true) return true;
     if (!mounted) return false;
     final accepted = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('使用 AI 记账'),
-        content: Text(
-          voice
-              ? '录音将发送给腾讯云语音识别，返回的文字可编辑。提交文字时，描述、当前账本人员姓名和现有分类名称会发送给 DeepSeek 解析。系统不会自动保存流水。'
-              : '你的记账描述、当前账本人员姓名和现有分类名称会发送给第三方 AI 服务解析。系统只生成草稿；请核对金额、人员和分类后逐笔确认。',
+        content: const Text(
+          '你的记账描述、当前账本人员姓名和现有分类名称会发送给第三方 AI 服务解析。系统只生成草稿；请核对金额、人员和分类后逐笔确认。',
         ),
         actions: [
           TextButton(
@@ -170,7 +166,6 @@ class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
 
   Future<void> _startRecording() async {
     if (_busy || _voiceBusy || _recording || !widget.canTranscribe) return;
-    if (!await _confirmDisclosure(voice: true)) return;
     try {
       final allowed = await _recorder.start(
         onAutoStop: (bytes) {
@@ -342,8 +337,6 @@ class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
       _text.clear();
       setState(() {
         _items = items;
-        _confirmed = 0;
-        _skipped = 0;
       });
       try {
         await _persistInput('');
@@ -383,7 +376,6 @@ class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
       if (!mounted) return;
       setState(() {
         _items = remaining;
-        _confirmed++;
       });
     } catch (error) {
       var saved = false;
@@ -433,7 +425,6 @@ class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
       if (!mounted) return;
       setState(() {
         _items = remaining;
-        _skipped++;
       });
     } catch (_) {
       if (mounted) setState(() => _error = '跳过失败，草稿仍保留，请重试');
@@ -446,26 +437,6 @@ class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
     if (_closing || _busy || _voiceBusy) return;
     _closing = true;
     try {
-      final leave = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('稍后继续复核？'),
-          content: Text(
-            '本次已确认 $_confirmed 笔、跳过 $_skipped 笔，剩余 ${_items.length} 笔。未完成草稿和文字输入会保存在本机。${_recording ? '当前录音会丢弃。' : ''}',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('继续复核'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('稍后继续'),
-            ),
-          ],
-        ),
-      );
-      if (leave != true || !mounted) return;
       if (_recording) await _cancelRecording();
       await _pendingEdit;
       await _pendingInput;
@@ -651,6 +622,14 @@ class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
                                 : _startRecording,
                             icon: const Icon(Icons.mic_none_rounded),
                             label: Text(_voiceBusy ? '转写中' : '开始语音输入'),
+                          ),
+                        if (!_recording && !_voiceBusy)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              '录音将发送至腾讯云进行转写；解析前会再次提示 AI 处理内容。',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
                           ),
                         const SizedBox(height: 12),
                       ],
