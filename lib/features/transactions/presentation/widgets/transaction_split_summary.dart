@@ -14,6 +14,9 @@ class TransactionSplitSummary extends StatelessWidget {
     required this.participantCount,
     this.payerName,
     this.ledger,
+    this.compact = false,
+    this.paymentConfirmed = true,
+    this.peopleConfirmed = true,
   });
 
   final int type;
@@ -22,6 +25,9 @@ class TransactionSplitSummary extends StatelessWidget {
   final int participantCount;
   final String? payerName;
   final Ledger? ledger;
+  final bool compact;
+  final bool paymentConfirmed;
+  final bool peopleConfirmed;
 
   double? _totalFor(String target, String source) {
     final value = amount;
@@ -52,6 +58,46 @@ class TransactionSplitSummary extends StatelessWidget {
         currencies.any(
           (code) => code != source && _totalFor(code, source) == null,
         );
+    if (compact) {
+      final total = _totalFor(source, source);
+      return Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Semantics(
+          liveRegion: true,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                '${type == 1 ? '收入' : '支出'} $source ${total?.toStringAsFixed(2) ?? '—'}',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              for (final code in currencies.where((code) => code != source))
+                if (_totalFor(code, source) case final double converted)
+                  Text(
+                    '按账本汇率约合 $code ${converted.toStringAsFixed(2)}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+              const SizedBox(height: 8),
+              if (participantCount == 0) Text(type == 1 ? '请选择收款人' : '请选择承担人'),
+              if (type == 0 && !paymentConfirmed) const Text('付款方式待确认'),
+              if (!peopleConfirmed) const Text('人员待确认，确认后显示分摊金额'),
+              if (peopleConfirmed &&
+                  participantCount > 0 &&
+                  (type == 1 || paymentConfirmed)) ...[
+                Text('$payer · $participantCount 人${type == 1 ? '收款' : '均分'}'),
+                if (total != null)
+                  Text(
+                    '每人 $source ${(total / participantCount).toStringAsFixed(2)}',
+                  ),
+              ],
+              if (missingConversion) const Text('当前汇率或金额无法换算，换算金额暂不显示'),
+            ],
+          ),
+        ),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.only(top: 10),
       child: Semantics(

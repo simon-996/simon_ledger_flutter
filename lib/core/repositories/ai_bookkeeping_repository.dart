@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import '../models/ai_draft.dart';
+import '../preferences/transaction_category_preference.dart';
 import '../network/api_client.dart';
 
 class AiCapability {
@@ -38,14 +39,25 @@ class AiBookkeepingRepository {
   Future<List<AiDraft>> parse(
     String ledgerUuid,
     String text,
-    String zone,
-  ) => apiClient.post<List<AiDraft>>(
-    '${_path(ledgerUuid)}/parse',
-    data: {'text': text, 'zone': zone},
-    fromJson: (json) => ((json as Map<String, dynamic>)['entries'] as List<dynamic>)
-        .map((entry) => AiDraft.fromJson(entry as Map<String, dynamic>))
-        .toList(),
-  );
+    String zone, {
+    List<String>? expenseCategories,
+    List<String>? incomeCategories,
+  }) async {
+    final categories = await TransactionCategoryPreference.read();
+    return apiClient.post<List<AiDraft>>(
+      '${_path(ledgerUuid)}/parse',
+      data: {
+        'text': text,
+        'zone': zone,
+        'expenseCategories': expenseCategories ?? categories.expense,
+        'incomeCategories': incomeCategories ?? categories.income,
+      },
+      fromJson: (json) =>
+          ((json as Map<String, dynamic>)['entries'] as List<dynamic>)
+              .map((entry) => AiDraft.fromJson(entry as Map<String, dynamic>))
+              .toList(),
+    );
+  }
 
   Future<String> transcribe(String ledgerUuid, Uint8List pcm) =>
       apiClient.postBytes<String>(

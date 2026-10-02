@@ -342,8 +342,12 @@ class CurrencySelector extends StatelessWidget {
         }
 
         if (currencies.length <= 4) {
+          // The quick option has two text lines; keep room for accessibility
+          // text scaling instead of clipping the currency name.
+          final textScale = (MediaQuery.textScalerOf(context).scale(14) / 14)
+              .clamp(1.0, double.infinity);
           return SizedBox(
-            height: transactionAmountControlHeight,
+            height: transactionAmountControlHeight * textScale,
             child: Row(
               children: [
                 for (var index = 0; index < currencies.length; index++) ...[

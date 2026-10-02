@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -11,6 +12,8 @@ import '../../../../core/network/api_exception.dart';
 import '../../../../core/network/friendly_error.dart';
 import '../../../../core/repositories/ai_bookkeeping_repository.dart';
 import '../../../../core/services/ai_draft_queue.dart';
+import '../../../../core/services/ai_draft_identity_mapper.dart';
+import '../../../../core/preferences/transaction_category_preference.dart';
 import '../../../../core/services/ai_audio_recorder.dart';
 import 'ai_draft_review.dart';
 
@@ -66,6 +69,7 @@ class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
   int _skipped = 0;
   bool _busy = false;
   bool _loaded = false;
+  bool _restoreFailed = false;
   String? _error;
   late final AiAudioRecorder _recorder;
   bool _recording = false;
@@ -89,20 +93,53 @@ class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
   }
 
   Future<void> _restore() async {
-    final text = await widget.queue.readInput(widget.ledger.uuid);
-    final items = await widget.queue.load(widget.ledger.uuid);
-    if (!mounted) return;
-    _text.text = text;
     setState(() {
-      _items = items;
-      _loaded = true;
+      _restoreFailed = false;
+      _error = null;
     });
+    try {
+      final text = await widget.queue.readInput(widget.ledger.uuid);
+      final items = await widget.queue.load(widget.ledger.uuid);
+      final restored = <AiDraftItem>[];
+      for (final item in items) {
+        final draft = normalizeAiDraftPeople(item.draft, _activePeople);
+        if (jsonEncode(draft.toJson()) != jsonEncode(item.draft.toJson())) {
+          await widget.queue.update(
+            widget.ledger.uuid,
+            item.uuid,
+            draft,
+            amountInput: item.amountInput,
+          );
+        }
+        restored.add(item.withDraft(draft));
+      }
+      if (!mounted) return;
+      _text.text = text;
+      setState(() {
+        _items = restored;
+        _loaded = true;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _restoreFailed = true;
+        _error = '草稿恢复失败，请重试；原草稿未删除';
+      });
+    }
   }
+
+  List<Person> get _activePeople => widget.people
+      .where(
+        (person) =>
+            !person.isDeleted &&
+            widget.ledger.personUuids.contains(person.uuid),
+      )
+      .toList();
 
   Future<bool> _confirmDisclosure({bool voice = false}) async {
     final prefs = await SharedPreferences.getInstance();
     final key =
-        'ai_bookkeeping_disclosure.v1.${widget.queue.scope.storageKey}.${voice ? 'voice' : 'text'}';
+        'ai_bookkeeping_disclosure.v2.${widget.queue.scope.storageKey}.${voice ? 'voice' : 'text'}';
     if (prefs.getBool(key) == true) return true;
     if (!mounted) return false;
     final accepted = await showDialog<bool>(
@@ -111,8 +148,8 @@ class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
         title: const Text('使用 AI 记账'),
         content: Text(
           voice
-              ? '录音将发送给腾讯云语音识别，返回的文字可编辑。提交文字后会发送给 DeepSeek 解析。系统不会自动保存流水。'
-              : '你输入的记账描述会发送给第三方 AI 服务解析。系统只生成草稿；请核对金额、人员和分类后逐笔确认。',
+              ? '录音将发送给腾讯云语音识别，返回的文字可编辑。提交文字时，描述、当前账本人员姓名和现有分类名称会发送给 DeepSeek 解析。系统不会自动保存流水。'
+              : '你的记账描述、当前账本人员姓名和现有分类名称会发送给第三方 AI 服务解析。系统只生成草稿；请核对金额、人员和分类后逐笔确认。',
         ),
         actions: [
           TextButton(
@@ -287,12 +324,20 @@ class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
         if (mounted) setState(() => _error = '文字输入暂未保存，请重试生成草稿');
         return;
       }
+      final categories = await TransactionCategoryPreference.read();
       final drafts = await widget.repository.parse(
         widget.ledger.remoteSyncUuid,
         input,
         currentAiTimeZone(),
+        expenseCategories: categories.expense,
+        incomeCategories: categories.income,
       );
-      final items = await widget.queue.add(widget.ledger.uuid, drafts);
+      final items = await widget.queue.add(
+        widget.ledger.uuid,
+        drafts
+            .map((draft) => normalizeAiDraftPeople(draft, _activePeople))
+            .toList(),
+      );
       if (!mounted) return;
       _text.clear();
       setState(() {
@@ -538,7 +583,16 @@ class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
                 ),
               ),
             if (!_loaded)
-              const Expanded(child: Center(child: CircularProgressIndicator())),
+              Expanded(
+                child: Center(
+                  child: _restoreFailed
+                      ? OutlinedButton(
+                          onPressed: _restore,
+                          child: const Text('重试恢复草稿'),
+                        )
+                      : const CircularProgressIndicator(),
+                ),
+              ),
             if (_loaded && _items.isNotEmpty)
               Expanded(
                 child: AiDraftReview(
@@ -546,13 +600,7 @@ class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
                   draft: _items.first.draft,
                   ledger: widget.ledger,
                   amountInput: _items.first.amountInput,
-                  people: widget.people
-                      .where(
-                        (person) =>
-                            !person.isDeleted &&
-                            widget.ledger.personUuids.contains(person.uuid),
-                      )
-                      .toList(),
+                  people: _activePeople,
                   position: _items.first.position,
                   total: _items.first.total,
                   busy: _busy,

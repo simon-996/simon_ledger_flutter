@@ -9,6 +9,7 @@ import 'package:simon_ledger_flutter/core/models/ai_draft.dart';
 import 'package:simon_ledger_flutter/core/models/ledger.dart';
 import 'package:simon_ledger_flutter/core/models/person.dart';
 import 'package:simon_ledger_flutter/core/models/transaction_record.dart';
+import 'package:simon_ledger_flutter/core/preferences/transaction_category_preference.dart';
 import 'package:simon_ledger_flutter/core/network/api_client.dart';
 import 'package:simon_ledger_flutter/core/network/token_store.dart';
 import 'package:simon_ledger_flutter/core/network/api_exception.dart';
@@ -23,6 +24,8 @@ class FakeRepository extends AiBookkeepingRepository {
 
   int parseCalls = 0;
   int transcribeCalls = 0;
+  List<String>? lastExpenseCategories;
+  List<String>? lastIncomeCategories;
 
   @override
   Future<String> transcribe(String ledgerUuid, Uint8List pcm) async {
@@ -34,9 +37,13 @@ class FakeRepository extends AiBookkeepingRepository {
   Future<List<AiDraft>> parse(
     String ledgerUuid,
     String text,
-    String zone,
-  ) async {
+    String zone, {
+    List<String>? expenseCategories,
+    List<String>? incomeCategories,
+  }) async {
     parseCalls++;
+    lastExpenseCategories = expenseCategories;
+    lastIncomeCategories = incomeCategories;
     return [
       const AiDraft(
         sourceText: '早餐18元',
@@ -64,8 +71,13 @@ class SlowRepository extends FakeRepository {
   final response = Completer<List<AiDraft>>();
 
   @override
-  Future<List<AiDraft>> parse(String ledgerUuid, String text, String zone) =>
-      response.future;
+  Future<List<AiDraft>> parse(
+    String ledgerUuid,
+    String text,
+    String zone, {
+    List<String>? expenseCategories,
+    List<String>? incomeCategories,
+  }) => response.future;
 }
 
 class FakeVoiceDevice implements AiRecorderDevice {
@@ -137,6 +149,25 @@ class FailFirstEditQueue extends AiDraftQueue {
   }
 }
 
+class FailOnceRestoreQueue extends AiDraftQueue {
+  FailOnceRestoreQueue({required super.scope, required super.loadTransactions});
+  bool failUpdate = true;
+
+  @override
+  Future<void> update(
+    String ledgerUuid,
+    String uuid,
+    AiDraft draft, {
+    String? amountInput,
+  }) async {
+    if (failUpdate) {
+      failUpdate = false;
+      throw StateError('temporary storage failure');
+    }
+    await super.update(ledgerUuid, uuid, draft, amountInput: amountInput);
+  }
+}
+
 class SlowInputQueue extends AiDraftQueue {
   SlowInputQueue({required super.scope, required super.loadTransactions});
   final release = Completer<void>();
@@ -174,6 +205,174 @@ void main() {
       currentAiTimeZone(),
       '$sign${(minutes ~/ 60).toString().padLeft(2, '0')}:${(minutes % 60).toString().padLeft(2, '0')}',
     );
+  });
+
+  testWidgets('submitting description supplies all current custom categories', (
+    tester,
+  ) async {
+    await TransactionCategoryPreference.addCategory(
+      transactionType: 0,
+      category: '养猫',
+    );
+    await TransactionCategoryPreference.addCategory(
+      transactionType: 1,
+      category: '版权授权',
+    );
+    final categories = await TransactionCategoryPreference.read();
+    final repository = FakeRepository();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AiBookkeepingFlow(
+            ledger: Ledger()
+              ..uuid = 'ledger-1'
+              ..name = '共享账本'
+              ..baseCurrencyCode = 'CNY',
+            people: const [],
+            queue: AiDraftQueue(
+              scope: const LocalDataScope.account('alice'),
+              loadTransactions: (_) async => [],
+            ),
+            repository: repository,
+            onSave: (_, _) async {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, '买猫粮花了30元');
+    await tester.tap(find.text('生成草稿'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('同意并继续'));
+    await tester.pumpAndSettle();
+    expect(repository.lastExpenseCategories, categories.expense);
+    expect(repository.lastIncomeCategories, categories.income);
+    expect(repository.lastExpenseCategories, contains('养猫'));
+    expect(repository.lastIncomeCategories, contains('版权授权'));
+  });
+
+  testWidgets(
+    'restored cloud identities retain queue identity and edited input',
+    (tester) async {
+      final queue = AiDraftQueue(
+        scope: const LocalDataScope.account('alice'),
+        loadTransactions: (_) async => [],
+      );
+      const draft = AiDraft(
+        sourceText: '陈欣付了30元',
+        type: 0,
+        amount: 30,
+        currencyCode: 'CNY',
+        categorySuggestion: '餐饮',
+        personUuids: ['cloud-person'],
+        payerPersonUuid: 'cloud-person',
+        unresolvedNames: [],
+        paymentMode: AiPaymentMode.person,
+        personMatches: [
+          AiPersonMatch(
+            sourceName: '陈欣',
+            role: 'payer',
+            personUuid: 'cloud-person',
+            matchedName: '陈鑫',
+            approximate: true,
+            candidatePersonUuids: ['cloud-person'],
+          ),
+        ],
+      );
+      final initial = (await queue.add('ledger-1', [draft])).single;
+      await queue.update('ledger-1', initial.uuid, draft, amountInput: '30.00');
+      final person = Person()
+        ..uuid = 'local-person'
+        ..syncedRemoteUuid = 'cloud-person'
+        ..name = '陈鑫';
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AiBookkeepingFlow(
+              ledger: Ledger()
+                ..uuid = 'ledger-1'
+                ..name = '共享账本'
+                ..baseCurrencyCode = 'CNY'
+                ..personUuids = ['local-person'],
+              people: [person],
+              queue: queue,
+              repository: FakeRepository(),
+              onSave: (_, _) async {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final restored = (await queue.load('ledger-1')).single;
+      expect(restored.uuid, initial.uuid);
+      expect(restored.operationId, initial.operationId);
+      expect(restored.position, initial.position);
+      expect(restored.total, initial.total);
+      expect(restored.amountInput, '30.00');
+      expect(restored.draft.personUuids, ['local-person']);
+      expect(restored.draft.payerPersonUuid, 'local-person');
+      expect(restored.draft.personMatches.single.personUuid, 'local-person');
+      expect(restored.draft.personMatches.single.candidatePersonUuids, [
+        'local-person',
+      ]);
+      expect(restored.draft.personMatches.single.sourceName, '陈欣');
+      expect(restored.draft.personMatches.single.approximate, isTrue);
+      expect(find.textContaining('已失效'), findsNothing);
+    },
+  );
+
+  testWidgets('failed identity recovery preserves drafts and offers retry', (
+    tester,
+  ) async {
+    final queue = FailOnceRestoreQueue(
+      scope: const LocalDataScope.account('alice'),
+      loadTransactions: (_) async => [],
+    );
+    final original = (await queue.add('ledger-1', [
+      const AiDraft(
+        sourceText: '晚饭30元',
+        type: 0,
+        amount: 30,
+        currencyCode: 'CNY',
+        personUuids: ['cloud-person'],
+        unresolvedNames: [],
+      ),
+    ])).single;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AiBookkeepingFlow(
+            ledger: Ledger()
+              ..uuid = 'ledger-1'
+              ..name = '共享账本'
+              ..baseCurrencyCode = 'CNY'
+              ..personUuids = ['local-person'],
+            people: [
+              Person()
+                ..uuid = 'local-person'
+                ..syncedRemoteUuid = 'cloud-person'
+                ..name = '小王',
+            ],
+            queue: queue,
+            repository: FakeRepository(),
+            onSave: (_, _) async {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('重试恢复草稿'), findsOneWidget);
+    expect((await queue.load('ledger-1')).single.draft.personUuids, [
+      'cloud-person',
+    ]);
+    expect(find.text('生成草稿'), findsNothing);
+    await tester.tap(find.text('重试恢复草稿'));
+    await tester.pumpAndSettle();
+    final recovered = (await queue.load('ledger-1')).single;
+    expect(recovered.operationId, original.operationId);
+    expect(recovered.draft.personUuids, ['local-person']);
+    expect(find.text('第 1/1 笔'), findsOneWidget);
   });
 
   test('AI quota errors remain distinguishable from missing permission', () {
@@ -225,6 +424,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('第 1/2 笔'), findsOneWidget);
+    await tester.ensureVisible(find.text('共同钱包'));
+    await tester.tap(find.text('共同钱包'));
     await tester.ensureVisible(find.text('确认记账'));
     await tester.tap(find.text('确认记账'));
     await tester.pumpAndSettle();
@@ -379,6 +580,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('同意并继续'));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('共同钱包'));
+    await tester.tap(find.text('共同钱包'));
     await tester.ensureVisible(find.text('确认记账'));
     await tester.tap(find.text('确认记账'));
     await tester.pumpAndSettle();
@@ -440,7 +643,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(confirmed, isNull);
       expect(find.text('请选择分类'), findsOneWidget);
-      expect(find.text('请确认待识别姓名和付款方式'), findsOneWidget);
+      expect(find.text('请确认待识别人员'), findsOneWidget);
       await tester.ensureVisible(find.text('餐饮'));
       await tester.tap(find.text('餐饮'));
       await tester.ensureVisible(find.text('忽略小李'));
@@ -449,8 +652,8 @@ void main() {
       await tester.tap(find.text('确认记账'));
       await tester.pumpAndSettle();
       expect(confirmed, isNull);
-      await tester.ensureVisible(find.text('使用共同钱包'));
-      await tester.tap(find.text('使用共同钱包'));
+      await tester.ensureVisible(find.text('共同钱包'));
+      await tester.tap(find.text('共同钱包'));
       await tester.ensureVisible(find.text('确认记账'));
       await tester.tap(find.text('确认记账'));
       await tester.pumpAndSettle();
@@ -886,8 +1089,9 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.textContaining('原参与人已失效'), findsWidgets);
-    expect(find.textContaining('原付款人已失效'), findsWidgets);
+    expect(find.textContaining('原承担人'), findsWidgets);
+    expect(find.textContaining('原付款人'), findsWidgets);
+    expect(find.textContaining('已失效'), findsNothing);
     await tester.tap(find.text('确认记账'));
     await tester.pumpAndSettle();
     expect(confirmed, isNull);
@@ -1037,6 +1241,8 @@ void main() {
     await tester.enterText(find.widgetWithText(TextField, '金额'), '20');
     queue.releaseFirst.complete();
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('共同钱包'));
+    await tester.tap(find.text('共同钱包'));
     await tester.tap(find.text('确认记账'));
     await tester.pumpAndSettle();
     expect(saved?.amount, 20);

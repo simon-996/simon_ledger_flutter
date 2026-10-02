@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simon_ledger_flutter/core/database/local_data_scope.dart';
 import 'package:simon_ledger_flutter/core/di/providers.dart';
 import 'package:simon_ledger_flutter/core/network/api_client.dart';
@@ -11,6 +12,7 @@ class FakeAiApiClient extends ApiClient {
 
   final paths = <String>[];
   bool textAvailable = true;
+  Object? postedData;
 
   @override
   Future<T> get<T>(
@@ -34,6 +36,7 @@ class FakeAiApiClient extends ApiClient {
     T Function(Object? json)? fromJson,
   }) async {
     paths.add(path);
+    postedData = data;
     return fromJson!({
       'entries': [
         {
@@ -68,6 +71,40 @@ final _testAccountScopeProvider =
     NotifierProvider<_TestAccountScope, LocalDataScope>(_TestAccountScope.new);
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  test('explicit category lists preserve a deliberately empty type', () async {
+    final api = FakeAiApiClient();
+    await AiBookkeepingRepository(api).parse(
+      'ledger-1',
+      '作品出售收入',
+      '+08:00',
+      expenseCategories: const [],
+      incomeCategories: const ['版权授权'],
+    );
+    final body = api.postedData as Map<String, dynamic>;
+    expect(body['expenseCategories'], isEmpty);
+    expect(body['incomeCategories'], ['版权授权']);
+  });
+  test(
+    'parse sends current custom categories as context without keyword rules',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'transaction_categories.expense.v1': ['养猫', '学习进修'],
+        'transaction_categories.income.v1': ['稿费'],
+      });
+      final api = FakeAiApiClient();
+      await AiBookkeepingRepository(api).parse('ledger-1', '给猫买了罐头', '+08:00');
+      final body = api.postedData as Map<String, dynamic>;
+      expect(
+        body['expenseCategories'],
+        containsAll(['餐饮', '交通', '养猫', '学习进修']),
+      );
+      expect(body['incomeCategories'], containsAll(['工资', '稿费']));
+      expect(body['text'], '给猫买了罐头');
+    },
+  );
+
   test(
     'switching accounts reloads AI capability for the same shared ledger',
     () async {
