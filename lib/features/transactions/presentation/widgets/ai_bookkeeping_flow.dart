@@ -624,14 +624,6 @@ class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
                             icon: const Icon(Icons.mic_none_rounded),
                             label: Text(_voiceBusy ? '转写中' : '开始语音输入'),
                           ),
-                        if (!_recording && !_voiceBusy)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(
-                              '录音将发送至腾讯云进行转写；解析前会再次提示 AI 处理内容。',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ),
                         const SizedBox(height: 12),
                       ],
                       if (widget.canParse)
