@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simon_ledger_flutter/core/database/database_service.dart';
+import 'package:simon_ledger_flutter/core/database/local_data_scope.dart';
+import 'package:simon_ledger_flutter/core/models/ai_draft.dart';
 import 'package:simon_ledger_flutter/core/models/conflict_record.dart';
 import 'package:simon_ledger_flutter/core/models/ledger.dart';
 import 'package:simon_ledger_flutter/core/models/money.dart';
@@ -16,6 +18,7 @@ import 'package:simon_ledger_flutter/core/network/token_store.dart';
 import 'package:simon_ledger_flutter/core/preferences/local_profile_store.dart';
 import 'package:simon_ledger_flutter/core/repositories/transaction_repository.dart';
 import 'package:simon_ledger_flutter/core/services/conflict_coordinator.dart';
+import 'package:simon_ledger_flutter/core/services/ai_draft_queue.dart';
 import 'package:simon_ledger_flutter/core/services/conflict_snapshot_codec.dart';
 import 'package:simon_ledger_flutter/core/services/conflict_store.dart';
 import 'package:simon_ledger_flutter/core/widgets/app_components.dart';
@@ -23,6 +26,196 @@ import 'package:simon_ledger_flutter/features/transactions/presentation/widgets/
 
 void main() {
   group('RemoteTransactionRepository', () {
+    test(
+      'creates a confirmed AI draft before updating its server uuid',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final database = DatabaseService();
+        final queue = AiDraftQueue(
+          scope: const LocalDataScope.account('alice'),
+          loadTransactions: database.getTransactionsForLedger,
+        );
+        final item = (await queue.add('ledger-1', [
+          AiDraft(
+            sourceText: '晚饭20泰铢',
+            type: 0,
+            amount: 20,
+            currencyCode: 'THB',
+            personUuids: const ['person-1'],
+            unresolvedNames: const [],
+          ),
+        ])).single;
+        final api = _UndoApiClient()..release.complete();
+        final repository = RemoteTransactionRepository(
+          apiClient: api,
+          database: database,
+        );
+
+        await repository.saveTransaction(
+          _transaction()
+            ..uuid = item.uuid
+            ..clientOperationId = item.operationId
+            ..amount = 20
+            ..currencyCode = 'THB',
+        );
+        final created = await repository.syncPendingTransactions('ledger-1');
+
+        expect(created.error, isNull);
+        expect(api.postPaths, ['/api/ledgers/ledger-1/transactions']);
+        expect(api.postKeys, [item.operationId]);
+        expect(api.putPaths, isEmpty);
+        final saved = (await database.getTransactionsForLedger(
+          'ledger-1',
+        )).single;
+        expect(saved.uuid, _remoteTransactionUuid);
+        expect(saved.clientOperationId, item.operationId);
+        expect(saved.pendingSync, isFalse);
+        expect(await queue.load('ledger-1'), isEmpty);
+
+        await repository.saveTransaction(saved..amount = 25);
+        await repository.syncPendingTransactions('ledger-1');
+        expect(api.postPaths, hasLength(1));
+        expect(api.putPaths, [
+          '/api/ledgers/ledger-1/transactions/$_remoteTransactionUuid',
+        ]);
+        expect(api.putData?['amount'], 25);
+      },
+    );
+
+    test(
+      'retries a persisted AI create using its original operation id',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final database = DatabaseService();
+        const operationId = 'd8053d040ae3995076308cc17f9cb0e0';
+        await database.saveTransaction(
+          _transaction()
+            ..uuid = operationId
+            ..clientOperationId = operationId
+            ..pendingSync = true
+            ..syncError = '流水不存在',
+        );
+        final api = _UndoApiClient()..release.complete();
+        final repository = RemoteTransactionRepository(
+          apiClient: api,
+          database: database,
+        );
+
+        final result = await repository.syncPendingTransactions('ledger-1');
+
+        expect(result.error, isNull);
+        expect(api.postPaths, ['/api/ledgers/ledger-1/transactions']);
+        expect(api.postKeys, [operationId]);
+        expect(api.putPaths, isEmpty);
+        final saved = (await database.getTransactionsForLedger(
+          'ledger-1',
+        )).single;
+        expect(saved.uuid, _remoteTransactionUuid);
+        expect(saved.pendingSync, isFalse);
+        expect(saved.syncError, isNull);
+      },
+    );
+
+    test(
+      'undo of a pending AI create deletes the returned server uuid',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final database = DatabaseService();
+        const operationId = 'd8053d040ae3995076308cc17f9cb0e0';
+        await database.saveTransaction(
+          _transaction()
+            ..uuid = operationId
+            ..clientOperationId = operationId
+            ..pendingSync = true,
+        );
+        final api = _UndoApiClient()..release.complete();
+        final repository = RemoteTransactionRepository(
+          apiClient: api,
+          database: database,
+        );
+
+        await repository.deleteTransaction('ledger-1', operationId);
+        final result = await repository.syncPendingTransactions('ledger-1');
+
+        expect(result.error, isNull);
+        expect(api.postKeys, [operationId]);
+        expect(api.putPaths, isEmpty);
+        expect(api.deletePaths, [
+          '/api/ledgers/ledger-1/transactions/$_remoteTransactionUuid',
+        ]);
+        expect(await database.getTransactionsForLedger('ledger-1'), isEmpty);
+        expect(
+          (await database.getTransactionsForLedger(
+            'ledger-1',
+            includeDeleted: true,
+          )).where((record) => record.pendingSync),
+          isEmpty,
+        );
+      },
+    );
+
+    test(
+      'editing a remote row without an operation id still uses PUT',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final database = DatabaseService();
+        final api = _UndoApiClient()..release.complete();
+        final repository = RemoteTransactionRepository(
+          apiClient: api,
+          database: database,
+        );
+        await repository.saveTransaction(
+          _syncedTransaction()..clientOperationId = null,
+        );
+        await repository.syncPendingTransactions('ledger-1');
+
+        expect(api.postPaths, isEmpty);
+        expect(api.putPaths, [
+          '/api/ledgers/ledger-1/transactions/1234567890abcdef1234567890abcdef',
+        ]);
+      },
+    );
+
+    test(
+      'failed AI undo retries deletion only for the server identity',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final database = DatabaseService();
+        const operationId = 'd8053d040ae3995076308cc17f9cb0e0';
+        await database.saveTransaction(
+          _transaction()
+            ..uuid = operationId
+            ..clientOperationId = operationId
+            ..isDeleted = true
+            ..pendingSync = true,
+        );
+        final api = _UndoApiClient()
+          ..failDeletion = true
+          ..release.complete();
+        final repository = RemoteTransactionRepository(
+          apiClient: api,
+          database: database,
+        );
+
+        final failed = await repository.syncPendingTransactions('ledger-1');
+        expect(failed.error, isNotNull);
+        final pending = (await database.getTransactionsForLedger(
+          'ledger-1',
+          includeDeleted: true,
+        )).where((record) => record.pendingSync);
+        expect(pending.map((record) => record.uuid), [_remoteTransactionUuid]);
+
+        api.failDeletion = false;
+        final retried = await repository.syncPendingTransactions('ledger-1');
+        expect(retried.error, isNull);
+        expect(api.postKeys, [operationId]);
+        expect(api.deletePaths, [
+          '/api/ledgers/ledger-1/transactions/$_remoteTransactionUuid',
+        ]);
+        expect(await database.getTransactionsForLedger('ledger-1'), isEmpty);
+      },
+    );
+
     testWidgets('shows a deleted creator on a retained remote transaction', (
       tester,
     ) async {
@@ -712,6 +905,7 @@ class _UndoApiClient extends _FakeApiClient {
   bool failDeletion = false;
   bool loseResponse = false;
   Map<String, dynamic>? putData;
+  final postKeys = <String?>[];
   final started = Completer<void>();
   final release = Completer<void>();
   @override
@@ -762,6 +956,7 @@ class _UndoApiClient extends _FakeApiClient {
     T Function(Object? json)? fromJson,
   }) async {
     postPaths.add(path);
+    postKeys.add(idempotencyKey);
     if (!started.isCompleted) started.complete();
     await release.future;
     if (loseResponse) throw StateError('response lost after acceptance');
