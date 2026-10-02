@@ -21,6 +21,13 @@ import '../providers/transaction_provider.dart';
 import 'transaction_form_components.dart';
 import 'ai_bookkeeping_flow.dart';
 
+String _recentTransactionDateTime(DateTime dateTime) {
+  final local = dateTime.toLocal();
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  return '${local.month}月${local.day}日 $hour:$minute';
+}
+
 class BookkeepingTab extends ConsumerStatefulWidget {
   const BookkeepingTab({
     super.key,
@@ -949,7 +956,12 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab>
                         AppSectionHeader(title: '最近记录', trailing: widget.onOpenLedger == null ? null : TextButton(onPressed: () => widget.onOpenLedger!(selectedLedger), child: const Text('查看流水'))),
                         for (final record in recentTransactions.take(3)) ListTile(
                           dense: true, contentPadding: EdgeInsets.zero,
-                          title: Text(record.category), subtitle: Text('${record.createdAt.month}月${record.createdAt.day}日${record.note.isEmpty ? '' : ' · ${record.note}'}', maxLines: 1, overflow: TextOverflow.ellipsis),
+                          title: Text(record.category),
+                          subtitle: Text(
+                            '${_recentTransactionDateTime(record.createdAt)}${record.note.isEmpty ? '' : ' · ${record.note}'}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                           trailing: Text('${record.type == 1 ? '+' : '−'} ${record.currencyCode} ${record.amount.toStringAsFixed(2)}'),
                           onTap: widget.onOpenLedger == null ? null : () => widget.onOpenLedger!(selectedLedger),
                         ),

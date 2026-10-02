@@ -986,6 +986,21 @@ DateTime transactionDateOnDay(DateTime day, DateTime previous) {
   );
 }
 
+/// Changing the displayed hour and minute keeps the date and finer precision.
+DateTime transactionDateAtTime(DateTime previous, TimeOfDay time) {
+  final local = previous.toLocal();
+  return DateTime(
+    local.year,
+    local.month,
+    local.day,
+    time.hour,
+    time.minute,
+    local.second,
+    local.millisecond,
+    local.microsecond,
+  );
+}
+
 class TransactionDateControl extends StatelessWidget {
   const TransactionDateControl({
     super.key,
@@ -1001,29 +1016,60 @@ class TransactionDateControl extends StatelessWidget {
     final value = (date ?? DateTime.now()).toLocal();
     final label =
         '${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
+    final timeLabel = date == null
+        ? '现在'
+        : '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
     return Align(
       alignment: Alignment.centerLeft,
-      child: TextButton.icon(
-        key: const ValueKey('transaction-date-control'),
-        icon: const Icon(Icons.event_outlined, size: 18),
-        label: Text('日期 · $label'),
-        onPressed: !enabled
-            ? null
-            : () async {
-                final now = DateTime.now();
-                final initial = value.isAfter(now) ? now : value;
-                final day = await showDatePicker(
-                  context: context,
-                  initialDate: initial,
-                  firstDate: DateTime(
-                    initial.year < 2000 ? initial.year : 2000,
-                  ),
-                  lastDate: now,
-                );
-                if (day != null && context.mounted) {
-                  onChanged(transactionDateOnDay(day, value));
-                }
-              },
+      child: Wrap(
+        spacing: 8,
+        children: [
+          TextButton.icon(
+            key: const ValueKey('transaction-date-control'),
+            icon: const Icon(Icons.event_outlined, size: 18),
+            label: Text('日期 · $label'),
+            onPressed: !enabled
+                ? null
+                : () async {
+                    final now = DateTime.now();
+                    final initial = value.isAfter(now) ? now : value;
+                    final day = await showDatePicker(
+                      context: context,
+                      initialDate: initial,
+                      firstDate: DateTime(
+                        initial.year < 2000 ? initial.year : 2000,
+                      ),
+                      lastDate: now,
+                    );
+                    if (day != null && context.mounted) {
+                      onChanged(transactionDateOnDay(day, value));
+                    }
+                  },
+          ),
+          TextButton.icon(
+            key: const ValueKey('transaction-time-control'),
+            icon: const Icon(Icons.access_time_outlined, size: 18),
+            label: Text('时间 · $timeLabel'),
+            onPressed: !enabled
+                ? null
+                : () async {
+                    final time = await showTimePicker(
+                      context: context,
+                      initialTime: TimeOfDay.fromDateTime(value),
+                      helpText: '选择记账时间',
+                      builder: (context, child) => MediaQuery(
+                        data: MediaQuery.of(
+                          context,
+                        ).copyWith(alwaysUse24HourFormat: true),
+                        child: child!,
+                      ),
+                    );
+                    if (time != null && context.mounted) {
+                      onChanged(transactionDateAtTime(value, time));
+                    }
+                  },
+          ),
+        ],
       ),
     );
   }
