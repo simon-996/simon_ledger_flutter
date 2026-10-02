@@ -89,6 +89,7 @@ final aiDraftQueueProvider = Provider<AiDraftQueue>((ref) {
 });
 
 final aiCapabilityProvider = FutureProvider.family<AiCapability, String>((ref, ledgerUuid) {
+  ref.watch(activeLocalDataScopeProvider);
   return ref.watch(aiBookkeepingRepositoryProvider).capability(ledgerUuid);
 });
 

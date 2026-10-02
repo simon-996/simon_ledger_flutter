@@ -3,17 +3,96 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simon_ledger_flutter/core/database/database_service.dart';
+import 'package:simon_ledger_flutter/core/database/local_data_scope.dart';
 import 'package:simon_ledger_flutter/core/di/providers.dart';
 import 'package:simon_ledger_flutter/core/models/ledger.dart';
 import 'package:simon_ledger_flutter/core/models/person.dart';
 import 'package:simon_ledger_flutter/core/models/transaction_record.dart';
 import 'package:simon_ledger_flutter/core/network/token_store.dart';
 import 'package:simon_ledger_flutter/core/repositories/transaction_repository.dart';
+import 'package:simon_ledger_flutter/core/repositories/ai_bookkeeping_repository.dart';
 import 'package:simon_ledger_flutter/core/theme/app_theme.dart';
 import 'package:simon_ledger_flutter/core/widgets/app_components.dart';
 import 'package:simon_ledger_flutter/features/transactions/presentation/widgets/bookkeeping_tab.dart';
 
 void main() {
+  for (final refreshEvent in [
+    'returning to bookkeeping',
+    'app resume',
+    'remounting bookkeeping',
+  ]) {
+    testWidgets('AI availability refreshes after $refreshEvent', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({});
+      final database = DatabaseService();
+      final ledger = await _saveLedgerFixture(database);
+      ledger.cloudPolicy = LedgerCloudPolicy.cloudManaged;
+      ledger.role = 'owner';
+      await database.saveLedger(ledger);
+      var isActive = true;
+      var showTab = true;
+      var granted = false;
+      var requests = 0;
+      late StateSetter updateTab;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            databaseProvider.overrideWithValue(database),
+            authTokenProvider.overrideWith((ref) async => null),
+            activeLocalDataScopeProvider.overrideWithValue(
+              const LocalDataScope.account('ai-test-account'),
+            ),
+            aiCapabilityProvider.overrideWith((ref, uuid) async {
+              requests++;
+              return AiCapability(
+                textAvailable: granted,
+                voiceAvailable: false,
+              );
+            }),
+            aiPendingDraftsProvider.overrideWith((ref, uuid) async => []),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.lightTheme,
+            home: Scaffold(
+              body: StatefulBuilder(
+                builder: (context, setState) {
+                  updateTab = setState;
+                  if (!showTab) return const SizedBox.shrink();
+                  return BookkeepingTab(ledgers: [ledger], isActive: isActive);
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('AI 记账'), findsNothing);
+      final initialRequests = requests;
+      granted = true;
+      if (refreshEvent == 'app resume') {
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+      } else if (refreshEvent == 'remounting bookkeeping') {
+        updateTab(() => showTab = false);
+        await tester.pumpAndSettle();
+        updateTab(() => showTab = true);
+      } else {
+        updateTab(() => isActive = false);
+        await tester.pumpAndSettle();
+        updateTab(() => isActive = true);
+      }
+      await tester.pumpAndSettle();
+      expect(find.text('AI 记账'), findsOneWidget);
+      expect(requests, greaterThan(initialRequests));
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('bookkeeping header keeps ledger selector visually quiet', (
     tester,
   ) async {

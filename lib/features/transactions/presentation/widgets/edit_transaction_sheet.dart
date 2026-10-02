@@ -307,7 +307,9 @@ class _EditTransactionSheetState extends ConsumerState<EditTransactionSheet> {
                               TransactionResponsivePair(
                                 breakpoint: 0,
                                 first: SizedBox(
-                                  height: _amountError == null ? 56 : 118,
+                                  height: _amountError == null
+                                      ? transactionAmountControlHeight
+                                      : 118,
                                   child: TextField(
                                     key: _amountAnchor,
                                     focusNode: _amountFocus,

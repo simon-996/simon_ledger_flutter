@@ -6,6 +6,62 @@ import 'package:simon_ledger_flutter/core/widgets/currency_widgets.dart';
 import 'package:simon_ledger_flutter/features/transactions/presentation/widgets/transaction_form_components.dart';
 
 void main() {
+  for (final width in [320.0, 900.0]) {
+    for (final currencies in const [
+      ['CNY'],
+      ['CNY', 'USD'],
+      ['CNY', 'USD', 'EUR', 'GBP'],
+      ['CNY', 'USD', 'EUR', 'GBP', 'JPY'],
+    ]) {
+      testWidgets(
+        'amount and currency controls align at width $width with ${currencies.length} currencies',
+        (tester) async {
+          await tester.binding.setSurfaceSize(Size(width, 650));
+          addTearDown(() => tester.binding.setSurfaceSize(null));
+          final amountKey = GlobalKey();
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: AppTheme.lightTheme,
+              home: Scaffold(
+                body: TransactionResponsivePair(
+                  breakpoint: 0,
+                  first: SizedBox(
+                    key: amountKey,
+                    height: 58,
+                    child: const TextField(
+                      decoration: InputDecoration(labelText: '金额'),
+                    ),
+                  ),
+                  second: CurrencySelector(
+                    currencies: currencies,
+                    selectedCurrency: 'CNY',
+                    onChanged: (_) {},
+                  ),
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          final amount = tester.getRect(find.byKey(amountKey));
+          final selector = tester.getRect(find.byType(CurrencySelector));
+          expect(selector.top, closeTo(amount.top, 0.01));
+          expect(selector.bottom, closeTo(amount.bottom, 0.01));
+          final visual = currencies.length == 1
+              ? find.byType(CurrencyLabel)
+              : find
+                    .byKey(const ValueKey('currency-picker'))
+                    .evaluate()
+                    .isNotEmpty
+              ? find.byKey(const ValueKey('currency-picker'))
+              : find.byKey(const ValueKey('currency-option-CNY'));
+          expect(tester.getCenter(visual).dy, closeTo(amount.center.dy, 0.01));
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
   testWidgets('compact four currency selector preserves readable options', (
     tester,
   ) async {

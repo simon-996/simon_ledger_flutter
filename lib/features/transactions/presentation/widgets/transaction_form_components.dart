@@ -6,6 +6,8 @@ import '../../../../core/widgets/currency_widgets.dart';
 
 export 'transaction_split_summary.dart';
 
+const transactionAmountControlHeight = 58.0;
+
 Color transactionAccentColor(BuildContext context, int transactionType) {
   return AppColors.of(context).transaction(transactionType);
 }
@@ -293,11 +295,17 @@ class CurrencySelector extends StatelessWidget {
   Widget build(BuildContext context) {
     if (currencies.length == 1) {
       final currency = currencies.first;
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: CurrencyLabel(
-          code: currency,
-          style: Theme.of(context).textTheme.bodySmall,
+      return ConstrainedBox(
+        constraints: const BoxConstraints(
+          minHeight: transactionAmountControlHeight,
+        ),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          heightFactor: 1,
+          child: CurrencyLabel(
+            code: currency,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
         ),
       );
     }
@@ -307,6 +315,9 @@ class CurrencySelector extends StatelessWidget {
             constraints.maxWidth < currencies.length * 88) {
           return OutlinedButton.icon(
             key: const ValueKey('currency-picker'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(0, transactionAmountControlHeight),
+            ),
             icon: CurrencyFlag(code: selectedCurrency),
             label: Text(
               '$selectedCurrency · ${currencyName(selectedCurrency)}',
@@ -332,7 +343,7 @@ class CurrencySelector extends StatelessWidget {
 
         if (currencies.length <= 4) {
           return SizedBox(
-            height: 56,
+            height: transactionAmountControlHeight,
             child: Row(
               children: [
                 for (var index = 0; index < currencies.length; index++) ...[
