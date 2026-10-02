@@ -597,7 +597,8 @@ class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
                         onChanged: _persistInput,
                         decoration: const InputDecoration(
                           labelText: '描述要记的流水',
-                          hintText: '例如：早餐18元，午饭32元',
+                          hintText:
+                              '例如：张三吃早餐花了20元，所有人一起坐地铁花了30泰铢，所有人吃零食花了80元，李四垫付的',
                         ),
                       ),
                       const SizedBox(height: 12),
