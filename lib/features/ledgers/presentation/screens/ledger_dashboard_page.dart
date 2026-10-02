@@ -379,6 +379,11 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                     ),
               );
           final balance = totalIncome - totalExpense;
+          final (summaryLabel, summaryAmount) = switch (_typeFilter) {
+            _DetailTransactionTypeFilter.all => ('结余', balance),
+            _DetailTransactionTypeFilter.expense => ('支出', totalExpense),
+            _DetailTransactionTypeFilter.income => ('收入', totalIncome),
+          };
           final dayGroups = groupTransactionsByDay(
             filteredTransactions,
             amountOf: (t) =>
@@ -433,7 +438,7 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text(
-                          '结余 ($_displayCurrency)',
+                          '$summaryLabel ($_displayCurrency)',
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(color: colorScheme.onSurfaceVariant),
@@ -467,7 +472,7 @@ class _LedgerDashboardPageState extends ConsumerState<LedgerDashboardPage> {
                         FittedBox(
                           fit: BoxFit.scaleDown,
                           child: Text(
-                            formatMoney(_displayCurrency, balance),
+                            formatMoney(_displayCurrency, summaryAmount),
                             style: Theme.of(context).textTheme.displayMedium
                                 ?.copyWith(fontWeight: AppTheme.emphasisWeight),
                           ),
