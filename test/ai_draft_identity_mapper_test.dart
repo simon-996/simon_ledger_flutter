@@ -38,6 +38,47 @@ void main() {
     expect(normalizeAiDraftPeople(local, [person]).toJson(), local.toJson());
   });
 
+  test(
+    'v2 identity mapping retains semantic metadata and maps issue candidates',
+    () {
+      final semantic = draft.copyWith(
+        schemaVersion: 2,
+        participantScope: 'ALL',
+        datePrecision: 'TIME',
+        referenceDate: '2026-10-05',
+        referenceZone: 'Asia/Shanghai',
+        happenedAt: DateTime(2026, 10, 4, 14, 35),
+        categoryOriginalSuggestion: '住宿',
+        fieldSources: const {
+          'participants': 'EXPLICIT',
+          'splitMode': 'DEFAULT',
+        },
+        issues: const [
+          AiDraftIssue(
+            id: 'payer-ambiguous',
+            field: 'payer',
+            code: 'PERSON_AMBIGUOUS',
+            sourceText: '陈欣',
+            candidateUuids: ['remote'],
+          ),
+        ],
+      );
+      final local = normalizeAiDraftPeople(semantic, [person]);
+      expect(local.schemaVersion, 2);
+      expect(local.participantScope, 'ALL');
+      expect(local.paymentMode, 'PERSON_PAID');
+      expect(local.datePrecision, 'TIME');
+      expect(local.happenedAt, semantic.happenedAt);
+      expect(local.referenceDate, semantic.referenceDate);
+      expect(local.referenceZone, semantic.referenceZone);
+      expect(local.categoryOriginalSuggestion, '住宿');
+      expect(local.fieldSources, semantic.fieldSources);
+      expect(local.issues.single.candidateUuids, ['local']);
+      expect(local.issues.single.id, 'payer-ambiguous');
+      expect(normalizeAiDraftPeople(local, [person]).toJson(), local.toJson());
+    },
+  );
+
   test('people outside the supplied ledger or deleted remain unresolved', () {
     expect(normalizeAiDraftPeople(draft, []).payerPersonUuid, 'remote');
     final deleted = Person.copy(person)..isDeleted = true;

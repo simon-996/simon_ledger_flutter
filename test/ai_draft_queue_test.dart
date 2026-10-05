@@ -20,6 +20,33 @@ void main() {
   );
 
   test(
+    'legacy mode and stable operation identity survive queue recovery',
+    () async {
+      final queue = AiDraftQueue(
+        scope: const LocalDataScope.account('alice'),
+        loadTransactions: (_) async => [],
+      );
+      final added = await queue.add('ledger-a', [
+        AiDraft.fromJson({
+          'sourceText': '住宿400',
+          'type': 0,
+          'amount': 400.0,
+          'currencyCode': 'CNY',
+          'categorySuggestion': '居住',
+          'payerPersonUuid': null,
+          'personUuids': ['p-zhang'],
+          'unresolvedNames': [],
+        }),
+      ]);
+
+      final recovered = (await queue.load('ledger-a')).single;
+      expect(recovered.draft.paymentMode, 'UNKNOWN');
+      expect(recovered.uuid, added.single.uuid);
+      expect(recovered.operationId, added.single.operationId);
+    },
+  );
+
+  test(
     'keeps pending drafts separate by account and ledger after restart',
     () async {
       final queue = AiDraftQueue(

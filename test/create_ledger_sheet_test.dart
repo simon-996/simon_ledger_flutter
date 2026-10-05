@@ -76,9 +76,9 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.text('CNY · 人民币'));
+    await tester.tap(find.text('¥ CNY · 人民币'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('USD · 美元').last);
+    await tester.tap(find.text('US\$ USD · 美元').last);
     await tester.pumpAndSettle();
 
     final rateField = tester.widget<TextField>(_rateFieldFinder());
@@ -144,9 +144,9 @@ void main() {
         ),
         '反向汇率账本',
       );
-      await tester.tap(find.text('CNY · 人民币'));
+      await tester.tap(find.text('¥ CNY · 人民币'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('USD · 美元').last);
+      await tester.tap(find.text('US\$ USD · 美元').last);
       await tester.pumpAndSettle();
       await tester.enterText(_rateFieldFinder(), '7.2');
       await tester.pump();
@@ -232,12 +232,12 @@ void main() {
       expect(find.text('1 JPY = 0.05 CNY'), findsNothing);
       await tester.enterText(_rateFieldFinder(), '0.125');
       await tester.pumpAndSettle();
-      final currency = find.text('JPY · 日元');
+      final currency = find.text('¥ JPY · 日元');
       await tester.ensureVisible(currency);
       await tester.pumpAndSettle();
       await tester.tap(currency);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('CNY · 人民币').last);
+      await tester.tap(find.text('¥ CNY · 人民币').last);
       await tester.pumpAndSettle();
       expect(_rateFieldFinder(), findsNothing);
       expect(inverse, findsNothing);

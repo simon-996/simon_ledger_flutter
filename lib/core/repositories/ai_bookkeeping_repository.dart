@@ -9,17 +9,23 @@ class AiCapability {
     required this.textAvailable,
     required this.voiceAvailable,
     this.reason,
+    this.draftSchemaVersion = 1,
   });
 
   final bool textAvailable;
   final bool voiceAvailable;
   final String? reason;
+  final int draftSchemaVersion;
 
-  factory AiCapability.fromJson(Map<String, dynamic> json) => AiCapability(
-    textAvailable: json['textAvailable'] == true,
-    voiceAvailable: json['voiceAvailable'] == true,
-    reason: json['reason'] as String?,
-  );
+  factory AiCapability.fromJson(Map<String, dynamic> json) {
+    final version = json['draftSchemaVersion'];
+    return AiCapability(
+      textAvailable: json['textAvailable'] == true,
+      voiceAvailable: json['voiceAvailable'] == true,
+      reason: json['reason'] as String?,
+      draftSchemaVersion: version is num && version.toInt() == 2 ? 2 : 1,
+    );
+  }
 }
 
 class AiBookkeepingRepository {
@@ -40,6 +46,7 @@ class AiBookkeepingRepository {
     String ledgerUuid,
     String text,
     String zone, {
+    int schemaVersion = 1,
     List<String>? expenseCategories,
     List<String>? incomeCategories,
   }) async {
@@ -49,6 +56,7 @@ class AiBookkeepingRepository {
       data: {
         'text': text,
         'zone': zone,
+        if (schemaVersion >= 2) 'schemaVersion': 2,
         'expenseCategories': expenseCategories ?? categories.expense,
         'incomeCategories': incomeCategories ?? categories.income,
       },

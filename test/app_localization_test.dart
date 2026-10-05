@@ -37,7 +37,11 @@ void main() {
     await tester.tap(date);
     await tester.pumpAndSettle();
     expect(find.text('取消'), findsOneWidget);
-    expect(find.text('确定'), findsOneWidget);
+    expect(find.text('完成'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('transaction-calendar-toggle')));
+    await tester.pumpAndSettle();
+    final calendarContext = tester.element(find.byType(CalendarDatePicker));
+    expect(Localizations.localeOf(calendarContext).languageCode, 'zh');
     expect(find.text('SELECT DATE'), findsNothing);
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();

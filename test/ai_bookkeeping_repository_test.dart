@@ -11,8 +11,9 @@ class FakeAiApiClient extends ApiClient {
   FakeAiApiClient() : super(tokenStore: TokenStore());
 
   final paths = <String>[];
-  bool textAvailable = true;
   Object? postedData;
+  int? capabilityVersion;
+  bool textAvailable = true;
 
   @override
   Future<T> get<T>(
@@ -25,6 +26,7 @@ class FakeAiApiClient extends ApiClient {
       'textAvailable': textAvailable,
       'voiceAvailable': false,
       'reason': null,
+      if (capabilityVersion != null) 'draftSchemaVersion': capabilityVersion,
     });
   }
 
@@ -155,5 +157,36 @@ void main() {
       '/api/ledgers/ledger-1/ai-bookkeeping/capability',
       '/api/ledgers/ledger-1/ai-bookkeeping/parse',
     ]);
+    expect(capability.draftSchemaVersion, 1);
+    final body = api.postedData as Map<String, dynamic>;
+    expect(body['text'], '早餐18元，午饭32元');
+    expect(body['zone'], 'Asia/Shanghai');
+    expect(body.containsKey('schemaVersion'), isFalse);
+    expect(body['expenseCategories'], contains('餐饮'));
+    expect(body['incomeCategories'], contains('工资'));
   });
+
+  test(
+    'sends v2 with ledger categories only when explicitly negotiated',
+    () async {
+      final api = FakeAiApiClient()..capabilityVersion = 2;
+      final repo = AiBookkeepingRepository(api);
+      final capability = await repo.capability('ledger-1');
+      await repo.parse(
+        'ledger-1',
+        '住宿400',
+        'Asia/Shanghai',
+        schemaVersion: capability.draftSchemaVersion,
+        expenseCategories: const ['居住', '交通'],
+        incomeCategories: const ['工资'],
+      );
+      expect(api.postedData, {
+        'text': '住宿400',
+        'zone': 'Asia/Shanghai',
+        'schemaVersion': 2,
+        'expenseCategories': ['居住', '交通'],
+        'incomeCategories': ['工资'],
+      });
+    },
+  );
 }

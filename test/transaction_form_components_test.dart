@@ -6,6 +6,110 @@ import 'package:simon_ledger_flutter/core/widgets/currency_widgets.dart';
 import 'package:simon_ledger_flutter/features/transactions/presentation/widgets/transaction_form_components.dart';
 
 void main() {
+  testWidgets('currency search remains scrollable with a landscape keyboard', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(600, 360);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetViewInsets);
+    String? selected;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CurrencySelector(
+            currencies: const ['CNY', 'USD', 'EUR', 'JPY', 'GBP'],
+            selectedCurrency: 'CNY',
+            onChanged: (value) => selected = value,
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('currency-picker')));
+    await tester.pumpAndSettle();
+    tester.view.viewInsets = const FakeViewPadding(bottom: 220);
+    await tester.enterText(find.byType(TextField), 'EUR');
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.ensureVisible(find.textContaining('欧元'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('欧元'));
+    await tester.pumpAndSettle();
+    expect(selected, 'EUR');
+  });
+  testWidgets('currency labels include symbol, ISO code and name', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Column(
+            children: [
+              CurrencyLabel(code: 'CNY'),
+              CurrencyLabel(code: 'USD'),
+              CurrencyLabel(code: 'THB'),
+            ],
+          ),
+        ),
+      ),
+    );
+    expect(find.text('¥ CNY · 人民币'), findsOneWidget);
+    expect(find.text('US\$ USD · 美元'), findsOneWidget);
+    expect(find.text('฿ THB · 泰铢'), findsOneWidget);
+  });
+
+  testWidgets(
+    'two currencies remain directly selectable in narrow amount row',
+    (tester) async {
+      var selected = 'CNY';
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 160,
+              child: CurrencySelector(
+                currencies: const ['CNY', 'USD'],
+                selectedCurrency: selected,
+                onChanged: (value) => selected = value,
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(find.byKey(const ValueKey('currency-option-USD')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('currency-option-USD')));
+      expect(selected, 'USD');
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('currency search accepts symbols and closes on selection', (
+    tester,
+  ) async {
+    String? selected;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CurrencySelector(
+            currencies: const ['CNY', 'USD', 'EUR', 'JPY', 'THB'],
+            selectedCurrency: 'CNY',
+            onChanged: (value) => selected = value,
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('currency-picker')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '฿');
+    await tester.pumpAndSettle();
+    expect(find.textContaining('泰铢'), findsOneWidget);
+    await tester.tap(find.textContaining('泰铢'));
+    await tester.pumpAndSettle();
+    expect(selected, 'THB');
+    expect(find.byType(BottomSheet), findsNothing);
+  });
   for (final width in [320.0, 900.0]) {
     for (final currencies in const [
       ['CNY'],

@@ -307,7 +307,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 700));
 
-    expect(find.text('支出已记下'), findsOneWidget);
+    expect(find.textContaining('支出已记下'), findsOneWidget);
     expect(tester.testTextInput.isVisible, isFalse);
     expect(tester.widget<TextField>(amountInput).autofocus, isFalse);
 
@@ -393,7 +393,7 @@ void main() {
 
       final transactions = await database.getTransactionsForLedger(ledger.uuid);
       expect(transactions, hasLength(1));
-      expect(find.text('支出已记下'), findsOneWidget);
+      expect(find.textContaining('支出已记下'), findsOneWidget);
       expect(find.textContaining('失败'), findsNothing);
 
       await tester.pump(const Duration(milliseconds: 1500));

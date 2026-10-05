@@ -15,20 +15,23 @@ AiDraft normalizeAiDraftPeople(AiDraft draft, Iterable<Person> people) {
     return matches?.length == 1 ? matches!.single : id;
   }
 
-  return AiDraft(
-    sourceText: draft.sourceText,
-    type: draft.type,
-    amount: draft.amount,
-    currencyCode: draft.currencyCode,
-    categorySuggestion: draft.categorySuggestion,
-    note: draft.note,
-    happenedAt: draft.happenedAt,
+  return draft.copyWith(
     payerPersonUuid: draft.payerPersonUuid == null
         ? null
         : resolve(draft.payerPersonUuid!),
     personUuids: draft.personUuids.map(resolve).toSet().toList(),
     unresolvedNames: draft.unresolvedNames,
-    paymentMode: draft.effectivePaymentMode,
+    issues: draft.issues
+        .map(
+          (issue) => AiDraftIssue(
+            id: issue.id,
+            field: issue.field,
+            code: issue.code,
+            sourceText: issue.sourceText,
+            candidateUuids: issue.candidateUuids.map(resolve).toSet().toList(),
+          ),
+        )
+        .toList(),
     personMatches: draft.personMatches
         .map(
           (match) => AiPersonMatch(
