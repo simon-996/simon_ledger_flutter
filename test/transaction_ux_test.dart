@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -217,7 +218,12 @@ void main() {
       find.byType(CalendarDatePicker),
     );
     expect(DateUtils.isSameDay(picker.lastDate, DateTime.now()), isTrue);
-    await tester.tap(find.text('15').last);
+    final day = find.descendant(
+      of: find.byType(CalendarDatePicker),
+      matching: find.text('15'),
+    );
+    await tester.ensureVisible(day);
+    await tester.tap(day);
     await tester.tap(find.text('完成'));
     await tester.pumpAndSettle();
     expect(chosen, DateTime(2026, 6, 15, 14, 23, 45, 67, 89));
@@ -241,14 +247,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('transaction-date-control')));
     await tester.pumpAndSettle();
     expect(find.byType(TimePickerDialog), findsNothing);
-    await tester.enterText(
-      find.byKey(const ValueKey('transaction-hour-input')),
-      '09',
-    );
-    await tester.enterText(
-      find.byKey(const ValueKey('transaction-minute-input')),
-      '07',
-    );
+    tester
+        .widget<CupertinoDatePicker>(find.byType(CupertinoDatePicker))
+        .onDateTimeChanged(DateTime(2026, 6, 16, 9, 7));
     await tester.tap(find.text('完成'));
     await tester.pumpAndSettle();
     expect(chosen, DateTime(2026, 6, 16, 9, 7, 45, 67));

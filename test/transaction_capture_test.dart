@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:ui' as ui;
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -37,7 +38,13 @@ void main() {
     );
     if (font.existsSync()) {
       final bytes = await font.readAsBytes();
-      for (final family in ['Microsoft YaHei', 'Roboto', 'Ahem']) {
+      for (final family in [
+        'Microsoft YaHei',
+        'Roboto',
+        'Ahem',
+        'CupertinoSystemDisplay',
+        'CupertinoSystemText',
+      ]) {
         await (FontLoader(
           family,
         )..addFont(Future.value(ByteData.sublistView(bytes)))).load();
@@ -133,7 +140,7 @@ void main() {
       await tester.pumpAndSettle();
     });
   }
-  testWidgets('date panel keeps completion above keyboard at large text size', (
+  testWidgets('time wheel fits large text and existing keyboard inset', (
     tester,
   ) async {
     final data = await _fixture();
@@ -153,12 +160,13 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey('transaction-date-control')));
     await tester.pumpAndSettle();
+    expect(find.byType(CupertinoDatePicker), findsOneWidget);
+    expect(find.byType(TextFormField), findsNothing);
+    await tester.runAsync(
+      () => _capture(boundary, 'date-wheel-large-text-320'),
+    );
     tester.view.viewInsets = const FakeViewPadding(bottom: 300);
     addTearDown(tester.view.resetViewInsets);
-    await tester.enterText(
-      find.byKey(const ValueKey('transaction-hour-input')),
-      '18',
-    );
     await tester.pumpAndSettle();
     expect(tester.getBottomLeft(find.text('完成')).dy, lessThanOrEqualTo(544));
     expect(tester.takeException(), isNull);

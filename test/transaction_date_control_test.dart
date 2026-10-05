@@ -161,55 +161,79 @@ void main() {
     expect(chosen, isNull);
   });
 
-  testWidgets('time fields use 24 hour input and preserve date and seconds', (
+  testWidgets('time uses an iOS style wheel without range helper text', (
     tester,
   ) async {
     DateTime? chosen;
     final date = DateTime(2026, 6, 16, 14, 23, 45, 67);
     await mountDate(tester, date, (value) => chosen = value);
-    expect(
-      find.byKey(const ValueKey('transaction-hour-input')),
-      findsOneWidget,
+    expect(find.byType(CupertinoDatePicker), findsOneWidget);
+    expect(find.byType(TextFormField), findsNothing);
+    expect(find.text('00–23'), findsNothing);
+    expect(find.text('00–59'), findsNothing);
+    final picker = tester.widget<CupertinoDatePicker>(
+      find.byType(CupertinoDatePicker),
     );
-    await tester.enterText(
-      find.byKey(const ValueKey('transaction-hour-input')),
-      '09',
-    );
-    await tester.enterText(
-      find.byKey(const ValueKey('transaction-minute-input')),
-      '07',
-    );
+    expect(picker.use24hFormat, isTrue);
+    picker.onDateTimeChanged(DateTime(2026, 10, 5, 9, 7));
     await tester.tap(find.text('完成'));
     await tester.pumpAndSettle();
     expect(chosen, DateTime(2026, 6, 16, 9, 7, 45, 67));
   });
 
-  testWidgets('invalid time keeps picker open until corrected', (tester) async {
+  testWidgets(
+    'scrolling time stages the displayed selection until completion',
+    (tester) async {
+      DateTime? chosen;
+      final original = DateTime(2026, 6, 16, 14, 23, 45, 67, 89);
+      await mountDate(tester, original, (value) => chosen = value);
+      expect(find.byType(CupertinoDatePicker), findsOneWidget);
+      final wheels = find.descendant(
+        of: find.byType(CupertinoDatePicker),
+        matching: find.byType(ListWheelScrollView),
+      );
+      expect(wheels, findsNWidgets(2));
+      await tester.drag(wheels.first, const Offset(0, -64));
+      await tester.drag(wheels.last, const Offset(0, -96));
+      await tester.pumpAndSettle();
+      expect(chosen, isNull);
+      final positions = wheels.evaluate().map(
+        (element) =>
+            (element.widget as ListWheelScrollView).controller!
+                as FixedExtentScrollController,
+      );
+      final hour = positions.first.selectedItem % 24;
+      final minute = positions.last.selectedItem % 60;
+      expect(hour, isNot(original.hour));
+      expect(minute, isNot(original.minute));
+      await tester.tap(find.text('完成'));
+      await tester.pumpAndSettle();
+      expect(chosen, DateTime(2026, 6, 16, hour, minute, 45, 67, 89));
+      expect(tester.testTextInput.isVisible, isFalse);
+    },
+  );
+
+  testWidgets('canceling a scrolled time leaves the record unchanged', (
+    tester,
+  ) async {
     DateTime? chosen;
-    await mountDate(
-      tester,
-      DateTime(2026, 6, 16, 14, 23),
-      (value) => chosen = value,
+    await mountDate(tester, DateTime(2026, 6, 16, 14, 23), (value) {
+      chosen = value;
+    });
+    expect(find.byType(CupertinoDatePicker), findsOneWidget);
+    await tester.drag(
+      find
+          .descendant(
+            of: find.byType(CupertinoDatePicker),
+            matching: find.byType(ListWheelScrollView),
+          )
+          .first,
+      const Offset(0, -64),
     );
-    expect(
-      find.byKey(const ValueKey('transaction-hour-input')),
-      findsOneWidget,
-    );
-    await tester.enterText(
-      find.byKey(const ValueKey('transaction-hour-input')),
-      '25',
-    );
-    await tester.tap(find.text('完成'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
     expect(chosen, isNull);
-    expect(find.text('小时需为 00–23'), findsOneWidget);
-    await tester.enterText(
-      find.byKey(const ValueKey('transaction-hour-input')),
-      '22',
-    );
-    await tester.tap(find.text('完成'));
-    await tester.pumpAndSettle();
-    expect(chosen?.hour, 22);
   });
 
   testWidgets('desktop uses compact picker instead of bottom sheet', (
@@ -222,6 +246,7 @@ void main() {
       size: const Size(1100, 750),
     );
     expect(find.byType(BottomSheet), findsNothing);
+    expect(find.byType(CupertinoDatePicker), findsOneWidget);
     expect(find.text('完成'), findsOneWidget);
     expect(
       tester

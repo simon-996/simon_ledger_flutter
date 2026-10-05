@@ -2,7 +2,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 /// Changing the day keeps the displayed time and finer precision.
 DateTime transactionDateOnDay(DateTime day, DateTime previous) {
@@ -181,11 +180,8 @@ class _TransactionDatePicker extends StatefulWidget {
 }
 
 class _TransactionDatePickerState extends State<_TransactionDatePicker> {
-  final _form = GlobalKey<FormState>();
   late DateTime _date;
   late bool _hasTime;
-  late final TextEditingController _hour;
-  late final TextEditingController _minute;
   bool _changed = false;
   bool _calendar = false;
 
@@ -194,17 +190,6 @@ class _TransactionDatePickerState extends State<_TransactionDatePicker> {
     super.initState();
     _date = widget.initial;
     _hasTime = widget.hasTime;
-    _hour = TextEditingController(text: _date.hour.toString().padLeft(2, '0'));
-    _minute = TextEditingController(
-      text: _date.minute.toString().padLeft(2, '0'),
-    );
-  }
-
-  @override
-  void dispose() {
-    _hour.dispose();
-    _minute.dispose();
-    super.dispose();
   }
 
   void _chooseDay(DateTime day) => setState(() {
@@ -213,53 +198,14 @@ class _TransactionDatePickerState extends State<_TransactionDatePicker> {
   });
 
   void _complete() {
-    if (_hasTime && !_form.currentState!.validate()) return;
-    final selected = _hasTime
-        ? transactionDateAtTime(
-            _date,
-            TimeOfDay(
-              hour: int.parse(_hour.text),
-              minute: int.parse(_minute.text),
-            ),
-          )
-        : _date;
-    Navigator.pop(context, _DateSelection(selected, _hasTime, _changed));
+    Navigator.pop(context, _DateSelection(_date, _hasTime, _changed));
   }
-
-  Widget _timeField(TextEditingController controller, bool hour) => Expanded(
-    child: TextFormField(
-      key: ValueKey(
-        hour ? 'transaction-hour-input' : 'transaction-minute-input',
-      ),
-      controller: controller,
-      keyboardType: TextInputType.number,
-      inputFormatters: [
-        FilteringTextInputFormatter.digitsOnly,
-        LengthLimitingTextInputFormatter(2),
-      ],
-      textInputAction: hour ? TextInputAction.next : TextInputAction.done,
-      decoration: InputDecoration(
-        labelText: hour ? '小时' : '分钟',
-        helperText: hour ? '00–23' : '00–59',
-      ),
-      onChanged: (_) => _changed = true,
-      onFieldSubmitted: hour ? null : (_) => _complete(),
-      validator: (value) {
-        final number = int.tryParse(value ?? '');
-        if (number == null || number < 0 || number > (hour ? 23 : 59)) {
-          return hour ? '小时需为 00–23' : '分钟需为 00–59';
-        }
-        return null;
-      },
-    ),
-  );
 
   @override
   Widget build(BuildContext context) {
     final today = DateUtils.dateOnly(widget.today);
     final firstDate = DateTime(_date.year < 2000 ? _date.year : 2000);
     final initialDay = _date.isAfter(today) ? today : _date;
-    final ios = Theme.of(context).platform == TargetPlatform.iOS;
     return SafeArea(
       top: false,
       child: Padding(
@@ -273,103 +219,77 @@ class _TransactionDatePickerState extends State<_TransactionDatePicker> {
             const SizedBox(height: 12),
             Flexible(
               child: SingleChildScrollView(
-                child: Form(
-                  key: _form,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (var offset = 0; offset < 3; offset++)
-                            ChoiceChip(
-                              label: Text(const ['今天', '昨天', '前天'][offset]),
-                              selected: DateUtils.isSameDay(
-                                _date,
-                                DateUtils.addDaysToDate(today, -offset),
-                              ),
-                              onSelected: (_) => _chooseDay(
-                                DateUtils.addDaysToDate(today, -offset),
-                              ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (var offset = 0; offset < 3; offset++)
+                          ChoiceChip(
+                            label: Text(const ['今天', '昨天', '前天'][offset]),
+                            selected: DateUtils.isSameDay(
+                              _date,
+                              DateUtils.addDaysToDate(today, -offset),
                             ),
-                        ],
+                            onSelected: (_) => _chooseDay(
+                              DateUtils.addDaysToDate(today, -offset),
+                            ),
+                          ),
+                      ],
+                    ),
+                    TextButton.icon(
+                      key: const ValueKey('transaction-calendar-toggle'),
+                      onPressed: () => setState(() => _calendar = !_calendar),
+                      icon: Icon(
+                        _calendar
+                            ? Icons.expand_less
+                            : Icons.calendar_month_outlined,
                       ),
-                      TextButton.icon(
-                        key: const ValueKey('transaction-calendar-toggle'),
-                        onPressed: () => setState(() => _calendar = !_calendar),
-                        icon: Icon(
-                          _calendar
-                              ? Icons.expand_less
-                              : Icons.calendar_month_outlined,
-                        ),
-                        label: Text('其他日期 · ${_dayLabel(_date, today)}'),
+                      label: Text('其他日期 · ${_dayLabel(_date, today)}'),
+                    ),
+                    if (_calendar)
+                      CalendarDatePicker(
+                        key: ValueKey(DateUtils.dateOnly(initialDay)),
+                        initialDate: initialDay,
+                        firstDate: firstDate,
+                        lastDate: today,
+                        onDateChanged: _chooseDay,
                       ),
-                      if (_calendar)
-                        CalendarDatePicker(
-                          key: ValueKey(DateUtils.dateOnly(initialDay)),
-                          initialDate: initialDay,
-                          firstDate: firstDate,
-                          lastDate: today,
-                          onDateChanged: _chooseDay,
-                        ),
-                      if (widget.allowDateOnly)
-                        SwitchListTile.adaptive(
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text('指定时间'),
-                          subtitle: Text(_hasTime ? '24 小时制' : '仅记录日期'),
-                          value: _hasTime,
-                          onChanged: (value) => setState(() {
-                            _hasTime = value;
+                    if (widget.allowDateOnly)
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('指定时间'),
+                        subtitle: Text(_hasTime ? '24 小时制' : '仅记录日期'),
+                        value: _hasTime,
+                        onChanged: (value) => setState(() {
+                          _hasTime = value;
+                          _changed = true;
+                        }),
+                      ),
+                    if (!widget.allowDateOnly)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Text('时间 · 24 小时制'),
+                      ),
+                    if (_hasTime)
+                      SizedBox(
+                        height: 160,
+                        child: CupertinoDatePicker(
+                          initialDateTime: _date,
+                          mode: CupertinoDatePickerMode.time,
+                          use24hFormat: true,
+                          onDateTimeChanged: (value) {
+                            _date = transactionDateAtTime(
+                              _date,
+                              TimeOfDay.fromDateTime(value),
+                            );
                             _changed = true;
-                          }),
+                          },
                         ),
-                      if (!widget.allowDateOnly)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 8),
-                          child: Text('时间 · 24 小时制'),
-                        ),
-                      if (_hasTime && ios)
-                        SizedBox(
-                          height: 160,
-                          child: CupertinoDatePicker(
-                            initialDateTime: _date,
-                            mode: CupertinoDatePickerMode.time,
-                            use24hFormat: true,
-                            onDateTimeChanged: (value) {
-                              _date = transactionDateAtTime(
-                                _date,
-                                TimeOfDay.fromDateTime(value),
-                              );
-                              _hour.text = value.hour.toString().padLeft(
-                                2,
-                                '0',
-                              );
-                              _minute.text = value.minute.toString().padLeft(
-                                2,
-                                '0',
-                              );
-                              _changed = true;
-                            },
-                          ),
-                        ),
-                      if (_hasTime && !ios)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _timeField(_hour, true),
-                              const Padding(
-                                padding: EdgeInsets.fromLTRB(12, 16, 12, 0),
-                                child: Text(':'),
-                              ),
-                              _timeField(_minute, false),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
+                      ),
+                  ],
                 ),
               ),
             ),

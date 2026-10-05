@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -83,14 +84,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byType(SwitchListTile));
     await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const ValueKey('transaction-hour-input')),
-      '14',
-    );
-    await tester.enterText(
-      find.byKey(const ValueKey('transaction-minute-input')),
-      '35',
-    );
+    tester
+        .widget<CupertinoDatePicker>(find.byType(CupertinoDatePicker))
+        .onDateTimeChanged(DateTime(2026, 10, 4, 14, 35));
     await tester.tap(find.text('完成'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('确认记账'));
@@ -118,7 +114,7 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey('transaction-date-control')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('前天'));
+    await tester.tap(find.widgetWithText(ChoiceChip, '前天'));
     await tester.tap(find.text('完成'));
     await tester.pumpAndSettle();
     expect(changes, hasLength(1));
