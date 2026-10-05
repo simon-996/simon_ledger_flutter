@@ -82,6 +82,27 @@ class SlowRepository extends FakeRepository {
   }) => response.future;
 }
 
+class SemanticRepository extends FakeRepository {
+  SemanticRepository(this.drafts);
+
+  final List<AiDraft> drafts;
+  int? lastSchemaVersion;
+
+  @override
+  Future<List<AiDraft>> parse(
+    String ledgerUuid,
+    String text,
+    String zone, {
+    int schemaVersion = 1,
+    List<String> expenseCategories = const [],
+    List<String> incomeCategories = const [],
+  }) async {
+    parseCalls++;
+    lastSchemaVersion = schemaVersion;
+    return drafts;
+  }
+}
+
 class FakeVoiceDevice implements AiRecorderDevice {
   final chunks = StreamController<Uint8List>.broadcast();
   bool failStop = false;
@@ -250,6 +271,218 @@ void main() {
     await tester.pumpAndSettle();
     expect(saved, hasLength(1));
     expect(await queue.load('ledger-1'), isEmpty);
+  });
+
+  testWidgets('v2 summary keeps edits by draft and preserves batch order', (
+    tester,
+  ) async {
+    final ledger = Ledger()
+      ..uuid = 'ledger-1'
+      ..name = '共享账本'
+      ..baseCurrencyCode = 'CNY'
+      ..personUuids = ['p1'];
+    final person = Person()
+      ..uuid = 'p1'
+      ..name = '小王';
+    final queue = AiDraftQueue(
+      scope: const LocalDataScope.account('alice'),
+      loadTransactions: (_) async => [],
+    );
+    AiDraft v2Draft(String source, double amount) => AiDraft(
+      sourceText: source,
+      type: 0,
+      amount: amount,
+      currencyCode: 'CNY',
+      categorySuggestion: '餐饮',
+      happenedAt: DateTime.now(),
+      personUuids: const ['p1'],
+      unresolvedNames: const [],
+      schemaVersion: 2,
+      paymentMode: 'SHARED_POOL',
+      participantScope: 'SPECIFIED',
+    );
+
+    final items = await queue.add('ledger-1', [
+      v2Draft('早餐18元', 18),
+      v2Draft('午饭32元', 32),
+    ]);
+    final savedAmounts = <double>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AiBookkeepingFlow(
+            ledger: ledger,
+            people: [person],
+            queue: queue,
+            repository: FakeRepository(),
+            onSave: (_, draft) async => savedAmounts.add(draft.amount),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('第 1/2 笔'), findsOneWidget);
+    expect(find.text('第 2 笔'), findsOneWidget);
+    expect(find.byKey(ValueKey('summary-${items.first.uuid}')), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(ValueKey('ai-draft-overview-${items[1].uuid}')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('第 2/2 笔'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(ValueKey('summary-${items[1].uuid}')),
+        matching: find.text('CNY 32.00'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('ai-summary-edit-amount')));
+    await tester.pumpAndSettle();
+    expect(find.text('返回摘要'), findsOneWidget);
+    expect(find.text('展开全部字段'), findsOneWidget);
+    await tester.enterText(find.widgetWithText(TextField, '金额'), '50');
+    await tester.pump();
+    await tester.tap(find.text('返回摘要'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(ValueKey('ai-draft-overview-${items.first.uuid}')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byKey(ValueKey('summary-${items.first.uuid}')),
+        matching: find.text('CNY 18.00'),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find.byKey(ValueKey('ai-draft-overview-${items[1].uuid}')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byKey(ValueKey('summary-${items[1].uuid}')),
+        matching: find.text('CNY 50.00'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('确认记账'));
+    await tester.pumpAndSettle();
+    expect(savedAmounts, [50]);
+    expect(find.text('第 1/2 笔'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(ValueKey('summary-${items.first.uuid}')),
+        matching: find.text('CNY 18.00'),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('确认记账'));
+    await tester.pumpAndSettle();
+    expect(savedAmounts, [50, 18]);
+    expect(await queue.load('ledger-1'), isEmpty);
+  });
+
+  testWidgets('the accommodation example is fully prefilled and saves once', (
+    tester,
+  ) async {
+    final ledger = Ledger()
+      ..uuid = 'ledger-1'
+      ..name = '旅行账本'
+      ..baseCurrencyCode = 'CNY'
+      ..personUuids = ['p1', 'p2'];
+    final people = [
+      Person()
+        ..uuid = 'p1'
+        ..name = '张三',
+      Person()
+        ..uuid = 'p2'
+        ..name = '李四',
+    ];
+    final repository = SemanticRepository([
+      AiDraft(
+        sourceText: '张三在昨天住宿花了400元，他垫付的，所有人都用上了。',
+        type: 0,
+        amount: 400,
+        currencyCode: 'CNY',
+        categorySuggestion: '居住',
+        categoryOriginalSuggestion: '住宿',
+        note: '住宿费用',
+        happenedAt: DateTime.now().subtract(const Duration(days: 1)),
+        payerPersonUuid: 'p1',
+        personUuids: const ['p1', 'p2'],
+        unresolvedNames: const [],
+        schemaVersion: 2,
+        paymentMode: 'PERSON_PAID',
+        participantScope: 'ALL',
+        splitMode: 'EQUAL',
+        fieldSources: const {
+          'amount': 'EXPLICIT',
+          'category': 'SUGGESTED',
+          'happenedAt': 'EXPLICIT',
+          'payer': 'EXPLICIT',
+          'participants': 'EXPLICIT',
+          'splitMode': 'DEFAULT',
+        },
+      ),
+    ]);
+    final queue = AiDraftQueue(
+      scope: const LocalDataScope.account('alice'),
+      loadTransactions: (_) async => [],
+    );
+    AiDraft? saved;
+    var saveCalls = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AiBookkeepingFlow(
+            ledger: ledger,
+            people: people,
+            queue: queue,
+            repository: repository,
+            draftSchemaVersion: 2,
+            onSave: (_, draft) async {
+              saveCalls++;
+              saved = draft;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byType(TextField).first,
+      '张三在昨天住宿花了400元，他垫付的，所有人都用上了。',
+    );
+    await tester.tap(find.text('生成草稿'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('同意并继续'));
+    await tester.pumpAndSettle();
+
+    expect(repository.lastSchemaVersion, 2);
+    expect(find.text('400'), findsNothing);
+    expect(find.text('CNY 400.00'), findsOneWidget);
+    expect(find.text('张三垫付'), findsOneWidget);
+    expect(find.text('全体 2 人承担'), findsOneWidget);
+    expect(find.text('默认均摊 · 约 CNY 200.00/人'), findsOneWidget);
+    expect(find.text('展开全部字段'), findsNothing);
+    await tester.tap(find.text('确认记账'));
+    await tester.pumpAndSettle();
+
+    expect(saveCalls, 1);
+    expect(saved?.categorySuggestion, '居住');
+    expect(saved?.payerPersonUuid, 'p1');
+    expect(saved?.personUuids, ['p1', 'p2']);
+    expect(saved?.paymentMode, 'PERSON_PAID');
+    expect(saved?.participantScope, 'ALL');
+    expect(
+      saved?.happenedAt?.day,
+      DateTime.now().subtract(const Duration(days: 1)).day,
+    );
   });
 
   testWidgets('shows editable transcript and does not parse until submitted', (
@@ -680,6 +913,142 @@ void main() {
     expect(confirmed?.splitMode, 'EQUAL');
     expect(confirmed?.issues, isEmpty);
     expect(confirmed?.fieldSources['splitMode'], 'USER');
+  });
+
+  testWidgets('unsupported currency requires explicit ledger-currency choice', (
+    tester,
+  ) async {
+    final ledger = Ledger()
+      ..uuid = 'ledger-1'
+      ..name = '共享账本'
+      ..baseCurrencyCode = 'CNY'
+      ..personUuids = ['p1'];
+    final person = Person()
+      ..uuid = 'p1'
+      ..name = '张三';
+    AiDraft? confirmed;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AiDraftReview(
+            draft: AiDraft(
+              sourceText: '住宿400欧元，全体使用，共同钱包支付',
+              type: 0,
+              amount: 400,
+              currencyCode: 'EUR',
+              categorySuggestion: '居住',
+              personUuids: const ['p1'],
+              unresolvedNames: const [],
+              schemaVersion: 2,
+              paymentMode: 'SHARED_POOL',
+              participantScope: 'SPECIFIED',
+              happenedAt: DateTime(2026, 10, 4),
+              issues: const [
+                AiDraftIssue(
+                  id: 'currency',
+                  field: 'currencyCode',
+                  code: 'CURRENCY_UNSUPPORTED',
+                ),
+              ],
+            ),
+            ledger: ledger,
+            people: [person],
+            position: 1,
+            total: 1,
+            busy: false,
+            onConfirm: (draft) async => confirmed = draft,
+            onSkip: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('确认记账'));
+    await tester.tap(find.text('确认记账'));
+    await tester.pumpAndSettle();
+    expect(confirmed, isNull);
+
+    const choice = '按账本币种 CNY 继续（不换算金额）';
+    await tester.ensureVisible(find.text(choice));
+    await tester.tap(find.text(choice));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('确认记账'));
+    await tester.tap(find.text('确认记账'));
+    await tester.pumpAndSettle();
+    expect(confirmed?.currencyCode, 'CNY');
+    expect(confirmed?.amount, 400);
+    expect(confirmed?.issues, isEmpty);
+    expect(confirmed?.fieldSources['currencyCode'], 'USER');
+  });
+
+  testWidgets('resolving an exclusion makes the participant list explicit', (
+    tester,
+  ) async {
+    final ledger = Ledger()
+      ..uuid = 'ledger-1'
+      ..name = '共享账本'
+      ..baseCurrencyCode = 'CNY'
+      ..personUuids = ['p1', 'p2'];
+    final people = [
+      Person()
+        ..uuid = 'p1'
+        ..name = '张三',
+      Person()
+        ..uuid = 'p2'
+        ..name = '李四',
+    ];
+    AiDraft? confirmed;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AiDraftReview(
+            draft: AiDraft(
+              sourceText: '住宿400，所有人使用，除小陈外',
+              type: 0,
+              amount: 400,
+              currencyCode: 'CNY',
+              categorySuggestion: '居住',
+              personUuids: const ['p1', 'p2'],
+              unresolvedNames: const [],
+              schemaVersion: 2,
+              paymentMode: 'SHARED_POOL',
+              participantScope: 'ALL',
+              happenedAt: DateTime(2026, 10, 4),
+              issues: const [
+                AiDraftIssue(
+                  id: 'excluded',
+                  field: 'excludedParticipants',
+                  code: 'PERSON_NOT_FOUND',
+                  sourceText: '小陈',
+                ),
+              ],
+            ),
+            ledger: ledger,
+            people: people,
+            position: 1,
+            total: 1,
+            busy: false,
+            onConfirm: (draft) async => confirmed = draft,
+            onSkip: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('ai-issue-choice-excluded')),
+    );
+    await tester.tap(find.byKey(const ValueKey('ai-issue-choice-excluded')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('李四').last);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('确认记账'));
+    await tester.tap(find.text('确认记账'));
+    await tester.pumpAndSettle();
+
+    expect(confirmed?.participantScope, 'SPECIFIED');
+    expect(confirmed?.personUuids, ['p1']);
+    expect(confirmed?.fieldSources['participants'], 'USER');
   });
 
   testWidgets('edits to a review survive closing and reopening the flow', (

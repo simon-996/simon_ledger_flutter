@@ -24,6 +24,7 @@ class AiDraftReview extends StatefulWidget {
     this.amountInput,
     this.onChanged,
     this.initialField,
+    this.onBackToSummary,
   });
 
   final AiDraft draft;
@@ -37,6 +38,7 @@ class AiDraftReview extends StatefulWidget {
   final bool busy;
   final void Function(AiDraft draft, String amountInput)? onChanged;
   final String? initialField;
+  final VoidCallback? onBackToSummary;
 
   @override
   State<AiDraftReview> createState() => _AiDraftReviewState();
@@ -59,19 +61,31 @@ class _AiDraftReviewState extends State<AiDraftReview> {
   DateTime? _date;
   String? _payer;
   bool _validationActive = false;
+  bool _showAllFields = false;
+  bool _initialFieldRevealed = false;
   final _amountFocus = FocusNode();
   final _amountAnchor = GlobalKey();
+  final _typeAnchor = GlobalKey();
   final _categoryAnchor = GlobalKey();
   final _peopleAnchor = GlobalKey();
   final _unknownAnchor = GlobalKey();
   final _paymentAnchor = GlobalKey();
   final _dateAnchor = GlobalKey();
+  final _noteAnchor = GlobalKey();
   String? get _amountError {
     final value = double.tryParse(_amount.text.trim());
     return _validationActive && (value == null || !value.isFinite || value <= 0)
         ? '请输入大于 0 的有效金额'
         : null;
   }
+
+  String? get _typeError =>
+      _validationActive && _type != 0 && _type != 1 ? '请选择收入或支出' : null;
+  String? get _currencyError =>
+      _validationActive &&
+          !supportedCurrenciesForLedger(widget.ledger).contains(_currency)
+      ? '草稿币种不受当前账本支持，请明确选择账本币种；金额数值不会自动换算'
+      : null;
 
   String? get _categoryError =>
       _validationActive &&
@@ -145,6 +159,49 @@ class _AiDraftReviewState extends State<AiDraftReview> {
         ? draft.categorySuggestion
         : null;
     _loadCategories();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _revealInitialField());
+  }
+
+  String? get _initialSection => switch (widget.initialField) {
+    'amount' || 'type' || 'currencyCode' => 'amount',
+    'category' || 'happenedAt' => 'category',
+    'payer' ||
+    'paymentMode' ||
+    'participants' ||
+    'excludedParticipants' ||
+    'legacy' ||
+    'splitMode' => 'people',
+    'note' => 'note',
+    _ => null,
+  };
+
+  bool _showSection(String section) =>
+      _showAllFields || _initialSection == null || _initialSection == section;
+
+  void _revealInitialField() {
+    if (_initialFieldRevealed || !mounted || widget.initialField == null) {
+      return;
+    }
+    _initialFieldRevealed = true;
+    final anchor = switch (widget.initialField) {
+      'amount' || 'currencyCode' => _amountAnchor,
+      'type' => _typeAnchor,
+      'category' => _categoryAnchor,
+      'happenedAt' => _dateAnchor,
+      'payer' || 'paymentMode' => _paymentAnchor,
+      'participants' ||
+      'excludedParticipants' ||
+      'legacy' ||
+      'splitMode' => _peopleAnchor,
+      'note' => _noteAnchor,
+      _ => null,
+    };
+    if (anchor != null) {
+      revealTransactionField(
+        anchor,
+        focus: widget.initialField == 'amount' ? _amountFocus : null,
+      );
+    }
   }
 
   Future<void> _loadCategories() async {
@@ -250,6 +307,8 @@ class _AiDraftReviewState extends State<AiDraftReview> {
       } else if (issue.field == 'excludedParticipants') {
         _people.remove(selectedPersonId);
         _issues.removeWhere((value) => value.id == issue.id);
+        _participantScope = 'SPECIFIED';
+        _fieldSources['participants'] = 'USER';
         _fieldSources['excludedParticipants'] = 'USER';
       }
     });
@@ -351,8 +410,16 @@ class _AiDraftReviewState extends State<AiDraftReview> {
 
   Future<void> _confirm() async {
     setState(() => _validationActive = true);
+    if (_typeError != null || _blockingFields.contains('type')) {
+      revealTransactionField(_typeAnchor);
+      return;
+    }
     if (_amountError != null) {
       revealTransactionField(_amountAnchor, focus: _amountFocus);
+      return;
+    }
+    if (_currencyError != null || _blockingFields.contains('currencyCode')) {
+      revealTransactionField(_amountAnchor);
       return;
     }
     if (_categoryError != null) {
@@ -393,6 +460,15 @@ class _AiDraftReviewState extends State<AiDraftReview> {
     await widget.onConfirm(_editedDraft());
   }
 
+  void _useLedgerCurrency(String currency) {
+    setState(() {
+      _currency = currency;
+      _clearIssues(['currencyCode']);
+      _fieldSources['currencyCode'] = 'USER';
+    });
+    _changed();
+  }
+
   Widget _section(String title, Widget child) => Padding(
     padding: const EdgeInsets.only(top: 20),
     child: Column(
@@ -413,7 +489,8 @@ class _AiDraftReviewState extends State<AiDraftReview> {
   @override
   Widget build(BuildContext context) {
     final currencies = supportedCurrenciesForLedger(widget.ledger);
-    if (!currencies.contains(_currency)) _currency = currencies.first;
+    final currencyIsSupported = currencies.contains(_currency);
+    final selectedCurrency = currencyIsSupported ? _currency : currencies.first;
     final suggestion = widget.draft.categorySuggestion?.trim();
     final unknownSuggestion =
         suggestion != null &&
@@ -427,12 +504,34 @@ class _AiDraftReviewState extends State<AiDraftReview> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                '第 ${widget.position}/${widget.total} 笔',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: AppTheme.emphasisWeight,
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '第 ${widget.position}/${widget.total} 笔',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: AppTheme.emphasisWeight,
+                      ),
+                    ),
+                  ),
+                  if (widget.onBackToSummary != null)
+                    TextButton.icon(
+                      onPressed: widget.busy ? null : widget.onBackToSummary,
+                      icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                      label: const Text('返回摘要'),
+                    ),
+                ],
               ),
+              if (widget.initialField != null && !_showAllFields)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: widget.busy
+                        ? null
+                        : () => setState(() => _showAllFields = true),
+                    child: const Text('展开全部字段'),
+                  ),
+                ),
               const SizedBox(height: 10),
               LinearProgressIndicator(value: widget.position / widget.total),
               if (widget.draft.sourceText?.isNotEmpty == true) ...[
@@ -487,347 +586,362 @@ class _AiDraftReviewState extends State<AiDraftReview> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _section(
-                  '金额与类型',
-                  Column(
-                    children: [
-                      TransactionTypeSelector(
-                        selectedType: _type,
-                        onChanged: (type) {
-                          if (widget.busy) return;
-                          setState(() {
-                            _clearIssues(['type', 'category']);
-                            _fieldSources['type'] = 'USER';
-                            _type = type;
-                            if (!_categories.contains(_category)) {
-                              _category = null;
-                            }
-                            if (type == 1) {
-                              _payer = null;
-                              _paymentMode = 'UNKNOWN';
-                              _clearIssues(['payer', 'paymentMode']);
-                              _unresolved.remove('原付款人已失效');
-                              _unresolved.remove(_paymentDecision);
-                            }
-                          });
-                          _changed();
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        key: _amountAnchor,
-                        focusNode: _amountFocus,
-                        controller: _amount,
-                        enabled: !widget.busy,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
+                if (_showSection('amount'))
+                  _section(
+                    '金额与类型',
+                    Column(
+                      children: [
+                        TransactionTypeSelector(
+                          key: _typeAnchor,
+                          selectedType: _type,
+                          onChanged: (type) {
+                            if (widget.busy) return;
+                            setState(() {
+                              _clearIssues(['type', 'category']);
+                              _fieldSources['type'] = 'USER';
+                              _type = type;
+                              if (!_categories.contains(_category)) {
+                                _category = null;
+                              }
+                              if (type == 1) {
+                                _payer = null;
+                                _paymentMode = 'UNKNOWN';
+                                _clearIssues(['payer', 'paymentMode']);
+                                _unresolved.remove('原付款人已失效');
+                                _unresolved.remove(_paymentDecision);
+                              }
+                            });
+                            _changed();
+                          },
                         ),
-                        onChanged: (_) => _changed(),
-                        decoration: InputDecoration(
-                          labelText: '金额',
-                          errorText: _amountError,
+                        TransactionFieldError(message: _typeError),
+                        const SizedBox(height: 12),
+                        TextField(
+                          key: _amountAnchor,
+                          focusNode: _amountFocus,
+                          controller: _amount,
+                          enabled: !widget.busy,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          onChanged: (_) => _changed(),
+                          decoration: InputDecoration(
+                            labelText: '金额',
+                            errorText: _amountError,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      CurrencySelector(
-                        currencies: currencies,
-                        selectedCurrency: _currency,
-                        onChanged: (value) {
-                          if (widget.busy) return;
-                          setState(() {
-                            _currency = value;
-                            _clearIssues(['currencyCode']);
-                            _fieldSources['currencyCode'] = 'USER';
-                          });
-                          _changed();
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                _section(
-                  '分类与时间',
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (unknownSuggestion && _category == null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Text('AI 建议「$suggestion」不在现有分类中，请选择或新建分类。'),
+                        const SizedBox(height: 12),
+                        CurrencySelector(
+                          currencies: currencies,
+                          selectedCurrency: selectedCurrency,
+                          onChanged: (value) {
+                            if (widget.busy) return;
+                            _useLedgerCurrency(value);
+                          },
                         ),
-                      CategorySelector(
-                        key: _categoryAnchor,
-                        categories: _categories,
-                        selectedCategory: _category ?? '',
-                        isIncome: _type == 1,
-                        onChanged: (category) {
-                          if (widget.busy) return;
-                          setState(() {
-                            _category = category;
-                            _clearIssues(['category']);
-                            _fieldSources['category'] = 'USER';
-                          });
-                          _changed();
-                        },
-                        onAddCategory: widget.busy ? null : _addCategory,
-                      ),
-                      TransactionFieldError(message: _categoryError),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Text(
-                          _category == null ? '尚未选择分类' : '已选分类：$_category',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TransactionDateControl(
-                        key: _dateAnchor,
-                        date: _date,
-                        enabled: !widget.busy,
-                        onChanged: (date) {
-                          setState(() {
-                            _date = date;
-                            _clearIssues(['happenedAt']);
-                            _fieldSources['happenedAt'] = 'USER';
-                          });
-                          _changed();
-                        },
-                      ),
-                      TransactionFieldError(message: _dateError),
-                    ],
-                  ),
-                ),
-                _section(
-                  _type == 0 ? '谁承担与谁付款' : '谁收款',
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (_issues.isNotEmpty) ...[
-                        for (final issue in [..._issues]) _issueCard(issue),
-                        const SizedBox(height: 8),
+                        if (!currencyIsSupported) ...[
+                          TransactionFieldError(message: _currencyError),
+                          OutlinedButton(
+                            onPressed: widget.busy
+                                ? null
+                                : () => _useLedgerCurrency(currencies.first),
+                            child: Text('按账本币种 ${currencies.first} 继续（不换算金额）'),
+                          ),
+                        ],
                       ],
-                      if (_unresolved.isNotEmpty) ...[
-                        Text('请确认未识别的人员，以及这笔支出的付款方式。', key: _unknownAnchor),
-                        const SizedBox(height: 8),
-                        for (final name in [..._unresolved])
+                    ),
+                  ),
+                if (_showSection('category'))
+                  _section(
+                    '分类与时间',
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (unknownSuggestion && _category == null)
                           Padding(
                             padding: const EdgeInsets.only(bottom: 8),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: DropdownButtonFormField<String>(
-                                    decoration: InputDecoration(
-                                      labelText: name == _paymentDecision
-                                          ? '选择付款人'
-                                          : '「$name」对应人员',
+                            child: Text('AI 建议「$suggestion」不在现有分类中，请选择或新建分类。'),
+                          ),
+                        CategorySelector(
+                          key: _categoryAnchor,
+                          categories: _categories,
+                          selectedCategory: _category ?? '',
+                          isIncome: _type == 1,
+                          onChanged: (category) {
+                            if (widget.busy) return;
+                            setState(() {
+                              _category = category;
+                              _clearIssues(['category']);
+                              _fieldSources['category'] = 'USER';
+                            });
+                            _changed();
+                          },
+                          onAddCategory: widget.busy ? null : _addCategory,
+                        ),
+                        TransactionFieldError(message: _categoryError),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            _category == null ? '尚未选择分类' : '已选分类：$_category',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TransactionDateControl(
+                          key: _dateAnchor,
+                          date: _date,
+                          enabled: !widget.busy,
+                          onChanged: (date) {
+                            setState(() {
+                              _date = date;
+                              _clearIssues(['happenedAt']);
+                              _fieldSources['happenedAt'] = 'USER';
+                            });
+                            _changed();
+                          },
+                        ),
+                        TransactionFieldError(message: _dateError),
+                      ],
+                    ),
+                  ),
+                if (_showSection('people'))
+                  _section(
+                    _type == 0 ? '谁承担与谁付款' : '谁收款',
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (_issues.isNotEmpty) ...[
+                          for (final issue in [..._issues]) _issueCard(issue),
+                          const SizedBox(height: 8),
+                        ],
+                        if (_unresolved.isNotEmpty) ...[
+                          Text('请确认未识别的人员，以及这笔支出的付款方式。', key: _unknownAnchor),
+                          const SizedBox(height: 8),
+                          for (final name in [..._unresolved])
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: DropdownButtonFormField<String>(
+                                      decoration: InputDecoration(
+                                        labelText: name == _paymentDecision
+                                            ? '选择付款人'
+                                            : '「$name」对应人员',
+                                      ),
+                                      items: widget.people
+                                          .map(
+                                            (person) => DropdownMenuItem(
+                                              value: person.uuid,
+                                              child: Text(person.name),
+                                            ),
+                                          )
+                                          .toList(),
+                                      onChanged: widget.busy
+                                          ? null
+                                          : (value) {
+                                              if (value == null) return;
+                                              setState(() {
+                                                if (name == '原付款人已失效' ||
+                                                    name == _paymentDecision) {
+                                                  _payer = value;
+                                                  _paymentMode = 'PERSON_PAID';
+                                                  _fieldSources['payer'] =
+                                                      'USER';
+                                                  _fieldSources['paymentMode'] =
+                                                      'USER';
+                                                  _clearIssues([
+                                                    'payer',
+                                                    'paymentMode',
+                                                  ]);
+                                                  _unresolved.remove(
+                                                    _paymentDecision,
+                                                  );
+                                                } else {
+                                                  _people.add(value);
+                                                  _participantScope =
+                                                      'SPECIFIED';
+                                                  _fieldSources['participants'] =
+                                                      'USER';
+                                                  _clearIssues([
+                                                    'participants',
+                                                  ]);
+                                                }
+                                                _unresolved.remove(name);
+                                              });
+                                              _changed();
+                                            },
                                     ),
-                                    items: widget.people
-                                        .map(
-                                          (person) => DropdownMenuItem(
-                                            value: person.uuid,
-                                            child: Text(person.name),
-                                          ),
-                                        )
-                                        .toList(),
-                                    onChanged: widget.busy
+                                  ),
+                                  TextButton(
+                                    onPressed: widget.busy
                                         ? null
-                                        : (value) {
-                                            if (value == null) return;
+                                        : () {
                                             setState(() {
-                                              if (name == '原付款人已失效' ||
-                                                  name == _paymentDecision) {
-                                                _payer = value;
-                                                _paymentMode = 'PERSON_PAID';
-                                                _fieldSources['payer'] = 'USER';
+                                              if (name == _paymentDecision) {
+                                                _payer = null;
+                                                _paymentMode = 'SHARED_POOL';
                                                 _fieldSources['paymentMode'] =
                                                     'USER';
+                                                _fieldSources['payer'] = 'USER';
                                                 _clearIssues([
                                                   'payer',
                                                   'paymentMode',
                                                 ]);
-                                                _unresolved.remove(
-                                                  _paymentDecision,
-                                                );
-                                              } else {
-                                                _people.add(value);
-                                                _participantScope = 'SPECIFIED';
-                                                _fieldSources['participants'] =
-                                                    'USER';
-                                                _clearIssues(['participants']);
                                               }
                                               _unresolved.remove(name);
                                             });
                                             _changed();
                                           },
+                                    child: Text(
+                                      name == _paymentDecision
+                                          ? '使用共同钱包'
+                                          : '忽略$name',
+                                    ),
                                   ),
-                                ),
-                                TextButton(
-                                  onPressed: widget.busy
-                                      ? null
-                                      : () {
-                                          setState(() {
-                                            if (name == _paymentDecision) {
-                                              _payer = null;
-                                              _paymentMode = 'SHARED_POOL';
-                                              _fieldSources['paymentMode'] =
-                                                  'USER';
-                                              _fieldSources['payer'] = 'USER';
-                                              _clearIssues([
-                                                'payer',
-                                                'paymentMode',
-                                              ]);
-                                            }
-                                            _unresolved.remove(name);
-                                          });
-                                          _changed();
-                                        },
-                                  child: Text(
-                                    name == _paymentDecision
-                                        ? '使用共同钱包'
-                                        : '忽略$name',
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                      ],
-                      TransactionFieldError(message: _unknownError),
-                      if (_type == 0 &&
-                          _participantScope == 'UNKNOWN' &&
-                          _people.isNotEmpty)
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: TextButton(
-                            onPressed: widget.busy
-                                ? null
-                                : _confirmParticipantSnapshot,
-                            child: const Text('按当前名单确认承担人员'),
-                          ),
-                        ),
-                      AppPersonChoiceGrid(
-                        key: _peopleAnchor,
-                        items: widget.people
-                            .map(
-                              (person) => AppPersonChoiceItem(
-                                id: person.uuid,
-                                name: person.name,
-                                avatar: person.avatar,
+                                ],
                               ),
-                            )
-                            .toList(),
-                        selectedIds: _people,
-                        onToggle: (id, selected) {
-                          if (widget.busy) return;
-                          setState(() {
-                            if (selected) {
-                              _people.add(id);
-                            } else {
-                              _people.remove(id);
-                            }
-                            _participantScope = 'SPECIFIED';
-                            _fieldSources['participants'] = 'USER';
-                            _clearIssues(['participants']);
-                          });
-                          _changed();
-                        },
-                      ),
-                      TransactionFieldError(message: _peopleError),
-                      if (_type == 0) ...[
-                        const SizedBox(height: 12),
-                        Text('付款方式', key: _paymentAnchor),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          children: [
-                            ChoiceChip(
-                              label: const Text('个人垫付'),
-                              selected: _paymentMode == 'PERSON_PAID',
-                              onSelected: widget.busy
-                                  ? null
-                                  : (_) => _selectPaymentMode('PERSON_PAID'),
                             ),
-                            ChoiceChip(
-                              label: const Text('共同钱包'),
-                              selected: _paymentMode == 'SHARED_POOL',
-                              onSelected: widget.busy
+                        ],
+                        TransactionFieldError(message: _unknownError),
+                        if (_type == 0 &&
+                            _participantScope == 'UNKNOWN' &&
+                            _people.isNotEmpty)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton(
+                              onPressed: widget.busy
                                   ? null
-                                  : (_) => _selectPaymentMode('SHARED_POOL'),
+                                  : _confirmParticipantSnapshot,
+                              child: const Text('按当前名单确认承担人员'),
+                            ),
+                          ),
+                        AppPersonChoiceGrid(
+                          key: _peopleAnchor,
+                          items: widget.people
+                              .map(
+                                (person) => AppPersonChoiceItem(
+                                  id: person.uuid,
+                                  name: person.name,
+                                  avatar: person.avatar,
+                                ),
+                              )
+                              .toList(),
+                          selectedIds: _people,
+                          onToggle: (id, selected) {
+                            if (widget.busy) return;
+                            setState(() {
+                              if (selected) {
+                                _people.add(id);
+                              } else {
+                                _people.remove(id);
+                              }
+                              _participantScope = 'SPECIFIED';
+                              _fieldSources['participants'] = 'USER';
+                              _clearIssues(['participants']);
+                            });
+                            _changed();
+                          },
+                        ),
+                        TransactionFieldError(message: _peopleError),
+                        if (_type == 0) ...[
+                          const SizedBox(height: 12),
+                          Text('付款方式', key: _paymentAnchor),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            children: [
+                              ChoiceChip(
+                                label: const Text('个人垫付'),
+                                selected: _paymentMode == 'PERSON_PAID',
+                                onSelected: widget.busy
+                                    ? null
+                                    : (_) => _selectPaymentMode('PERSON_PAID'),
+                              ),
+                              ChoiceChip(
+                                label: const Text('共同钱包'),
+                                selected: _paymentMode == 'SHARED_POOL',
+                                onSelected: widget.busy
+                                    ? null
+                                    : (_) => _selectPaymentMode('SHARED_POOL'),
+                              ),
+                            ],
+                          ),
+                          TransactionFieldError(message: _paymentError),
+                          if (_paymentMode == 'PERSON_PAID') ...[
+                            const SizedBox(height: 8),
+                            const Text('选择付款人；付款人不会自动加入承担人员。'),
+                            AppPersonChoiceGrid(
+                              items: widget.people
+                                  .map(
+                                    (person) => AppPersonChoiceItem(
+                                      id: person.uuid,
+                                      name: person.name,
+                                      avatar: person.avatar,
+                                    ),
+                                  )
+                                  .toList(),
+                              selectedId: _payer,
+                              onSelect: (id) {
+                                if (widget.busy) return;
+                                _selectPayer(id);
+                              },
                             ),
                           ],
-                        ),
-                        TransactionFieldError(message: _paymentError),
-                        if (_paymentMode == 'PERSON_PAID') ...[
+                        ],
+                        if (_splitMode == 'EQUAL' &&
+                            (_type == 1 ||
+                                _paymentMode == 'SHARED_POOL' ||
+                                (_paymentMode == 'PERSON_PAID' &&
+                                    _payer != null)))
+                          TransactionSplitSummary(
+                            ledger: widget.ledger,
+                            type: _type,
+                            amount: double.tryParse(_amount.text),
+                            currency: _currency,
+                            participantCount: _people.length,
+                            payerName: _paymentMode == 'PERSON_PAID'
+                                ? widget.people
+                                      .where((person) => person.uuid == _payer)
+                                      .firstOrNull
+                                      ?.name
+                                : null,
+                          )
+                        else if (_splitMode != 'EQUAL') ...[
+                          const Text('原文可能包含非等额分摊，不能按原方案直接记账。'),
                           const SizedBox(height: 8),
-                          const Text('选择付款人；付款人不会自动加入承担人员。'),
-                          AppPersonChoiceGrid(
-                            items: widget.people
-                                .map(
-                                  (person) => AppPersonChoiceItem(
-                                    id: person.uuid,
-                                    name: person.name,
-                                    avatar: person.avatar,
-                                  ),
-                                )
-                                .toList(),
-                            selectedId: _payer,
-                            onSelect: (id) {
-                              if (widget.busy) return;
-                              _selectPayer(id);
-                            },
+                          OutlinedButton(
+                            onPressed: widget.busy
+                                ? null
+                                : () {
+                                    setState(() {
+                                      _splitMode = 'EQUAL';
+                                      _fieldSources['splitMode'] = 'USER';
+                                      _clearIssues(['splitMode']);
+                                    });
+                                    _changed();
+                                  },
+                            child: const Text('我确认改为等额分摊'),
                           ),
                         ],
                       ],
-                      if (_splitMode == 'EQUAL' &&
-                          (_type == 1 ||
-                              _paymentMode == 'SHARED_POOL' ||
-                              (_paymentMode == 'PERSON_PAID' &&
-                                  _payer != null)))
-                        TransactionSplitSummary(
-                          ledger: widget.ledger,
-                          type: _type,
-                          amount: double.tryParse(_amount.text),
-                          currency: _currency,
-                          participantCount: _people.length,
-                          payerName: _paymentMode == 'PERSON_PAID'
-                              ? widget.people
-                                    .where((person) => person.uuid == _payer)
-                                    .firstOrNull
-                                    ?.name
-                              : null,
-                        )
-                      else if (_splitMode != 'EQUAL') ...[
-                        const Text('原文可能包含非等额分摊，不能按原方案直接记账。'),
-                        const SizedBox(height: 8),
-                        OutlinedButton(
-                          onPressed: widget.busy
-                              ? null
-                              : () {
-                                  setState(() {
-                                    _splitMode = 'EQUAL';
-                                    _fieldSources['splitMode'] = 'USER';
-                                    _clearIssues(['splitMode']);
-                                  });
-                                  _changed();
-                                },
-                          child: const Text('我确认改为等额分摊'),
-                        ),
-                      ],
-                    ],
+                    ),
                   ),
-                ),
-                _section(
-                  '备注',
-                  TextField(
-                    controller: _note,
-                    enabled: !widget.busy,
-                    maxLines: 2,
-                    onChanged: (_) {
-                      _fieldSources['note'] = 'USER';
-                      _changed();
-                    },
-                    decoration: const InputDecoration(labelText: '备注（选填）'),
+                if (_showSection('note'))
+                  _section(
+                    '备注',
+                    TextField(
+                      key: _noteAnchor,
+                      controller: _note,
+                      enabled: !widget.busy,
+                      maxLines: 2,
+                      onChanged: (_) {
+                        _fieldSources['note'] = 'USER';
+                        _changed();
+                      },
+                      decoration: const InputDecoration(labelText: '备注（选填）'),
+                    ),
                   ),
-                ),
               ],
             ),
           ),

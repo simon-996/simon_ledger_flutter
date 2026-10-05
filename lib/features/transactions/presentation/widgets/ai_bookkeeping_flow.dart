@@ -13,7 +13,9 @@ import '../../../../core/preferences/transaction_category_preference.dart';
 import '../../../../core/repositories/ai_bookkeeping_repository.dart';
 import '../../../../core/services/ai_draft_queue.dart';
 import '../../../../core/services/ai_audio_recorder.dart';
+import 'ai_draft_overview.dart';
 import 'ai_draft_review.dart';
+import 'ai_draft_summary.dart';
 
 bool isAiBookkeepingEligible(Ledger ledger, bool signedIn) =>
     signedIn && ledger.isCloudManaged && ledger.canRecordTransactions;
@@ -65,8 +67,17 @@ class AiBookkeepingFlow extends StatefulWidget {
 class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
   final _text = TextEditingController();
   List<AiDraftItem> _items = [];
+  String? _activeUuid;
+  String? _detailField;
   int _confirmed = 0;
   int _skipped = 0;
+  List<String> _expenseCategories =
+      TransactionCategoryPreference.defaultExpenseCategories;
+  List<String> _incomeCategories =
+      TransactionCategoryPreference.defaultIncomeCategories;
+  final Set<String> _saveFailedUuids = {};
+  final Set<String> _editFailedUuids = {};
+  final Map<String, int> _editRevisionByUuid = {};
   bool _busy = false;
   bool _loaded = false;
   String? _error;
@@ -76,13 +87,17 @@ class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
   int _recordingSeconds = 0;
   Timer? _recordingTicker;
   Future<void> _pendingEdit = Future<void>.value();
-  bool _editSaveFailed = false;
-  int _editRevision = 0;
   Future<void> _pendingInput = Future<void>.value();
   bool _inputSaveFailed = false;
   int _inputRevision = 0;
   bool _closing = false;
   bool _allowPop = false;
+
+  AiDraftItem? get _activeItem {
+    if (_items.isEmpty) return null;
+    return _items.where((item) => item.uuid == _activeUuid).firstOrNull ??
+        _items.first;
+  }
 
   @override
   void initState() {
@@ -94,10 +109,14 @@ class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
   Future<void> _restore() async {
     final text = await widget.queue.readInput(widget.ledger.uuid);
     final items = await widget.queue.load(widget.ledger.uuid);
+    final categories = await TransactionCategoryPreference.read();
     if (!mounted) return;
     _text.text = text;
     setState(() {
       _items = items;
+      _activeUuid = items.firstOrNull?.uuid;
+      _expenseCategories = categories.expense;
+      _incomeCategories = categories.income;
       _loaded = true;
     });
   }
@@ -293,6 +312,12 @@ class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
       final categories = widget.draftSchemaVersion >= 2
           ? await TransactionCategoryPreference.read()
           : null;
+      if (categories != null && mounted) {
+        setState(() {
+          _expenseCategories = categories.expense;
+          _incomeCategories = categories.income;
+        });
+      }
       final drafts = await widget.repository.parse(
         widget.ledger.remoteSyncUuid,
         input,
@@ -306,6 +331,8 @@ class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
       _text.clear();
       setState(() {
         _items = items;
+        _activeUuid = items.firstOrNull?.uuid;
+        _detailField = null;
         _confirmed = 0;
         _skipped = 0;
       });
@@ -330,15 +357,17 @@ class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
   }
 
   Future<void> _confirm(AiDraft draft) async {
-    if (_busy || _items.isEmpty) return;
-    final item = _items.first;
+    final item = _activeItem;
+    if (_busy || item == null) return;
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
       await _pendingEdit;
-      if (_editSaveFailed) throw StateError('草稿修改未保存');
+      if (_editFailedUuids.contains(item.uuid)) {
+        throw StateError('草稿修改未保存');
+      }
       if (!await widget.queue.isSaved(widget.ledger.uuid, item)) {
         await widget.onSave(item, draft);
       }
@@ -347,6 +376,9 @@ class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
       if (!mounted) return;
       setState(() {
         _items = remaining;
+        _activeUuid = remaining.firstOrNull?.uuid;
+        _detailField = null;
+        _saveFailedUuids.remove(item.uuid);
         _confirmed++;
       });
     } catch (error) {
@@ -356,6 +388,7 @@ class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
       } catch (_) {
         // Keep the draft visible when local lookup is also unavailable.
       }
+      _saveFailedUuids.add(item.uuid);
       if (mounted) {
         setState(
           () => _error = saved
@@ -391,12 +424,19 @@ class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
     setState(() => _busy = true);
     try {
       await _pendingEdit;
-      final item = _items.first;
+      final item = _activeItem;
+      if (item == null) return;
+      if (_editFailedUuids.contains(item.uuid)) {
+        throw StateError('草稿修改未保存');
+      }
       await widget.queue.remove(widget.ledger.uuid, item.uuid);
       final remaining = await widget.queue.load(widget.ledger.uuid);
       if (!mounted) return;
       setState(() {
         _items = remaining;
+        _activeUuid = remaining.firstOrNull?.uuid;
+        _detailField = null;
+        _saveFailedUuids.remove(item.uuid);
         _skipped++;
       });
     } catch (_) {
@@ -433,7 +473,7 @@ class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
       if (_recording) await _cancelRecording();
       await _pendingEdit;
       await _pendingInput;
-      if (_editSaveFailed) {
+      if (_editFailedUuids.isNotEmpty) {
         if (mounted) setState(() => _error = '修改暂未保存，请重试后再关闭');
         return;
       }
@@ -450,13 +490,15 @@ class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
     }
   }
 
-  void _editDraft(AiDraft draft, String amountInput) {
-    if (_items.isEmpty) return;
-    final item = _items.first;
-    final revision = ++_editRevision;
+  void _editDraft(String itemUuid, AiDraft draft, String amountInput) {
+    final index = _items.indexWhere((item) => item.uuid == itemUuid);
+    if (index < 0) return;
+    final item = _items[index];
+    final revision = (_editRevisionByUuid[itemUuid] ?? 0) + 1;
+    _editRevisionByUuid[itemUuid] = revision;
     setState(() {
-      _items[0] = item.withDraft(draft, amountInput: amountInput);
-      _editSaveFailed = false;
+      _items[index] = item.withDraft(draft, amountInput: amountInput);
+      _editFailedUuids.remove(itemUuid);
     });
     _pendingEdit = _pendingEdit
         .then(
@@ -469,19 +511,38 @@ class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
         )
         .then(
           (_) {
-            if (revision != _editRevision) return;
-            _editSaveFailed = false;
+            if (_editRevisionByUuid[itemUuid] != revision) return;
+            _editFailedUuids.remove(itemUuid);
             if (mounted) setState(() => _error = null);
           },
           onError: (Object _) {
-            if (revision != _editRevision) return;
-            _editSaveFailed = true;
+            if (_editRevisionByUuid[itemUuid] != revision) return;
+            _editFailedUuids.add(itemUuid);
             if (mounted) {
               setState(() => _error = '修改暂未保存，请重试编辑或保持页面开启');
             }
           },
         );
   }
+
+  Future<void> _selectDraft(String uuid) async {
+    if (_busy || _activeUuid == uuid) return;
+    await _pendingEdit;
+    if (!mounted) return;
+    setState(() {
+      _activeUuid = uuid;
+      _detailField = null;
+      _error = _editFailedUuids.contains(uuid)
+          ? '修改暂未保存，请重试编辑或保持页面开启'
+          : _saveFailedUuids.contains(uuid)
+          ? '上次保存未完成，可核对后重试'
+          : null;
+    });
+  }
+
+  void _openDetail(String field) => setState(() => _detailField = field);
+
+  void _returnToSummary() => setState(() => _detailField = null);
 
   Future<void> _persistInput(String value) {
     final revision = ++_inputRevision;
@@ -511,6 +572,7 @@ class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
 
   @override
   Widget build(BuildContext context) {
+    final activeItem = _activeItem;
     return PopScope(
       canPop: _allowPop,
       onPopInvokedWithResult: (didPop, _) {
@@ -548,28 +610,8 @@ class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
               ),
             if (!_loaded)
               const Expanded(child: Center(child: CircularProgressIndicator())),
-            if (_loaded && _items.isNotEmpty)
-              Expanded(
-                child: AiDraftReview(
-                  key: ValueKey(_items.first.uuid),
-                  draft: _items.first.draft,
-                  ledger: widget.ledger,
-                  amountInput: _items.first.amountInput,
-                  people: widget.people
-                      .where(
-                        (person) =>
-                            !person.isDeleted &&
-                            widget.ledger.personUuids.contains(person.uuid),
-                      )
-                      .toList(),
-                  position: _items.first.position,
-                  total: _items.first.total,
-                  busy: _busy,
-                  onConfirm: _confirm,
-                  onSkip: _skip,
-                  onChanged: _editDraft,
-                ),
-              ),
+            if (_loaded && activeItem != null)
+              Expanded(child: _buildDraftReview(activeItem)),
             if (_loaded && _items.isEmpty)
               Expanded(
                 child: SingleChildScrollView(
@@ -631,6 +673,76 @@ class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildDraftReview(AiDraftItem item) {
+    final people = widget.people
+        .where(
+          (person) =>
+              !person.isDeleted &&
+              widget.ledger.personUuids.contains(person.uuid),
+        )
+        .toList();
+    final overview = AiDraftOverview(
+      items: _items,
+      selectedUuid: item.uuid,
+      ledger: widget.ledger,
+      people: people,
+      expenseCategories: _expenseCategories,
+      incomeCategories: _incomeCategories,
+      busy: _busy,
+      failedUuids: {..._saveFailedUuids, ..._editFailedUuids},
+      onSelect: (uuid) => unawaited(_selectDraft(uuid)),
+    );
+    void onChanged(AiDraft draft, String amountInput) {
+      _editDraft(item.uuid, draft, amountInput);
+    }
+
+    if (item.draft.schemaVersion >= 2 && _detailField == null) {
+      return Column(
+        children: [
+          overview,
+          Expanded(
+            child: AiDraftSummary(
+              key: ValueKey('summary-${item.uuid}'),
+              item: item,
+              ledger: widget.ledger,
+              people: people,
+              expenseCategories: _expenseCategories,
+              incomeCategories: _incomeCategories,
+              busy: _busy,
+              onEdit: _openDetail,
+              onConfirm: () => _confirm(item.draft),
+              onSkip: _skip,
+            ),
+          ),
+        ],
+      );
+    }
+    return Column(
+      children: [
+        overview,
+        Expanded(
+          child: AiDraftReview(
+            key: ValueKey('${item.uuid}:${_detailField ?? 'all'}'),
+            draft: item.draft,
+            ledger: widget.ledger,
+            amountInput: item.amountInput,
+            people: people,
+            position: item.position,
+            total: item.total,
+            busy: _busy,
+            onConfirm: _confirm,
+            onSkip: _skip,
+            onChanged: onChanged,
+            initialField: item.draft.schemaVersion >= 2 ? _detailField : null,
+            onBackToSummary: item.draft.schemaVersion >= 2
+                ? _returnToSummary
+                : null,
+          ),
+        ),
+      ],
     );
   }
 }
