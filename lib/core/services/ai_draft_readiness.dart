@@ -65,6 +65,16 @@ List<String> aiDraftBlockingFields(
     fields.add('happenedAt');
   }
   fields.addAll(draft.issues.map((issue) => issue.field));
+  for (final match in draft.personMatches) {
+    if (!activePersonIds.contains(match.personUuid)) {
+      if (match.role == 'participant') fields.add('participants');
+      if (draft.type == 0 &&
+          match.role == 'payer' &&
+          draft.paymentMode != 'SHARED_POOL') {
+        fields.add('payer');
+      }
+    }
+  }
   if (draft.unresolvedNames.isNotEmpty) fields.add('legacy');
   return fields.toList();
 }

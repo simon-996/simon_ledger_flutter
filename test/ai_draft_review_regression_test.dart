@@ -5,6 +5,7 @@ import 'package:simon_ledger_flutter/core/models/ai_draft.dart';
 import 'package:simon_ledger_flutter/core/models/ledger.dart';
 import 'package:simon_ledger_flutter/core/models/person.dart';
 import 'package:simon_ledger_flutter/features/transactions/presentation/widgets/ai_draft_review.dart';
+import 'package:simon_ledger_flutter/features/transactions/presentation/widgets/transaction_form_components.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -63,6 +64,28 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets('an explicit time edit survives review with time precision', (
+    tester,
+  ) async {
+    AiDraft? saved;
+    await showReview(
+      tester,
+      draft(),
+      (value) async => saved = value,
+      field: 'happenedAt',
+    );
+    final control = tester.widget<TransactionDateControl>(
+      find.byType(TransactionDateControl),
+    );
+    control.onChanged(DateTime(2026, 10, 4, 14, 35));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('确认记账'));
+    await tester.pumpAndSettle();
+    expect(saved?.happenedAt, DateTime(2026, 10, 4, 14, 35));
+    expect(saved?.datePrecision, 'TIME');
+    expect(saved?.fieldSources['happenedAt'], 'USER');
+  });
 
   testWidgets('a supported currency conflict can be deliberately reconfirmed', (
     tester,

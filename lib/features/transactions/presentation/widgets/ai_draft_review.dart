@@ -9,6 +9,8 @@ import '../../../../core/services/ai_draft_readiness.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../../core/theme/app_theme.dart';
 import 'transaction_form_components.dart';
+import 'ai_person_resolution.dart';
+import '../../../../core/services/ai_draft_identity_mapper.dart';
 
 class AiDraftReview extends StatefulWidget {
   const AiDraftReview({
@@ -51,12 +53,14 @@ class _AiDraftReviewState extends State<AiDraftReview> {
   late final Set<String> _people;
   late final List<String> _unresolved;
   late List<AiDraftIssue> _issues;
+  late final List<AiPersonMatch> _personMatches;
   late Map<String, String> _fieldSources;
   late int _type;
   late String _currency;
   late String _paymentMode;
   late String _participantScope;
   late String _splitMode;
+  late String _datePrecision;
   String? _category;
   DateTime? _date;
   String? _payer;
@@ -94,7 +98,26 @@ class _AiDraftReviewState extends State<AiDraftReview> {
   String? get _peopleError =>
       _validationActive && _people.isEmpty ? '请至少选择一个参与人员' : null;
   String? get _unknownError =>
-      _validationActive && _unresolved.isNotEmpty ? '请确认待识别姓名和付款方式' : null;
+      _validationActive &&
+          (_unresolved.isNotEmpty || _pendingMatches.isNotEmpty)
+      ? '请确认待识别人员'
+      : null;
+
+  Iterable<AiPersonMatch> get _pendingMatches {
+    final validIds = widget.people
+        .where((person) => !person.isDeleted)
+        .map((person) => person.uuid)
+        .toSet();
+    return _personMatches.where(
+      (match) =>
+          !validIds.contains(match.personUuid) &&
+          (match.role == 'participant' ||
+              (_type == 0 &&
+                  match.role == 'payer' &&
+                  _paymentMode != 'SHARED_POOL')),
+    );
+  }
+
   String? get _paymentError =>
       _validationActive &&
           _type == 0 &&
@@ -123,7 +146,7 @@ class _AiDraftReviewState extends State<AiDraftReview> {
   @override
   void initState() {
     super.initState();
-    final draft = widget.draft;
+    final draft = normalizeAiDraftPeople(widget.draft, widget.people);
     _amount = TextEditingController(
       text:
           widget.amountInput ??
@@ -137,27 +160,71 @@ class _AiDraftReviewState extends State<AiDraftReview> {
     _paymentMode = draft.paymentMode;
     _participantScope = draft.participantScope;
     _splitMode = draft.splitMode;
+    _datePrecision = draft.datePrecision;
     _issues = List.of(draft.issues);
     _fieldSources = Map.of(draft.fieldSources);
     _date = draft.happenedAt;
-    final validPeople = widget.people.map((person) => person.uuid).toSet();
+    final validPeople = widget.people
+        .where((person) => !person.isDeleted)
+        .map((person) => person.uuid)
+        .toSet();
     _people = draft.personUuids.where(validPeople.contains).toSet();
     _payer = validPeople.contains(draft.payerPersonUuid)
         ? draft.payerPersonUuid
         : null;
+    _paymentMode = draft.paymentMode;
+    if (_paymentMode == 'SHARED_POOL') _payer = null;
+    if (_paymentMode == 'PERSON_PAID' && _payer == null) {
+      _paymentMode = 'UNKNOWN';
+    }
+    _personMatches = draft.personMatches
+        .map(
+          (match) => AiPersonMatch(
+            sourceName: match.sourceName,
+            role: match.role,
+            personUuid: match.personUuid,
+            matchedName: match.matchedName,
+            approximate: match.approximate,
+            candidatePersonUuids: match.candidatePersonUuids
+                .where(validPeople.contains)
+                .toList(),
+          ),
+        )
+        .toList();
     final stalePeople = draft.personUuids
         .where((id) => !validPeople.contains(id))
         .toList();
-    _unresolved = {
-      ...draft.unresolvedNames,
-      for (var index = 0; index < stalePeople.length; index++)
-        '原参与人已失效 ${index + 1}',
-      if (draft.payerPersonUuid != null && _payer == null) '原付款人已失效',
-      if (draft.type == 0 &&
-          _payer == null &&
-          (draft.unresolvedNames.isNotEmpty || draft.payerPersonUuid != null))
-        _paymentDecision,
-    }.toList();
+    _unresolved = draft.unresolvedNames
+        .where(
+          (name) => !_personMatches.any((match) => match.sourceName == name),
+        )
+        .toSet()
+        .toList();
+    for (final id in stalePeople) {
+      if (!draft.personMatches.any(
+        (match) => match.role == 'participant' && match.personUuid == id,
+      )) {
+        _personMatches.add(
+          AiPersonMatch(
+            sourceName: '原承担人',
+            role: 'participant',
+            personUuid: id,
+          ),
+        );
+      }
+    }
+    if (draft.payerPersonUuid != null &&
+        _payer == null &&
+        _paymentMode != 'SHARED_POOL' &&
+        !_personMatches.any((match) => match.role == 'payer')) {
+      _personMatches.add(
+        AiPersonMatch(
+          sourceName: '原付款人',
+          role: 'payer',
+          personUuid: draft.payerPersonUuid,
+        ),
+      );
+    }
     _category = _categories.contains(draft.categorySuggestion)
         ? draft.categorySuggestion
         : null;
@@ -240,8 +307,10 @@ class _AiDraftReviewState extends State<AiDraftReview> {
     paymentMode: _type == 0 ? _paymentMode : 'UNKNOWN',
     participantScope: _participantScope,
     splitMode: _splitMode,
+    datePrecision: _datePrecision,
     fieldSources: _fieldSources,
     issues: _issues,
+    personMatches: [..._personMatches],
   );
 
   List<String> get _blockingFields => aiDraftBlockingFields(
@@ -264,7 +333,10 @@ class _AiDraftReviewState extends State<AiDraftReview> {
     if (widget.busy) return;
     setState(() {
       _paymentMode = mode;
-      if (mode == 'SHARED_POOL') _payer = null;
+      if (mode == 'SHARED_POOL') {
+        _payer = null;
+        _personMatches.removeWhere((match) => match.role == 'payer');
+      }
       _clearIssues(['paymentMode', if (mode == 'SHARED_POOL') 'payer']);
       _fieldSources['paymentMode'] = 'USER';
       if (mode == 'SHARED_POOL') _fieldSources['payer'] = 'USER';
@@ -287,6 +359,9 @@ class _AiDraftReviewState extends State<AiDraftReview> {
       _fieldSources['payer'] = 'USER';
       _fieldSources['paymentMode'] = 'USER';
     });
+    for (var index = 0; index < _personMatches.length; index++) {
+      if (_personMatches[index].role == 'payer') _resolveMatch(index, id);
+    }
     _changed();
   }
 
@@ -402,6 +477,33 @@ class _AiDraftReviewState extends State<AiDraftReview> {
   void _changed() {
     setState(() {});
     widget.onChanged?.call(_editedDraft(), _amount.text);
+  }
+
+  void _resolveMatch(int index, String id) {
+    final match = _personMatches[index];
+    final person = widget.people
+        .where((person) => person.uuid == id && !person.isDeleted)
+        .firstOrNull;
+    if (person == null) return;
+    if (match.role == 'payer') {
+      _payer = id;
+      _paymentMode = 'PERSON_PAID';
+      _clearIssues(['payer', 'paymentMode']);
+      _fieldSources['payer'] = 'USER';
+      _fieldSources['paymentMode'] = 'USER';
+    } else {
+      _people.add(id);
+      _participantScope = 'SPECIFIED';
+      _fieldSources['participants'] = 'USER';
+    }
+    _personMatches[index] = AiPersonMatch(
+      sourceName: match.sourceName,
+      role: match.role,
+      personUuid: id,
+      matchedName: person.name,
+      candidatePersonUuids: [id],
+    );
+    _changed();
   }
 
   Future<void> _addCategory() async {
@@ -626,6 +728,9 @@ class _AiDraftReviewState extends State<AiDraftReview> {
                                 _category = null;
                               }
                               if (type == 1) {
+                                _personMatches.removeWhere(
+                                  (match) => match.role == 'payer',
+                                );
                                 _payer = null;
                                 _paymentMode = 'UNKNOWN';
                                 _clearIssues(['payer', 'paymentMode']);
@@ -729,6 +834,7 @@ class _AiDraftReviewState extends State<AiDraftReview> {
                           onChanged: (date) {
                             setState(() {
                               _date = date;
+                              _datePrecision = 'TIME';
                               _clearIssues(['happenedAt']);
                               _fieldSources['happenedAt'] = 'USER';
                             });
@@ -749,89 +855,118 @@ class _AiDraftReviewState extends State<AiDraftReview> {
                           for (final issue in [..._issues]) _issueCard(issue),
                           const SizedBox(height: 8),
                         ],
+                        SizedBox(key: _unknownAnchor),
+                        for (final match in _personMatches)
+                          if (match.approximate &&
+                              match.personUuid != null &&
+                              (match.role == 'payer'
+                                  ? _payer == match.personUuid
+                                  : _people.contains(match.personUuid)))
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Text(
+                                '“${match.sourceName}”已近似匹配为“${match.matchedName ?? match.sourceName}”，可在下方修改。',
+                              ),
+                            ),
+                        for (
+                          var index = 0;
+                          index < _personMatches.length;
+                          index++
+                        )
+                          if (_pendingMatches.contains(_personMatches[index]))
+                            AiPersonResolution(
+                              key: ValueKey(
+                                'ai-match-${_personMatches[index].role}-${_personMatches[index].sourceName}-$index',
+                              ),
+                              match: _personMatches[index],
+                              missingIdentity:
+                                  _personMatches[index].personUuid != null,
+                              people: widget.people,
+                              busy: widget.busy,
+                              onSelected: (id) => _resolveMatch(index, id),
+                              onIgnore: () {
+                                _personMatches.removeAt(index);
+                                _changed();
+                              },
+                            ),
                         if (_unresolved.isNotEmpty) ...[
-                          Text('请确认未识别的人员，以及这笔支出的付款方式。', key: _unknownAnchor),
+                          const Text('旧草稿没有记录人员身份，请先确认承担人或付款人。'),
                           const SizedBox(height: 8),
                           for (final name in [..._unresolved])
                             Padding(
                               padding: const EdgeInsets.only(bottom: 8),
-                              child: Row(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  Expanded(
-                                    child: DropdownButtonFormField<String>(
-                                      decoration: InputDecoration(
-                                        labelText: name == _paymentDecision
-                                            ? '选择付款人'
-                                            : '「$name」对应人员',
-                                      ),
-                                      items: widget.people
-                                          .map(
-                                            (person) => DropdownMenuItem(
-                                              value: person.uuid,
-                                              child: Text(person.name),
-                                            ),
-                                          )
-                                          .toList(),
-                                      onChanged: widget.busy
-                                          ? null
-                                          : (value) {
-                                              if (value == null) return;
-                                              setState(() {
-                                                if (name == '原付款人已失效' ||
-                                                    name == _paymentDecision) {
-                                                  _payer = value;
-                                                  _paymentMode = 'PERSON_PAID';
-                                                  _fieldSources['payer'] =
-                                                      'USER';
-                                                  _fieldSources['paymentMode'] =
-                                                      'USER';
-                                                  _clearIssues([
-                                                    'payer',
-                                                    'paymentMode',
-                                                  ]);
-                                                  _unresolved.remove(
-                                                    _paymentDecision,
-                                                  );
-                                                } else {
-                                                  _people.add(value);
-                                                  _participantScope =
-                                                      'SPECIFIED';
-                                                  _fieldSources['participants'] =
-                                                      'USER';
-                                                  _clearIssues([
-                                                    'participants',
-                                                  ]);
-                                                }
-                                                _unresolved.remove(name);
-                                              });
-                                              _changed();
-                                            },
+                                  Text('“$name”在这笔流水中的身份是什么？'),
+                                  DropdownButtonFormField<String>(
+                                    key: ValueKey('legacy-role-$name'),
+                                    isExpanded: true,
+                                    decoration: const InputDecoration(
+                                      labelText: '选择人员身份',
                                     ),
-                                  ),
-                                  TextButton(
-                                    onPressed: widget.busy
+                                    items: [
+                                      DropdownMenuItem(
+                                        value: 'participant',
+                                        child: Text(_type == 1 ? '收款人' : '承担人'),
+                                      ),
+                                      if (_type == 0)
+                                        const DropdownMenuItem(
+                                          value: 'payer',
+                                          child: Text('付款人'),
+                                        ),
+                                      if (_type == 0)
+                                        const DropdownMenuItem(
+                                          value: 'both',
+                                          child: Text('同时承担和付款'),
+                                        ),
+                                    ],
+                                    onChanged: widget.busy
                                         ? null
-                                        : () {
+                                        : (value) {
+                                            if (![
+                                              'participant',
+                                              'payer',
+                                              'both',
+                                            ].contains(value)) {
+                                              return;
+                                            }
                                             setState(() {
-                                              if (name == _paymentDecision) {
+                                              if (value != 'payer') {
+                                                _personMatches.add(
+                                                  AiPersonMatch(
+                                                    sourceName: name,
+                                                    role: 'participant',
+                                                  ),
+                                                );
+                                              }
+                                              if (value != 'participant') {
+                                                _personMatches.add(
+                                                  AiPersonMatch(
+                                                    sourceName: name,
+                                                    role: 'payer',
+                                                  ),
+                                                );
+                                                _paymentMode = 'UNKNOWN';
                                                 _payer = null;
-                                                _paymentMode = 'SHARED_POOL';
-                                                _fieldSources['paymentMode'] =
-                                                    'USER';
-                                                _fieldSources['payer'] = 'USER';
-                                                _clearIssues([
-                                                  'payer',
-                                                  'paymentMode',
-                                                ]);
                                               }
                                               _unresolved.remove(name);
                                             });
                                             _changed();
                                           },
-                                    child: Text(
-                                      name == _paymentDecision
-                                          ? '使用共同钱包'
-                                          : '忽略$name',
+                                  ),
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: TextButton(
+                                      onPressed: widget.busy
+                                          ? null
+                                          : () {
+                                              setState(() {
+                                                _unresolved.remove(name);
+                                              });
+                                              _changed();
+                                            },
+                                      child: Text('忽略$name'),
                                     ),
                                   ),
                                 ],
@@ -924,23 +1059,27 @@ class _AiDraftReviewState extends State<AiDraftReview> {
                             ),
                           ],
                         ],
-                        if (_splitMode == 'EQUAL' &&
-                            (_type == 1 ||
-                                _paymentMode == 'SHARED_POOL' ||
-                                (_paymentMode == 'PERSON_PAID' &&
-                                    _payer != null)))
+                        if (_splitMode == 'EQUAL')
                           TransactionSplitSummary(
+                            compact: true,
+                            peopleConfirmed:
+                                _unresolved.isEmpty && _pendingMatches.isEmpty,
+                            paymentConfirmed:
+                                _type == 1 ||
+                                (_paymentMode == 'SHARED_POOL' ||
+                                    (_paymentMode == 'PERSON_PAID' &&
+                                        _payer != null)),
                             ledger: widget.ledger,
                             type: _type,
                             amount: double.tryParse(_amount.text),
                             currency: _currency,
                             participantCount: _people.length,
-                            payerName: _paymentMode == 'PERSON_PAID'
-                                ? widget.people
+                            payerName: _payer == null
+                                ? null
+                                : widget.people
                                       .where((person) => person.uuid == _payer)
                                       .firstOrNull
-                                      ?.name
-                                : null,
+                                      ?.name,
                           )
                         else if (_splitMode != 'EQUAL') ...[
                           const Text('原文可能包含非等额分摊，不能按原方案直接记账。'),

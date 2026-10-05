@@ -112,12 +112,29 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('2025年1月2日'), findsOneWidget);
       expect(find.text('支出 CNY 21.00 · 收入 CNY 0.00'), findsOneWidget);
+      expect(find.text('支出 (CNY)'), findsOneWidget);
+      expect(find.text('结余 (CNY)'), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byType(FittedBox).first,
+          matching: find.text('CNY 21.00'),
+        ),
+        findsOneWidget,
+      );
       expect(find.text('outside'), findsNothing);
       expect(find.text('income'), findsNothing);
       expect(find.text('2025-01-02 23:59'), findsOneWidget);
       await tester.tap(find.text('USD').first);
       await tester.pumpAndSettle();
       expect(find.text('支出 USD 3.00 · 收入 USD 0.00'), findsOneWidget);
+      expect(find.text('支出 (USD)'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(FittedBox).first,
+          matching: find.text('USD 3.00'),
+        ),
+        findsOneWidget,
+      );
       await tester.tap(find.text('usd'));
       await tester.pumpAndSettle();
       expect(find.text('支出明细'), findsOneWidget);
@@ -212,6 +229,22 @@ void main() {
 
     expect(find.text('工资到账'), findsOneWidget);
     expect(find.text('咖啡'), findsNothing);
+    expect(find.text('收入 (CNY)'), findsOneWidget);
+    expect(find.text('结余 (CNY)'), findsNothing);
+
+    await tester.tap(find.byTooltip('筛选流水'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('支出').last);
+    await tester.tap(find.text('应用筛选'));
+    await tester.pumpAndSettle();
+    expect(find.text('支出 (CNY)'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(FittedBox).first,
+        matching: find.text('CNY 28.00'),
+      ),
+      findsOneWidget,
+    );
 
     await tester.enterText(find.byType(TextField), '不存在的备注');
     await tester.pumpAndSettle();
@@ -221,5 +254,15 @@ void main() {
     await tester.tap(find.widgetWithText(TextButton, '清除筛选').last);
     await tester.pumpAndSettle();
     expect(find.text('工资到账'), findsOneWidget);
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, 700));
+    await tester.pumpAndSettle();
+    expect(find.text('结余 (CNY)'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(FittedBox).first,
+        matching: find.text('CNY 1172.00'),
+      ),
+      findsOneWidget,
+    );
   });
 }

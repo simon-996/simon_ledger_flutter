@@ -25,8 +25,14 @@ const _captureDir = String.fromEnvironment('UX_CAPTURE_DIR');
 void main() {
   setUpAll(() async {
     final windowsDir = Platform.environment['WINDIR'];
-    final font = File(windowsDir == null ? '' : '$windowsDir/Fonts/msyh.ttc');
-    if (Platform.isWindows && font.existsSync()) {
+    final font = File(
+      Platform.isMacOS
+          ? '/System/Library/Fonts/STHeiti Light.ttc'
+          : windowsDir == null
+          ? ''
+          : '$windowsDir/Fonts/msyh.ttc',
+    );
+    if (font.existsSync()) {
       final bytes = await font.readAsBytes();
       for (final family in ['Microsoft YaHei', 'Roboto', 'Ahem']) {
         await (FontLoader(
@@ -278,6 +284,60 @@ void main() {
       );
     },
   );
+  testWidgets('AI pending people and converted amount fit real Chinese font', (
+    tester,
+  ) async {
+    final data = await _fixture();
+    data.ledger.baseCurrencyCode = 'THB';
+    data.ledger.exchangeRateToCNY = 0.2;
+    final boundary = GlobalKey();
+    await _mount(
+      tester,
+      data.database,
+      boundary,
+      Scaffold(
+        body: AiDraftReview(
+          draft: const AiDraft(
+            sourceText: '王倾和陈欣喝饮料，花了三十元',
+            type: 0,
+            amount: 30,
+            currencyCode: 'CNY',
+            categorySuggestion: '餐饮',
+            personUuids: [],
+            unresolvedNames: ['王倾', '陈欣'],
+            paymentMode: AiPaymentMode.unconfirmed,
+            personMatches: [
+              AiPersonMatch(
+                sourceName: '王倾',
+                role: 'participant',
+                candidatePersonUuids: ['xiaowang'],
+              ),
+              AiPersonMatch(
+                sourceName: '陈欣',
+                role: 'payer',
+                candidatePersonUuids: ['xiaoli'],
+              ),
+            ],
+          ),
+          ledger: data.ledger,
+          people: data.people,
+          position: 1,
+          total: 1,
+          busy: false,
+          onConfirm: (_) async {},
+          onSkip: () {},
+        ),
+      ),
+      width: 390,
+    );
+    await tester.ensureVisible(find.text('付款方式待确认'));
+    await tester.pumpAndSettle();
+    expect(find.text('按账本汇率约合 THB 150.00'), findsOneWidget);
+    expect(find.text('人员待确认，确认后显示分摊金额'), findsOneWidget);
+    expect(find.textContaining('每人 CNY'), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.runAsync(() => _capture(boundary, 'ai-review-pending-390'));
+  });
   testWidgets('bookkeeping and edit remain usable at large text size', (
     tester,
   ) async {

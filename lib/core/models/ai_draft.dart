@@ -1,3 +1,54 @@
+enum AiPaymentMode {
+  unconfirmed('unconfirmed'),
+  sharedWallet('shared_wallet'),
+  person('person');
+
+  const AiPaymentMode(this.wireValue);
+  final String wireValue;
+
+  static AiPaymentMode fromWire(String? value) => values.firstWhere(
+    (mode) => mode.wireValue == value,
+    orElse: () => unconfirmed,
+  );
+}
+
+class AiPersonMatch {
+  const AiPersonMatch({
+    required this.sourceName,
+    required this.role,
+    this.personUuid,
+    this.matchedName,
+    this.approximate = false,
+    this.candidatePersonUuids = const [],
+  });
+
+  final String sourceName;
+  final String role;
+  final String? personUuid;
+  final String? matchedName;
+  final bool approximate;
+  final List<String> candidatePersonUuids;
+
+  factory AiPersonMatch.fromJson(Map<String, dynamic> json) => AiPersonMatch(
+    sourceName: json['sourceName'] as String,
+    role: json['role'] as String,
+    personUuid: json['personUuid'] as String?,
+    matchedName: json['matchedName'] as String?,
+    approximate: json['approximate'] == true,
+    candidatePersonUuids: (json['candidatePersonUuids'] as List<dynamic>? ?? [])
+        .cast<String>(),
+  );
+
+  Map<String, dynamic> toJson() => {
+    'sourceName': sourceName,
+    'role': role,
+    'personUuid': personUuid,
+    'matchedName': matchedName,
+    'approximate': approximate,
+    'candidatePersonUuids': candidatePersonUuids,
+  };
+}
+
 class AiDraftIssue {
   const AiDraftIssue({
     required this.id,
@@ -45,7 +96,7 @@ class AiDraft {
     this.happenedAt,
     this.payerPersonUuid,
     this.schemaVersion = 1,
-    this.paymentMode = 'UNKNOWN',
+    Object? paymentMode,
     this.participantScope = 'UNKNOWN',
     this.splitMode = 'EQUAL',
     this.datePrecision = 'DAY',
@@ -54,7 +105,8 @@ class AiDraft {
     this.referenceZone,
     this.fieldSources = const {},
     this.issues = const [],
-  });
+    this.personMatches = const [],
+  }) : _paymentMode = paymentMode;
 
   static const Object _unset = Object();
 
@@ -69,7 +121,25 @@ class AiDraft {
   final List<String> personUuids;
   final List<String> unresolvedNames;
   final int schemaVersion;
-  final String paymentMode;
+  final Object? _paymentMode;
+  final List<AiPersonMatch> personMatches;
+
+  String get paymentMode => switch (_paymentMode) {
+    AiPaymentMode.person || 'person' => 'PERSON_PAID',
+    AiPaymentMode.sharedWallet || 'shared_wallet' => 'SHARED_POOL',
+    AiPaymentMode.unconfirmed || 'unconfirmed' => 'UNKNOWN',
+    String value => value,
+    _ =>
+      schemaVersion == 1 && payerPersonUuid?.isNotEmpty == true
+          ? 'PERSON_PAID'
+          : 'UNKNOWN',
+  };
+
+  AiPaymentMode get effectivePaymentMode => switch (paymentMode) {
+    'PERSON_PAID' => AiPaymentMode.person,
+    'SHARED_POOL' => AiPaymentMode.sharedWallet,
+    _ => AiPaymentMode.unconfirmed,
+  };
   final String participantScope;
   final String splitMode;
   final String datePrecision;
@@ -97,7 +167,15 @@ class AiDraft {
       Set<String> allowed, {
       required String fallback,
     }) {
-      final raw = json[field];
+      final original = json[field];
+      final raw = field == 'paymentMode' && schemaVersion == 1
+          ? switch (original) {
+              'person' => 'PERSON_PAID',
+              'shared_wallet' => 'SHARED_POOL',
+              'unconfirmed' => 'UNKNOWN',
+              _ => original,
+            }
+          : original;
       if (raw == null) return fallback;
       if (raw is String && allowed.contains(raw)) return raw;
       issues.add(
@@ -165,6 +243,10 @@ class AiDraft {
       referenceZone: json['referenceZone'] as String?,
       fieldSources: fieldSources,
       issues: issues,
+      personMatches: (json['personMatches'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(AiPersonMatch.fromJson)
+          .toList(),
     );
   }
 
@@ -180,7 +262,7 @@ class AiDraft {
     List<String>? personUuids,
     List<String>? unresolvedNames,
     int? schemaVersion,
-    String? paymentMode,
+    Object? paymentMode,
     String? participantScope,
     String? splitMode,
     String? datePrecision,
@@ -189,6 +271,7 @@ class AiDraft {
     Object? referenceZone = _unset,
     Map<String, String>? fieldSources,
     List<AiDraftIssue>? issues,
+    List<AiPersonMatch>? personMatches,
   }) => AiDraft(
     sourceText: identical(sourceText, _unset)
         ? this.sourceText
@@ -224,6 +307,7 @@ class AiDraft {
         : referenceZone as String?,
     fieldSources: fieldSources ?? this.fieldSources,
     issues: issues ?? this.issues,
+    personMatches: personMatches ?? this.personMatches,
   );
 
   Map<String, dynamic> toJson() => {
@@ -238,7 +322,10 @@ class AiDraft {
     'personUuids': personUuids,
     'unresolvedNames': unresolvedNames,
     'schemaVersion': schemaVersion,
-    'paymentMode': paymentMode,
+    'paymentMode': schemaVersion == 1
+        ? effectivePaymentMode.wireValue
+        : paymentMode,
+    'personMatches': personMatches.map((match) => match.toJson()).toList(),
     'participantScope': participantScope,
     'splitMode': splitMode,
     'datePrecision': datePrecision,

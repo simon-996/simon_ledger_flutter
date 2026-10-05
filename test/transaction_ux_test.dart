@@ -223,6 +223,32 @@ void main() {
     expect(chosen, DateTime(2026, 6, 15, 14, 23, 45, 67, 89));
     expect(find.byType(TimePickerDialog), findsNothing);
   });
+  testWidgets('transaction time shows hours and minutes and opens picker', (
+    tester,
+  ) async {
+    DateTime? chosen;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TransactionDateControl(
+            date: DateTime(2026, 6, 16, 14, 23, 45, 67),
+            onChanged: (value) => chosen = value,
+          ),
+        ),
+      ),
+    );
+    expect(find.text('时间 · 14:23'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('transaction-time-control')));
+    await tester.pumpAndSettle();
+    expect(find.byType(TimePickerDialog), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.keyboard_outlined));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField).at(0), '09');
+    await tester.enterText(find.byType(TextFormField).at(1), '07');
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    expect(chosen, DateTime(2026, 6, 16, 9, 7, 45, 67));
+  });
   testWidgets(
     'manual past date is saved and date returns to today after success',
     (tester) async {
@@ -323,6 +349,7 @@ void main() {
     await tester.tap(find.text('全选'));
     await tester.pumpAndSettle();
     expect(find.text('共同钱包付款 · 2 人承担'), findsOneWidget);
+    await tester.ensureVisible(find.text('收入'));
     await tester.tap(find.text('收入'));
     await tester.pumpAndSettle();
     expect(find.text('收入分配 · 2 人收款'), findsOneWidget);
@@ -400,7 +427,13 @@ void main() {
           ..category = '餐饮'
           ..personUuids = ['p1']
           ..note = '记录$index'
-          ..createdAt = DateTime(2026, 6, index),
+          ..createdAt = DateTime(
+            2026,
+            6,
+            index,
+            index == 4 ? 13 : 0,
+            index == 4 ? 7 : 0,
+          ),
       );
     }
     Ledger? opened;
@@ -414,6 +447,7 @@ void main() {
     );
     expect(find.textContaining('记录1'), findsNothing);
     expect(find.textContaining('记录4'), findsOneWidget);
+    expect(find.textContaining('6月4日 13:07 · 记录4'), findsOneWidget);
     await tester.ensureVisible(find.text('查看流水'));
     await tester.tap(find.text('查看流水'));
     expect(opened?.uuid, ledger.uuid);

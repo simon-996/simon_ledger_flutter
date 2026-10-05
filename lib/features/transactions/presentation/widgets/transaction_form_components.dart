@@ -6,6 +6,8 @@ import '../../../../core/widgets/currency_widgets.dart';
 
 export 'transaction_split_summary.dart';
 
+const transactionAmountControlHeight = 58.0;
+
 Color transactionAccentColor(BuildContext context, int transactionType) {
   return AppColors.of(context).transaction(transactionType);
 }
@@ -293,11 +295,17 @@ class CurrencySelector extends StatelessWidget {
   Widget build(BuildContext context) {
     if (currencies.length == 1) {
       final currency = currencies.first;
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: CurrencyLabel(
-          code: currency,
-          style: Theme.of(context).textTheme.bodySmall,
+      return ConstrainedBox(
+        constraints: const BoxConstraints(
+          minHeight: transactionAmountControlHeight,
+        ),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          heightFactor: 1,
+          child: CurrencyLabel(
+            code: currency,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
         ),
       );
     }
@@ -307,6 +315,9 @@ class CurrencySelector extends StatelessWidget {
             constraints.maxWidth < currencies.length * 88) {
           return OutlinedButton.icon(
             key: const ValueKey('currency-picker'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(0, transactionAmountControlHeight),
+            ),
             icon: CurrencyFlag(code: selectedCurrency),
             label: Text(
               '$selectedCurrency · ${currencyName(selectedCurrency)}',
@@ -331,8 +342,12 @@ class CurrencySelector extends StatelessWidget {
         }
 
         if (currencies.length <= 4) {
+          // The quick option has two text lines; keep room for accessibility
+          // text scaling instead of clipping the currency name.
+          final textScale = (MediaQuery.textScalerOf(context).scale(14) / 14)
+              .clamp(1.0, double.infinity);
           return SizedBox(
-            height: 56,
+            height: transactionAmountControlHeight * textScale,
             child: Row(
               children: [
                 for (var index = 0; index < currencies.length; index++) ...[
@@ -971,6 +986,21 @@ DateTime transactionDateOnDay(DateTime day, DateTime previous) {
   );
 }
 
+/// Changing the displayed hour and minute keeps the date and finer precision.
+DateTime transactionDateAtTime(DateTime previous, TimeOfDay time) {
+  final local = previous.toLocal();
+  return DateTime(
+    local.year,
+    local.month,
+    local.day,
+    time.hour,
+    time.minute,
+    local.second,
+    local.millisecond,
+    local.microsecond,
+  );
+}
+
 class TransactionDateControl extends StatelessWidget {
   const TransactionDateControl({
     super.key,
@@ -986,29 +1016,60 @@ class TransactionDateControl extends StatelessWidget {
     final value = (date ?? DateTime.now()).toLocal();
     final label =
         '${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
+    final timeLabel = date == null
+        ? '现在'
+        : '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
     return Align(
       alignment: Alignment.centerLeft,
-      child: TextButton.icon(
-        key: const ValueKey('transaction-date-control'),
-        icon: const Icon(Icons.event_outlined, size: 18),
-        label: Text('日期 · $label'),
-        onPressed: !enabled
-            ? null
-            : () async {
-                final now = DateTime.now();
-                final initial = value.isAfter(now) ? now : value;
-                final day = await showDatePicker(
-                  context: context,
-                  initialDate: initial,
-                  firstDate: DateTime(
-                    initial.year < 2000 ? initial.year : 2000,
-                  ),
-                  lastDate: now,
-                );
-                if (day != null && context.mounted) {
-                  onChanged(transactionDateOnDay(day, value));
-                }
-              },
+      child: Wrap(
+        spacing: 8,
+        children: [
+          TextButton.icon(
+            key: const ValueKey('transaction-date-control'),
+            icon: const Icon(Icons.event_outlined, size: 18),
+            label: Text('日期 · $label'),
+            onPressed: !enabled
+                ? null
+                : () async {
+                    final now = DateTime.now();
+                    final initial = value.isAfter(now) ? now : value;
+                    final day = await showDatePicker(
+                      context: context,
+                      initialDate: initial,
+                      firstDate: DateTime(
+                        initial.year < 2000 ? initial.year : 2000,
+                      ),
+                      lastDate: now,
+                    );
+                    if (day != null && context.mounted) {
+                      onChanged(transactionDateOnDay(day, value));
+                    }
+                  },
+          ),
+          TextButton.icon(
+            key: const ValueKey('transaction-time-control'),
+            icon: const Icon(Icons.access_time_outlined, size: 18),
+            label: Text('时间 · $timeLabel'),
+            onPressed: !enabled
+                ? null
+                : () async {
+                    final time = await showTimePicker(
+                      context: context,
+                      initialTime: TimeOfDay.fromDateTime(value),
+                      helpText: '选择记账时间',
+                      builder: (context, child) => MediaQuery(
+                        data: MediaQuery.of(
+                          context,
+                        ).copyWith(alwaysUse24HourFormat: true),
+                        child: child!,
+                      ),
+                    );
+                    if (time != null && context.mounted) {
+                      onChanged(transactionDateAtTime(value, time));
+                    }
+                  },
+          ),
+        ],
       ),
     );
   }

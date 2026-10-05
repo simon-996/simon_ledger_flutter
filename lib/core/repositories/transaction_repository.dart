@@ -294,7 +294,7 @@ class RemoteTransactionRepository implements TransactionRepository {
               .firstOrNull;
           if (latest != null &&
               latest.isDeleted &&
-              !_looksLikeRemoteUuid(latest.uuid) &&
+              !_hasRemoteIdentity(latest) &&
               latest.clientOperationId != null) {
             final operationId = latest.clientOperationId;
             latest =
@@ -302,7 +302,7 @@ class RemoteTransactionRepository implements TransactionRepository {
                     .where(
                       (record) =>
                           record.clientOperationId == operationId &&
-                          _looksLikeRemoteUuid(record.uuid),
+                          _hasRemoteIdentity(record),
                     )
                     .firstOrNull ??
                 latest;
@@ -345,7 +345,7 @@ class RemoteTransactionRepository implements TransactionRepository {
       'personUuids': remotePersonUuids,
     };
 
-    final remoteUuid = _looksLikeRemoteUuid(transaction.uuid)
+    final remoteUuid = _hasRemoteIdentity(transaction)
         ? transaction.uuid
         : null;
     final version = transaction.version;
@@ -393,8 +393,7 @@ class RemoteTransactionRepository implements TransactionRepository {
                 record.clientOperationId == operationId),
       )) {
         final pendingDelete =
-            !localOnly &&
-            (record.pendingSync || _looksLikeRemoteUuid(record.uuid));
+            !localOnly && (record.pendingSync || _hasRemoteIdentity(record));
         record
           ..isDeleted = true
           ..pendingSync = pendingDelete
@@ -408,7 +407,7 @@ class RemoteTransactionRepository implements TransactionRepository {
     final remoteLedgerUuid = await _identityResolver.resolveLedgerUuid(
       transaction.ledgerUuid,
     );
-    final remoteUuid = _looksLikeRemoteUuid(transaction.uuid)
+    final remoteUuid = _hasRemoteIdentity(transaction)
         ? transaction.uuid
         : null;
     final version = transaction.version;
@@ -450,8 +449,11 @@ class RemoteTransactionRepository implements TransactionRepository {
     );
   }
 
-  static bool _looksLikeRemoteUuid(String uuid) {
-    return RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(uuid);
+  static bool _hasRemoteIdentity(TransactionRecord transaction) {
+    // AI drafts also use 32-digit hex ids. Until create returns a server uuid,
+    // the local uuid equals the stable client operation id (including old caches).
+    return transaction.uuid != transaction.clientOperationId &&
+        RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(transaction.uuid);
   }
 
   Future<bool> _isLocalOnlyLedger(String ledgerUuid) async {
@@ -533,7 +535,9 @@ class RemoteTransactionRepository implements TransactionRepository {
   }
 
   TransactionRecord _localPendingTransaction(TransactionRecord transaction) {
-    final clientOperationId = transaction.clientOperationId ?? transaction.uuid;
+    final clientOperationId =
+        transaction.clientOperationId ??
+        (_hasRemoteIdentity(transaction) ? null : transaction.uuid);
     return transaction
       ..clientOperationId = clientOperationId
       ..localAccountUuid = transaction.localAccountUuid ?? _db.scope.accountUuid

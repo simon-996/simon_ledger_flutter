@@ -22,6 +22,13 @@ import '../providers/transaction_provider.dart';
 import 'transaction_form_components.dart';
 import 'ai_bookkeeping_flow.dart';
 
+String _recentTransactionDateTime(DateTime dateTime) {
+  final local = dateTime.toLocal();
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  return '${local.month}月${local.day}日 $hour:$minute';
+}
+
 class BookkeepingTab extends ConsumerStatefulWidget {
   const BookkeepingTab({
     super.key,
@@ -42,7 +49,8 @@ class BookkeepingTab extends ConsumerStatefulWidget {
   ConsumerState<BookkeepingTab> createState() => _BookkeepingTabState();
 }
 
-class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
+class _BookkeepingTabState extends ConsumerState<BookkeepingTab>
+    with WidgetsBindingObserver {
   String? _selectedLedgerUuid;
   String? _selectedCategory;
   final Set<String> _selectedPersonIds = {};
@@ -87,6 +95,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initDefaults();
     _focusAmountOnEntry();
   }
@@ -97,6 +106,9 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     if (widget.isActive != oldWidget.isActive) {
       if (widget.isActive) {
         _focusAmountOnEntry();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _refreshAiCapability();
+        });
       } else {
         _amountFocusRequestedForEntry = false;
         _amountFocusNode.unfocus();
@@ -122,6 +134,26 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     });
     _persistDraft();
     _focusAmountOnEntry();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshAiCapability();
+    }
+  }
+
+  void _refreshAiCapability() {
+    if (!mounted || !widget.isActive) return;
+    final ledger = _selectedLedger;
+    if (ledger == null ||
+        !isAiBookkeepingEligible(
+          ledger,
+          ref.read(activeLocalDataScopeProvider).isAccount,
+        )) {
+      return;
+    }
+    ref.invalidate(aiCapabilityProvider(ledger.remoteSyncUuid));
   }
 
   Ledger? get _selectedLedger {
@@ -175,6 +207,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
       }
     });
     if (ledgers.isEmpty) return;
+    _refreshAiCapability();
     _persistDraft();
   }
 
@@ -300,6 +333,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _amountFocusNode.dispose();
     _amountController.dispose();
     _noteController.dispose();
@@ -1048,7 +1082,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
                               contentPadding: EdgeInsets.zero,
                               title: Text(record.category),
                               subtitle: Text(
-                                '${record.createdAt.month}月${record.createdAt.day}日${record.note.isEmpty ? '' : ' · ${record.note}'}',
+                                '${_recentTransactionDateTime(record.createdAt)}${record.note.isEmpty ? '' : ' · ${record.note}'}',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -1274,7 +1308,9 @@ class _BookkeepingAmountPanel extends StatelessWidget {
             TransactionResponsivePair(
               breakpoint: 0,
               first: SizedBox(
-                height: errorText == null ? 58 : 118,
+                height: errorText == null
+                    ? transactionAmountControlHeight
+                    : 118,
                 child: TextField(
                   key: const ValueKey('bookkeeping-amount-input'),
                   enabled: enabled,
