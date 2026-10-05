@@ -8,17 +8,23 @@ class AiCapability {
     required this.textAvailable,
     required this.voiceAvailable,
     this.reason,
+    this.draftSchemaVersion = 1,
   });
 
   final bool textAvailable;
   final bool voiceAvailable;
   final String? reason;
+  final int draftSchemaVersion;
 
-  factory AiCapability.fromJson(Map<String, dynamic> json) => AiCapability(
-    textAvailable: json['textAvailable'] == true,
-    voiceAvailable: json['voiceAvailable'] == true,
-    reason: json['reason'] as String?,
-  );
+  factory AiCapability.fromJson(Map<String, dynamic> json) {
+    final version = json['draftSchemaVersion'];
+    return AiCapability(
+      textAvailable: json['textAvailable'] == true,
+      voiceAvailable: json['voiceAvailable'] == true,
+      reason: json['reason'] as String?,
+      draftSchemaVersion: version is num && version.toInt() == 2 ? 2 : 1,
+    );
+  }
 }
 
 class AiBookkeepingRepository {
@@ -38,13 +44,25 @@ class AiBookkeepingRepository {
   Future<List<AiDraft>> parse(
     String ledgerUuid,
     String text,
-    String zone,
-  ) => apiClient.post<List<AiDraft>>(
+    String zone, {
+    int schemaVersion = 1,
+    List<String> expenseCategories = const [],
+    List<String> incomeCategories = const [],
+  }) => apiClient.post<List<AiDraft>>(
     '${_path(ledgerUuid)}/parse',
-    data: {'text': text, 'zone': zone},
-    fromJson: (json) => ((json as Map<String, dynamic>)['entries'] as List<dynamic>)
-        .map((entry) => AiDraft.fromJson(entry as Map<String, dynamic>))
-        .toList(),
+    data: {
+      'text': text,
+      'zone': zone,
+      if (schemaVersion >= 2) ...{
+        'schemaVersion': 2,
+        'expenseCategories': expenseCategories,
+        'incomeCategories': incomeCategories,
+      },
+    },
+    fromJson: (json) =>
+        ((json as Map<String, dynamic>)['entries'] as List<dynamic>)
+            .map((entry) => AiDraft.fromJson(entry as Map<String, dynamic>))
+            .toList(),
   );
 
   Future<String> transcribe(String ledgerUuid, Uint8List pcm) =>

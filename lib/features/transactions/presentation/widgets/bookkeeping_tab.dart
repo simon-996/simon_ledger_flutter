@@ -462,16 +462,23 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     });
   }
 
-  Future<void> _openAiFlow(Ledger ledger, {required bool canParse,
-      required bool canTranscribe}) async {
+  Future<void> _openAiFlow(
+    Ledger ledger, {
+    required bool canParse,
+    required bool canTranscribe,
+    required int draftSchemaVersion,
+  }) async {
     final List<Person> people;
     try {
-      people = await ref.read(personProvider(
-        includeDeleted: false, ledgerUuid: ledger.uuid).future);
+      people = await ref.read(
+        personProvider(includeDeleted: false, ledgerUuid: ledger.uuid).future,
+      );
     } catch (error) {
       if (mounted) {
-        AppNotice.error(context,
-          FriendlyError.message(error, fallback: '无法读取账本人员，请稍后重试。'));
+        AppNotice.error(
+          context,
+          FriendlyError.message(error, fallback: '无法读取账本人员，请稍后重试。'),
+        );
       }
       return;
     }
@@ -484,7 +491,9 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
       enableDrag: false,
       builder: (context) => AnimatedPadding(
         duration: AppMotion.fast,
-        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
         child: FractionallySizedBox(
           heightFactor: 0.9,
           child: AiBookkeepingFlow(
@@ -494,6 +503,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
             repository: ref.read(aiBookkeepingRepositoryProvider),
             canParse: canParse,
             canTranscribe: canTranscribe,
+            draftSchemaVersion: draftSchemaVersion,
             onSave: (item, draft) => _saveAiDraft(ledger, item, draft),
           ),
         ),
@@ -503,20 +513,37 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     ref.invalidate(aiCapabilityProvider(ledger.remoteSyncUuid));
   }
 
-  Future<void> _saveAiDraft(Ledger ledger, AiDraftItem item, AiDraft draft) async {
+  Future<void> _saveAiDraft(
+    Ledger ledger,
+    AiDraftItem item,
+    AiDraft draft,
+  ) async {
     final currentLedgers = await ref.read(databaseProvider).getAllLedgers();
-    final current = currentLedgers.where((value) => value.uuid == ledger.uuid).firstOrNull;
-    if (current == null || !isAiBookkeepingEligible(current,
-        ref.read(activeLocalDataScopeProvider).isAccount)) {
+    final current = currentLedgers
+        .where((value) => value.uuid == ledger.uuid)
+        .firstOrNull;
+    if (current == null ||
+        !isAiBookkeepingEligible(
+          current,
+          ref.read(activeLocalDataScopeProvider).isAccount,
+        )) {
       throw StateError('账本记账权限已变化');
     }
     final activePeople = await ref.read(databaseProvider).getAllPeople();
-    final activeIds = activePeople.where((person) => !person.isDeleted &&
-      current.personUuids.contains(person.uuid)).map((person) => person.uuid).toSet();
-    if (draft.personUuids.isEmpty || !activeIds.containsAll(draft.personUuids) ||
-        (draft.payerPersonUuid != null && !activeIds.contains(draft.payerPersonUuid)) ||
+    final activeIds = activePeople
+        .where(
+          (person) =>
+              !person.isDeleted && current.personUuids.contains(person.uuid),
+        )
+        .map((person) => person.uuid)
+        .toSet();
+    if (draft.personUuids.isEmpty ||
+        !activeIds.containsAll(draft.personUuids) ||
+        (draft.payerPersonUuid != null &&
+            !activeIds.contains(draft.payerPersonUuid)) ||
         !supportedCurrenciesForLedger(current).contains(draft.currencyCode) ||
-        draft.categorySuggestion == null || draft.categorySuggestion!.trim().isEmpty) {
+        draft.categorySuggestion == null ||
+        draft.categorySuggestion!.trim().isEmpty) {
       throw StateError('草稿中的人员、币种或分类已失效');
     }
     final profile = await ref.read(localProfileProvider.future);
@@ -537,7 +564,9 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
       ..createdByAvatar = user?.avatar ?? profile.personAvatar
       ..createdAt = draft.happenedAt ?? DateTime.now();
     try {
-      await ref.read(transactionProvider(ledger.uuid).notifier).addTransaction(record);
+      await ref
+          .read(transactionProvider(ledger.uuid).notifier)
+          .addTransaction(record);
     } catch (_) {
       if (!await _isTransactionSavedLocally(record)) rethrow;
     }
@@ -570,18 +599,29 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
         message: widget.ledgers.isEmpty
             ? '创建账本后，即可记录第一笔收支。'
             : '你对现有共享账本只有查看权限，可以联系管理员调整权限，或创建自己的账本。',
-        action: widget.onCreateLedger == null ? null : FilledButton.icon(onPressed: widget.onCreateLedger, icon: const Icon(Icons.add_rounded), label: Text(widget.ledgers.isEmpty ? '创建第一本账本' : '创建账本')),
+        action: widget.onCreateLedger == null
+            ? null
+            : FilledButton.icon(
+                onPressed: widget.onCreateLedger,
+                icon: const Icon(Icons.add_rounded),
+                label: Text(widget.ledgers.isEmpty ? '创建第一本账本' : '创建账本'),
+              ),
       );
     }
 
     final selectedLedger = _selectedLedger;
-    final aiEligible = selectedLedger != null && isAiBookkeepingEligible(
-      selectedLedger, ref.watch(activeLocalDataScopeProvider).isAccount);
+    final aiEligible =
+        selectedLedger != null &&
+        isAiBookkeepingEligible(
+          selectedLedger,
+          ref.watch(activeLocalDataScopeProvider).isAccount,
+        );
     final aiCapability = aiEligible
         ? ref.watch(aiCapabilityProvider(selectedLedger.remoteSyncUuid)).value
         : null;
     final aiPending = aiEligible
-        ? ref.watch(aiPendingDraftsProvider(selectedLedger.uuid)).value ?? const <AiDraftItem>[]
+        ? ref.watch(aiPendingDraftsProvider(selectedLedger.uuid)).value ??
+              const <AiDraftItem>[]
         : const <AiDraftItem>[];
     final currencyOptions = selectedLedger == null
         ? const ['CNY']
@@ -595,7 +635,14 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
     final ledgerPeopleById = ref
         .watch(cachedPeopleProvider)
         .maybeWhen(data: peopleByUuid, orElse: () => const <String, Person>{});
-    final recentTransactions = selectedLedger == null ? <TransactionRecord>[] : (ref.watch(transactionProvider(selectedLedger.uuid)).value ?? const <TransactionRecord>[]).where((record) => !record.isDeleted).toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final recentTransactions =
+        selectedLedger == null
+              ? <TransactionRecord>[]
+              : (ref.watch(transactionProvider(selectedLedger.uuid)).value ??
+                        const <TransactionRecord>[])
+                    .where((record) => !record.isDeleted)
+                    .toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     final syncStatus = selectedLedger == null
         ? null
         : ref.watch(ledgerSyncStatusProvider(selectedLedger.uuid)).value;
@@ -616,321 +663,405 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(
-                child: AbsorbPointer(absorbing: _savingTransaction, child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppTheme.pagePadding,
-                    AppTheme.pagePadding,
-                    AppTheme.pagePadding,
-                    8,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      AppAnimatedEntry(
-                        child: _QuickEntryHeader(
-                          key: ValueKey(
-                            'quick-header-${selectedLedger?.uuid}-$_transactionType',
-                          ),
-                          ledgers: recordableLedgers,
-                          ledger: selectedLedger,
-                          peopleById: ledgerPeopleById,
-                          currencyCode: _selectedCurrency,
-                          highlight: _highlightLedgerSelector,
-                          onLedgerChanged: (ledgerUuid) {
-                            setState(() {
-                              _highlightLedgerSelector = false;
-                              _updateSelectedLedger(ledgerUuid);
-                            });
-                          },
-                        ),
-                      ),
-                      if (aiEligible && (aiCapability?.textAvailable == true || aiPending.isNotEmpty)) ...[
-                        const SizedBox(height: 10),
-                        OutlinedButton.icon(
-                          onPressed: () => _openAiFlow(selectedLedger,
-                            canParse: aiCapability?.textAvailable == true,
-                            canTranscribe: aiCapability?.voiceAvailable == true),
-                          icon: const Icon(Icons.auto_awesome_outlined),
-                          label: Text(aiPending.isNotEmpty
-                              ? '继续确认 ${aiPending.length} 笔 AI 草稿'
-                              : 'AI 记账'),
-                        ),
-                      ],
-                      if (syncStatus?.hasPending == true) ...[
-                        const SizedBox(height: 10),
-                        _BookkeepingSyncBanner(status: syncStatus!),
-                      ],
-                      const SizedBox(height: 14),
-                      AppAnimatedEntry(
-                        delay: const Duration(milliseconds: 60),
-                        child: _BookkeepingAmountPanel(
-                          key: _amountAnchor,
-                          errorText: _amountError,
-                          enabled: !_savingTransaction,
-                          selectedType: _transactionType,
-                          onTypeChanged: (type) {
-                            _setAndPersist(() {
-                              _transactionType = type;
-                              if (_transactionType == 1) {
-                                _payerPersonUuid = null;
-                              }
-                              _selectedCategory = _currentCategories.first;
-                            });
-                          },
-                          amountController: _amountController,
-                          amountFocusNode: _amountFocusNode,
-                          selectedCurrency: _selectedCurrency ?? 'CNY',
-                          currencies: currencyOptions,
-                          onCurrencyChanged: (currency) {
-                            _setAndPersist(() => _selectedCurrency = currency);
-                          },
-                          onAmountChanged: (value) { _limitAmountPrecision(value); setState(() {}); },
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      AppAnimatedEntry(
-                        delay: const Duration(milliseconds: 120),
-                        child: AppSectionCard(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              AppAnimatedSwitcher(
-                                child: AppSectionHeader(
-                                  key: ValueKey(
-                                    'category-header-$_transactionType',
-                                  ),
-                                  title: '分类',
-                                  trailing: Icon(
-                                    _transactionType == 0
-                                        ? Icons.trending_down_rounded
-                                        : Icons.trending_up_rounded,
-                                    color: colorScheme.primary,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              CategorySelector(
-                                key: _categoryAnchor,
-                                categories: _currentCategories,
-                                selectedCategory:
-                                    _selectedCategory ??
-                                    _currentCategories.first,
-                                isIncome: _transactionType == 1,
-                                onChanged: (category) {
-                                  _setAndPersist(
-                                    () => _selectedCategory = category,
-                                  );
-                                },
-                                onAddCategory: _addCurrentCategory,
-                              ),
-                              TransactionFieldError(message: _categoryError),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      if (selectedLedger != null)
+                child: AbsorbPointer(
+                  absorbing: _savingTransaction,
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppTheme.pagePadding,
+                      AppTheme.pagePadding,
+                      AppTheme.pagePadding,
+                      8,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
                         AppAnimatedEntry(
-                          delay: const Duration(milliseconds: 180),
-                          child: peopleAsyncValue.when(
-                            loading: () => const AppSectionCard(
-                              child: Center(child: CircularProgressIndicator()),
+                          child: _QuickEntryHeader(
+                            key: ValueKey(
+                              'quick-header-${selectedLedger?.uuid}-$_transactionType',
                             ),
-                            error: (e, st) => AppSectionCard(
-                              child: Text(
-                                FriendlyError.message(
-                                  e,
-                                  fallback: '人员加载失败，请稍后重试。',
-                                ),
-                              ),
-                            ),
-                            data: (peoplePool) {
-                              if (selectedLedger.personUuids.isEmpty) {
-                                return Column(key: _peopleAnchor, children: [const Text('请先为账本添加人员'), TransactionFieldError(message: _peopleError)]);
-                              }
-
-                              final personMap = peopleByUuid(peoplePool);
-                              final activePersonIds = selectedLedger.personUuids
-                                  .where(personMap.containsKey)
-                                  .toList();
-                              if (activePersonIds.isEmpty) {
-                                return Column(key: _peopleAnchor, children: [const Text('请先为账本添加有效人员'), TransactionFieldError(message: _peopleError)]);
-                              }
-                              _sanitizeVisiblePeopleSelection(activePersonIds);
-                              final personChoices = activePersonIds.map((pid) {
-                                final person = personMap[pid]!;
-                                return AppPersonChoiceItem(
-                                  id: pid,
-                                  name: person.name,
-                                  avatar: person.avatar,
-                                );
-                              }).toList();
-                              return AppAnimatedSwitcher(
-                                child: AppSectionCard(
-                                  key: _peopleAnchor,
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      TransactionAnimatedVisibility(
-                                        visible: _transactionType == 0,
-                                        visibleKey: 'payment-mode-panel',
-                                        hiddenKey: 'payment-mode-empty',
-                                        child: Padding(
-                                          padding: const EdgeInsets.only(
-                                            bottom: 10,
-                                          ),
-                                          child: PaymentModePanel(
-                                            paidByPerson:
-                                                _payerPersonUuid != null,
-                                            description:
-                                                _payerPersonUuid == null
-                                                ? '谁付款 · 共同钱包'
-                                                : '谁付款 · 选择垫付人',
-                                            onChanged: (paidByPerson) {
-                                              _setAndPersist(() {
-                                                if (paidByPerson) {
-                                                  _payerPersonUuid ??=
-                                                      _selectedPersonIds
-                                                          .isNotEmpty
-                                                      ? _selectedPersonIds.first
-                                                      : activePersonIds.first;
-                                                } else {
-                                                  _payerPersonUuid = null;
-                                                }
-                                              });
-                                            },
-                                          ),
-                                        ),
-                                      ),
-                                      AppSectionHeader(
-                                        title: _transactionType == 0
-                                            ? '谁承担'
-                                            : '谁收款',
-                                        trailing: TextButton(
-                                          onPressed: () {
-                                            _setAndPersist(() {
-                                              if (_selectedPersonIds.length ==
-                                                  activePersonIds.length) {
-                                                _selectedPersonIds.clear();
-                                              } else {
-                                                _selectedPersonIds.addAll(
-                                                  activePersonIds,
-                                                );
-                                              }
-                                            });
-                                          },
-                                          child: Text(
-                                            _selectedPersonIds.length ==
-                                                    activePersonIds.length
-                                                ? '取消全选'
-                                                : '全选',
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 10),
-                                      AppPersonChoiceGrid(
-                                        items: personChoices,
-                                        selectedIds: _selectedPersonIds,
-                                        onToggle: (pid, selected) {
-                                          _setAndPersist(() {
-                                            if (selected) {
-                                              _selectedPersonIds.add(pid);
-                                            } else {
-                                              _selectedPersonIds.remove(pid);
-                                            }
-                                          });
-                                        },
-                                      ),
-                                      TransactionFieldError(message: _peopleError),
-                                      TransactionSplitSummary(ledger: selectedLedger, type: _transactionType, amount: double.tryParse(_amountController.text), currency: _selectedCurrency ?? 'CNY', participantCount: _selectedPersonIds.length, payerName: _payerPersonUuid == null ? null : personMap[_payerPersonUuid]?.name),
-                                      TransactionAnimatedVisibility(
-                                        visible:
-                                            _transactionType == 0 &&
-                                            _payerPersonUuid != null,
-                                        visibleKey: 'payer-person-panel',
-                                        hiddenKey: 'payer-person-empty',
-                                        child: Padding(
-                                          padding: const EdgeInsets.only(
-                                            top: 16,
-                                          ),
-                                          child: DecoratedBox(
-                                            decoration: BoxDecoration(
-                                              color: colorScheme
-                                                  .surfaceContainerLow,
-                                              borderRadius:
-                                                  BorderRadius.circular(16),
-                                              border: Border.all(
-                                                color: colorScheme
-                                                    .outlineVariant
-                                                    .withValues(alpha: 0.72),
-                                              ),
-                                            ),
-                                            child: Padding(
-                                              padding: const EdgeInsets.all(12),
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.stretch,
-                                                children: [
-                                                  Text(
-                                                    '谁付款',
-                                                    style: Theme.of(
-                                                      context,
-                                                    ).textTheme.titleSmall,
-                                                  ),
-                                                  const SizedBox(height: 8),
-                                                  AppPersonChoiceGrid(
-                                                    items: personChoices,
-                                                    selectedId:
-                                                        _payerPersonUuid,
-                                                    onSelect: (pid) {
-                                                      _setAndPersist(() {
-                                                        _payerPersonUuid = pid;
-                                                      });
-                                                    },
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
+                            ledgers: recordableLedgers,
+                            ledger: selectedLedger,
+                            peopleById: ledgerPeopleById,
+                            currencyCode: _selectedCurrency,
+                            highlight: _highlightLedgerSelector,
+                            onLedgerChanged: (ledgerUuid) {
+                              setState(() {
+                                _highlightLedgerSelector = false;
+                                _updateSelectedLedger(ledgerUuid);
+                              });
                             },
                           ),
                         ),
-                      if (selectedLedger != null) const SizedBox(height: 14),
-                      TransactionDateControl(date: _date, onChanged: (date) => setState(() => _date = date)),
-                      AppAnimatedEntry(
-                        delay: const Duration(milliseconds: 220),
-                        child: TextField(
-                          enabled: !_savingTransaction,
-                          controller: _noteController,
-                          decoration: const InputDecoration(
-                            labelText: '备注（选填）',
-                            prefixIcon: Icon(Icons.notes_outlined),
+                        if (aiEligible &&
+                            (aiCapability?.textAvailable == true ||
+                                aiPending.isNotEmpty)) ...[
+                          const SizedBox(height: 10),
+                          OutlinedButton.icon(
+                            onPressed: () => _openAiFlow(
+                              selectedLedger,
+                              canParse: aiCapability?.textAvailable == true,
+                              canTranscribe:
+                                  aiCapability?.voiceAvailable == true,
+                              draftSchemaVersion:
+                                  aiCapability?.draftSchemaVersion ?? 1,
+                            ),
+                            icon: const Icon(Icons.auto_awesome_outlined),
+                            label: Text(
+                              aiPending.isNotEmpty
+                                  ? '继续确认 ${aiPending.length} 笔 AI 草稿'
+                                  : 'AI 记账',
+                            ),
                           ),
-                          maxLines: 2,
-                          minLines: 1,
+                        ],
+                        if (syncStatus?.hasPending == true) ...[
+                          const SizedBox(height: 10),
+                          _BookkeepingSyncBanner(status: syncStatus!),
+                        ],
+                        const SizedBox(height: 14),
+                        AppAnimatedEntry(
+                          delay: const Duration(milliseconds: 60),
+                          child: _BookkeepingAmountPanel(
+                            key: _amountAnchor,
+                            errorText: _amountError,
+                            enabled: !_savingTransaction,
+                            selectedType: _transactionType,
+                            onTypeChanged: (type) {
+                              _setAndPersist(() {
+                                _transactionType = type;
+                                if (_transactionType == 1) {
+                                  _payerPersonUuid = null;
+                                }
+                                _selectedCategory = _currentCategories.first;
+                              });
+                            },
+                            amountController: _amountController,
+                            amountFocusNode: _amountFocusNode,
+                            selectedCurrency: _selectedCurrency ?? 'CNY',
+                            currencies: currencyOptions,
+                            onCurrencyChanged: (currency) {
+                              _setAndPersist(
+                                () => _selectedCurrency = currency,
+                              );
+                            },
+                            onAmountChanged: (value) {
+                              _limitAmountPrecision(value);
+                              setState(() {});
+                            },
+                          ),
                         ),
-                      ),
-                      if (selectedLedger != null && recentTransactions.isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        AppSectionHeader(title: '最近记录', trailing: widget.onOpenLedger == null ? null : TextButton(onPressed: () => widget.onOpenLedger!(selectedLedger), child: const Text('查看流水'))),
-                        for (final record in recentTransactions.take(3)) ListTile(
-                          dense: true, contentPadding: EdgeInsets.zero,
-                          title: Text(record.category), subtitle: Text('${record.createdAt.month}月${record.createdAt.day}日${record.note.isEmpty ? '' : ' · ${record.note}'}', maxLines: 1, overflow: TextOverflow.ellipsis),
-                          trailing: Text('${record.type == 1 ? '+' : '−'} ${record.currencyCode} ${record.amount.toStringAsFixed(2)}'),
-                          onTap: widget.onOpenLedger == null ? null : () => widget.onOpenLedger!(selectedLedger),
+                        const SizedBox(height: 14),
+                        AppAnimatedEntry(
+                          delay: const Duration(milliseconds: 120),
+                          child: AppSectionCard(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                AppAnimatedSwitcher(
+                                  child: AppSectionHeader(
+                                    key: ValueKey(
+                                      'category-header-$_transactionType',
+                                    ),
+                                    title: '分类',
+                                    trailing: Icon(
+                                      _transactionType == 0
+                                          ? Icons.trending_down_rounded
+                                          : Icons.trending_up_rounded,
+                                      color: colorScheme.primary,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                CategorySelector(
+                                  key: _categoryAnchor,
+                                  categories: _currentCategories,
+                                  selectedCategory:
+                                      _selectedCategory ??
+                                      _currentCategories.first,
+                                  isIncome: _transactionType == 1,
+                                  onChanged: (category) {
+                                    _setAndPersist(
+                                      () => _selectedCategory = category,
+                                    );
+                                  },
+                                  onAddCategory: _addCurrentCategory,
+                                ),
+                                TransactionFieldError(message: _categoryError),
+                              ],
+                            ),
+                          ),
                         ),
+                        const SizedBox(height: 14),
+                        if (selectedLedger != null)
+                          AppAnimatedEntry(
+                            delay: const Duration(milliseconds: 180),
+                            child: peopleAsyncValue.when(
+                              loading: () => const AppSectionCard(
+                                child: Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                              ),
+                              error: (e, st) => AppSectionCard(
+                                child: Text(
+                                  FriendlyError.message(
+                                    e,
+                                    fallback: '人员加载失败，请稍后重试。',
+                                  ),
+                                ),
+                              ),
+                              data: (peoplePool) {
+                                if (selectedLedger.personUuids.isEmpty) {
+                                  return Column(
+                                    key: _peopleAnchor,
+                                    children: [
+                                      const Text('请先为账本添加人员'),
+                                      TransactionFieldError(
+                                        message: _peopleError,
+                                      ),
+                                    ],
+                                  );
+                                }
+
+                                final personMap = peopleByUuid(peoplePool);
+                                final activePersonIds = selectedLedger
+                                    .personUuids
+                                    .where(personMap.containsKey)
+                                    .toList();
+                                if (activePersonIds.isEmpty) {
+                                  return Column(
+                                    key: _peopleAnchor,
+                                    children: [
+                                      const Text('请先为账本添加有效人员'),
+                                      TransactionFieldError(
+                                        message: _peopleError,
+                                      ),
+                                    ],
+                                  );
+                                }
+                                _sanitizeVisiblePeopleSelection(
+                                  activePersonIds,
+                                );
+                                final personChoices = activePersonIds.map((
+                                  pid,
+                                ) {
+                                  final person = personMap[pid]!;
+                                  return AppPersonChoiceItem(
+                                    id: pid,
+                                    name: person.name,
+                                    avatar: person.avatar,
+                                  );
+                                }).toList();
+                                return AppAnimatedSwitcher(
+                                  child: AppSectionCard(
+                                    key: _peopleAnchor,
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        TransactionAnimatedVisibility(
+                                          visible: _transactionType == 0,
+                                          visibleKey: 'payment-mode-panel',
+                                          hiddenKey: 'payment-mode-empty',
+                                          child: Padding(
+                                            padding: const EdgeInsets.only(
+                                              bottom: 10,
+                                            ),
+                                            child: PaymentModePanel(
+                                              paidByPerson:
+                                                  _payerPersonUuid != null,
+                                              description:
+                                                  _payerPersonUuid == null
+                                                  ? '谁付款 · 共同钱包'
+                                                  : '谁付款 · 选择垫付人',
+                                              onChanged: (paidByPerson) {
+                                                _setAndPersist(() {
+                                                  if (paidByPerson) {
+                                                    _payerPersonUuid ??=
+                                                        _selectedPersonIds
+                                                            .isNotEmpty
+                                                        ? _selectedPersonIds
+                                                              .first
+                                                        : activePersonIds.first;
+                                                  } else {
+                                                    _payerPersonUuid = null;
+                                                  }
+                                                });
+                                              },
+                                            ),
+                                          ),
+                                        ),
+                                        AppSectionHeader(
+                                          title: _transactionType == 0
+                                              ? '谁承担'
+                                              : '谁收款',
+                                          trailing: TextButton(
+                                            onPressed: () {
+                                              _setAndPersist(() {
+                                                if (_selectedPersonIds.length ==
+                                                    activePersonIds.length) {
+                                                  _selectedPersonIds.clear();
+                                                } else {
+                                                  _selectedPersonIds.addAll(
+                                                    activePersonIds,
+                                                  );
+                                                }
+                                              });
+                                            },
+                                            child: Text(
+                                              _selectedPersonIds.length ==
+                                                      activePersonIds.length
+                                                  ? '取消全选'
+                                                  : '全选',
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 10),
+                                        AppPersonChoiceGrid(
+                                          items: personChoices,
+                                          selectedIds: _selectedPersonIds,
+                                          onToggle: (pid, selected) {
+                                            _setAndPersist(() {
+                                              if (selected) {
+                                                _selectedPersonIds.add(pid);
+                                              } else {
+                                                _selectedPersonIds.remove(pid);
+                                              }
+                                            });
+                                          },
+                                        ),
+                                        TransactionFieldError(
+                                          message: _peopleError,
+                                        ),
+                                        TransactionSplitSummary(
+                                          ledger: selectedLedger,
+                                          type: _transactionType,
+                                          amount: double.tryParse(
+                                            _amountController.text,
+                                          ),
+                                          currency: _selectedCurrency ?? 'CNY',
+                                          participantCount:
+                                              _selectedPersonIds.length,
+                                          payerName: _payerPersonUuid == null
+                                              ? null
+                                              : personMap[_payerPersonUuid]
+                                                    ?.name,
+                                        ),
+                                        TransactionAnimatedVisibility(
+                                          visible:
+                                              _transactionType == 0 &&
+                                              _payerPersonUuid != null,
+                                          visibleKey: 'payer-person-panel',
+                                          hiddenKey: 'payer-person-empty',
+                                          child: Padding(
+                                            padding: const EdgeInsets.only(
+                                              top: 16,
+                                            ),
+                                            child: DecoratedBox(
+                                              decoration: BoxDecoration(
+                                                color: colorScheme
+                                                    .surfaceContainerLow,
+                                                borderRadius:
+                                                    BorderRadius.circular(16),
+                                                border: Border.all(
+                                                  color: colorScheme
+                                                      .outlineVariant
+                                                      .withValues(alpha: 0.72),
+                                                ),
+                                              ),
+                                              child: Padding(
+                                                padding: const EdgeInsets.all(
+                                                  12,
+                                                ),
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment
+                                                          .stretch,
+                                                  children: [
+                                                    Text(
+                                                      '谁付款',
+                                                      style: Theme.of(
+                                                        context,
+                                                      ).textTheme.titleSmall,
+                                                    ),
+                                                    const SizedBox(height: 8),
+                                                    AppPersonChoiceGrid(
+                                                      items: personChoices,
+                                                      selectedId:
+                                                          _payerPersonUuid,
+                                                      onSelect: (pid) {
+                                                        _setAndPersist(() {
+                                                          _payerPersonUuid =
+                                                              pid;
+                                                        });
+                                                      },
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        if (selectedLedger != null) const SizedBox(height: 14),
+                        TransactionDateControl(
+                          date: _date,
+                          onChanged: (date) => setState(() => _date = date),
+                        ),
+                        AppAnimatedEntry(
+                          delay: const Duration(milliseconds: 220),
+                          child: TextField(
+                            enabled: !_savingTransaction,
+                            controller: _noteController,
+                            decoration: const InputDecoration(
+                              labelText: '备注（选填）',
+                              prefixIcon: Icon(Icons.notes_outlined),
+                            ),
+                            maxLines: 2,
+                            minLines: 1,
+                          ),
+                        ),
+                        if (selectedLedger != null &&
+                            recentTransactions.isNotEmpty) ...[
+                          const SizedBox(height: 16),
+                          AppSectionHeader(
+                            title: '最近记录',
+                            trailing: widget.onOpenLedger == null
+                                ? null
+                                : TextButton(
+                                    onPressed: () =>
+                                        widget.onOpenLedger!(selectedLedger),
+                                    child: const Text('查看流水'),
+                                  ),
+                          ),
+                          for (final record in recentTransactions.take(3))
+                            ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(record.category),
+                              subtitle: Text(
+                                '${record.createdAt.month}月${record.createdAt.day}日${record.note.isEmpty ? '' : ' · ${record.note}'}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              trailing: Text(
+                                '${record.type == 1 ? '+' : '−'} ${record.currencyCode} ${record.amount.toStringAsFixed(2)}',
+                              ),
+                              onTap: widget.onOpenLedger == null
+                                  ? null
+                                  : () => widget.onOpenLedger!(selectedLedger),
+                            ),
+                        ],
+                        const SizedBox(height: 24),
                       ],
-                      const SizedBox(height: 24),
-                    ],
+                    ),
                   ),
-                )),
+                ),
               ),
               AnimatedPadding(
                 duration: AppMotion.fast,

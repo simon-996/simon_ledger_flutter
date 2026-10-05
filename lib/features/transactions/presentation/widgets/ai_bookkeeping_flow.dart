@@ -9,6 +9,7 @@ import '../../../../core/models/ledger.dart';
 import '../../../../core/models/person.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/network/friendly_error.dart';
+import '../../../../core/preferences/transaction_category_preference.dart';
 import '../../../../core/repositories/ai_bookkeeping_repository.dart';
 import '../../../../core/services/ai_draft_queue.dart';
 import '../../../../core/services/ai_audio_recorder.dart';
@@ -43,6 +44,7 @@ class AiBookkeepingFlow extends StatefulWidget {
     required this.onSave,
     this.canParse = true,
     this.canTranscribe = false,
+    this.draftSchemaVersion = 1,
     this.recorder,
   });
 
@@ -53,6 +55,7 @@ class AiBookkeepingFlow extends StatefulWidget {
   final Future<void> Function(AiDraftItem item, AiDraft draft) onSave;
   final bool canParse;
   final bool canTranscribe;
+  final int draftSchemaVersion;
   final AiAudioRecorder? recorder;
 
   @override
@@ -287,10 +290,16 @@ class _AiBookkeepingFlowState extends State<AiBookkeepingFlow> {
         if (mounted) setState(() => _error = '文字输入暂未保存，请重试生成草稿');
         return;
       }
+      final categories = widget.draftSchemaVersion >= 2
+          ? await TransactionCategoryPreference.read()
+          : null;
       final drafts = await widget.repository.parse(
         widget.ledger.remoteSyncUuid,
         input,
         currentAiTimeZone(),
+        schemaVersion: widget.draftSchemaVersion,
+        expenseCategories: categories?.expense ?? const [],
+        incomeCategories: categories?.income ?? const [],
       );
       final items = await widget.queue.add(widget.ledger.uuid, drafts);
       if (!mounted) return;

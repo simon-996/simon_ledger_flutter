@@ -34,8 +34,11 @@ class FakeRepository extends AiBookkeepingRepository {
   Future<List<AiDraft>> parse(
     String ledgerUuid,
     String text,
-    String zone,
-  ) async {
+    String zone, {
+    int schemaVersion = 1,
+    List<String> expenseCategories = const [],
+    List<String> incomeCategories = const [],
+  }) async {
     parseCalls++;
     return [
       const AiDraft(
@@ -64,8 +67,14 @@ class SlowRepository extends FakeRepository {
   final response = Completer<List<AiDraft>>();
 
   @override
-  Future<List<AiDraft>> parse(String ledgerUuid, String text, String zone) =>
-      response.future;
+  Future<List<AiDraft>> parse(
+    String ledgerUuid,
+    String text,
+    String zone, {
+    int schemaVersion = 1,
+    List<String> expenseCategories = const [],
+    List<String> incomeCategories = const [],
+  }) => response.future;
 }
 
 class FakeVoiceDevice implements AiRecorderDevice {
