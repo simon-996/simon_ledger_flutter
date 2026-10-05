@@ -15,6 +15,7 @@ import 'package:simon_ledger_flutter/core/network/api_exception.dart';
 import 'package:simon_ledger_flutter/core/repositories/ai_bookkeeping_repository.dart';
 import 'package:simon_ledger_flutter/core/services/ai_draft_queue.dart';
 import 'package:simon_ledger_flutter/core/services/ai_audio_recorder.dart';
+import 'package:simon_ledger_flutter/core/widgets/app_components.dart';
 import 'package:simon_ledger_flutter/features/transactions/presentation/widgets/ai_bookkeeping_flow.dart';
 import 'package:simon_ledger_flutter/features/transactions/presentation/widgets/ai_draft_review.dart';
 
@@ -49,6 +50,8 @@ class FakeRepository extends AiBookkeepingRepository {
         categorySuggestion: '餐饮',
         personUuids: ['p1'],
         unresolvedNames: [],
+        paymentMode: 'SHARED_POOL',
+        participantScope: 'SPECIFIED',
       ),
       const AiDraft(
         sourceText: '午饭32元',
@@ -58,6 +61,8 @@ class FakeRepository extends AiBookkeepingRepository {
         categorySuggestion: '餐饮',
         personUuids: ['p1'],
         unresolvedNames: [],
+        paymentMode: 'SHARED_POOL',
+        participantScope: 'SPECIFIED',
       ),
     ];
   }
@@ -467,6 +472,216 @@ void main() {
     },
   );
 
+  testWidgets('payer choice stays separate from participant choice', (
+    tester,
+  ) async {
+    final ledger = Ledger()
+      ..uuid = 'ledger-1'
+      ..name = '共享账本'
+      ..baseCurrencyCode = 'CNY'
+      ..personUuids = ['p1', 'p2'];
+    final people = [
+      Person()
+        ..uuid = 'p1'
+        ..name = '张三',
+      Person()
+        ..uuid = 'p2'
+        ..name = '李四',
+    ];
+    AiDraft? confirmed;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AiDraftReview(
+            draft: AiDraft(
+              sourceText: '张三和李四昨天住宿400元，李四垫付',
+              type: 0,
+              amount: 400,
+              currencyCode: 'CNY',
+              categorySuggestion: '居住',
+              personUuids: const ['p1'],
+              unresolvedNames: const [],
+              schemaVersion: 2,
+              paymentMode: 'UNKNOWN',
+              participantScope: 'SPECIFIED',
+              happenedAt: DateTime(2026, 10, 4),
+            ),
+            ledger: ledger,
+            people: people,
+            position: 1,
+            total: 1,
+            busy: false,
+            onConfirm: (draft) async => confirmed = draft,
+            onSkip: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final paymentChips = tester.widgetList<ChoiceChip>(find.byType(ChoiceChip));
+    expect(paymentChips.map((chip) => chip.selected), everyElement(isFalse));
+    await tester.ensureVisible(find.text('确认记账'));
+    await tester.tap(find.text('确认记账'));
+    await tester.pumpAndSettle();
+    expect(confirmed, isNull);
+
+    await tester.ensureVisible(find.text('个人垫付'));
+    await tester.tap(find.text('个人垫付'));
+    await tester.pumpAndSettle();
+    expect(confirmed, isNull);
+    expect(
+      tester
+          .widget<AppPersonChoiceGrid>(find.byType(AppPersonChoiceGrid).first)
+          .selectedIds,
+      {'p1'},
+    );
+
+    final payerGrid = find.byType(AppPersonChoiceGrid).at(1);
+    await tester.tap(
+      find.descendant(
+        of: payerGrid,
+        matching: find.byKey(const ValueKey('person-choice-tile-p2')),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('确认记账'));
+    await tester.tap(find.text('确认记账'));
+    await tester.pumpAndSettle();
+
+    expect(confirmed?.paymentMode, 'PERSON_PAID');
+    expect(confirmed?.payerPersonUuid, 'p2');
+    expect(confirmed?.personUuids, ['p1']);
+  });
+
+  testWidgets('unknown participant scope needs a deliberate snapshot choice', (
+    tester,
+  ) async {
+    final ledger = Ledger()
+      ..uuid = 'ledger-1'
+      ..name = '共享账本'
+      ..baseCurrencyCode = 'CNY'
+      ..personUuids = ['p1', 'p2'];
+    final people = [
+      Person()
+        ..uuid = 'p1'
+        ..name = '张三',
+      Person()
+        ..uuid = 'p2'
+        ..name = '李四',
+    ];
+    AiDraft? confirmed;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AiDraftReview(
+            draft: AiDraft(
+              sourceText: '住宿400元，大家都用上了',
+              type: 0,
+              amount: 400,
+              currencyCode: 'CNY',
+              categorySuggestion: '居住',
+              personUuids: const ['p1', 'p2'],
+              unresolvedNames: const [],
+              schemaVersion: 2,
+              paymentMode: 'SHARED_POOL',
+              participantScope: 'UNKNOWN',
+              happenedAt: DateTime(2026, 10, 4),
+            ),
+            ledger: ledger,
+            people: people,
+            position: 1,
+            total: 1,
+            busy: false,
+            onConfirm: (draft) async => confirmed = draft,
+            onSkip: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('确认记账'));
+    await tester.tap(find.text('确认记账'));
+    await tester.pumpAndSettle();
+    expect(confirmed, isNull);
+
+    await tester.ensureVisible(find.text('按当前名单确认承担人员'));
+    await tester.tap(find.text('按当前名单确认承担人员'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('确认记账'));
+    await tester.tap(find.text('确认记账'));
+    await tester.pumpAndSettle();
+    expect(confirmed?.personUuids, ['p1', 'p2']);
+    expect(confirmed?.participantScope, 'SPECIFIED');
+    expect(confirmed?.paymentMode, 'SHARED_POOL');
+    expect(confirmed?.payerPersonUuid, isNull);
+  });
+
+  testWidgets('non-equal split requires an explicit equal-split override', (
+    tester,
+  ) async {
+    final ledger = Ledger()
+      ..uuid = 'ledger-1'
+      ..name = '共享账本'
+      ..baseCurrencyCode = 'CNY'
+      ..personUuids = ['p1'];
+    final person = Person()
+      ..uuid = 'p1'
+      ..name = '张三';
+    AiDraft? confirmed;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AiDraftReview(
+            draft: AiDraft(
+              sourceText: '房费400，张三承担300，李四承担100',
+              type: 0,
+              amount: 400,
+              currencyCode: 'CNY',
+              categorySuggestion: '居住',
+              personUuids: const ['p1'],
+              unresolvedNames: const [],
+              schemaVersion: 2,
+              paymentMode: 'SHARED_POOL',
+              participantScope: 'SPECIFIED',
+              splitMode: 'UNSUPPORTED',
+              happenedAt: DateTime(2026, 10, 4),
+              issues: const [
+                AiDraftIssue(
+                  id: 'split',
+                  field: 'splitMode',
+                  code: 'UNSUPPORTED_SPLIT',
+                ),
+              ],
+            ),
+            ledger: ledger,
+            people: [person],
+            position: 1,
+            total: 1,
+            busy: false,
+            onConfirm: (draft) async => confirmed = draft,
+            onSkip: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('确认记账'));
+    await tester.tap(find.text('确认记账'));
+    await tester.pumpAndSettle();
+    expect(confirmed, isNull);
+
+    await tester.ensureVisible(find.text('我确认改为等额分摊'));
+    await tester.tap(find.text('我确认改为等额分摊'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('确认记账'));
+    await tester.tap(find.text('确认记账'));
+    await tester.pumpAndSettle();
+    expect(confirmed?.splitMode, 'EQUAL');
+    expect(confirmed?.issues, isEmpty);
+    expect(confirmed?.fieldSources['splitMode'], 'USER');
+  });
+
   testWidgets('edits to a review survive closing and reopening the flow', (
     tester,
   ) async {
@@ -491,6 +706,8 @@ void main() {
         categorySuggestion: '餐饮',
         personUuids: ['p1'],
         unresolvedNames: [],
+        paymentMode: 'SHARED_POOL',
+        participantScope: 'SPECIFIED',
       ),
     ]);
     Widget flow(Key key) => MaterialApp(
@@ -1021,6 +1238,8 @@ void main() {
         categorySuggestion: '餐饮',
         personUuids: ['p1'],
         unresolvedNames: [],
+        paymentMode: 'SHARED_POOL',
+        participantScope: 'SPECIFIED',
       ),
     ]);
     AiDraft? saved;

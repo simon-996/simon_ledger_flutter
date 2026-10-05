@@ -13,6 +13,7 @@ import '../../../../core/preferences/bookkeeping_preference.dart';
 import '../../../../core/preferences/last_selected_ledger_preference.dart';
 import '../../../../core/preferences/transaction_category_preference.dart';
 import '../../../../core/services/ai_draft_queue.dart';
+import '../../../../core/services/ai_draft_readiness.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_components.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
@@ -537,14 +538,16 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab> {
         )
         .map((person) => person.uuid)
         .toSet();
-    if (draft.personUuids.isEmpty ||
-        !activeIds.containsAll(draft.personUuids) ||
-        (draft.payerPersonUuid != null &&
-            !activeIds.contains(draft.payerPersonUuid)) ||
-        !supportedCurrenciesForLedger(current).contains(draft.currencyCode) ||
-        draft.categorySuggestion == null ||
-        draft.categorySuggestion!.trim().isEmpty) {
-      throw StateError('草稿中的人员、币种或分类已失效');
+    final categories = await TransactionCategoryPreference.read();
+    final blockers = aiDraftBlockingFields(
+      draft,
+      activePersonIds: activeIds,
+      categories: draft.type == 1 ? categories.income : categories.expense,
+      supportedCurrencies: supportedCurrenciesForLedger(current),
+      today: DateTime.now(),
+    );
+    if (blockers.isNotEmpty) {
+      throw StateError('请先处理草稿待确认内容：${blockers.join('、')}');
     }
     final profile = await ref.read(localProfileProvider.future);
     final user = ref.read(currentUserProvider).value;
