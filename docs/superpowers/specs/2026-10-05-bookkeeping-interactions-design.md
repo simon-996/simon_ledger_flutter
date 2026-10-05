@@ -35,3 +35,7 @@
 - https://api.flutter.dev/flutter/cupertino/CupertinoDatePicker-class.html
 
 采用 Flutter 官方组件和本项目主题，不新增 UI 依赖。
+
+## 实施结果
+
+已完成全部交互改造，最终 440 项 Flutter 测试通过、静态分析无问题、Web 构建成功。详细证据见 `docs/reviews/2026-10-05-bookkeeping-interactions-review.md`。手动交易沿用现有时间戳模型，时间可保持默认值；AI 草稿支持显式 DAY/TIME 选择，避免日期精度丢失。

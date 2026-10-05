@@ -5,7 +5,6 @@ import 'package:simon_ledger_flutter/core/models/ai_draft.dart';
 import 'package:simon_ledger_flutter/core/models/ledger.dart';
 import 'package:simon_ledger_flutter/core/models/person.dart';
 import 'package:simon_ledger_flutter/features/transactions/presentation/widgets/ai_draft_review.dart';
-import 'package:simon_ledger_flutter/features/transactions/presentation/widgets/transaction_form_components.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -44,6 +43,7 @@ void main() {
     AiDraft value,
     Future<void> Function(AiDraft) onConfirm, {
     String? field,
+    void Function(AiDraft, String)? onChanged,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -57,6 +57,7 @@ void main() {
             busy: false,
             initialField: field,
             onConfirm: onConfirm,
+            onChanged: onChanged,
             onSkip: () {},
           ),
         ),
@@ -75,16 +76,64 @@ void main() {
       (value) async => saved = value,
       field: 'happenedAt',
     );
-    final control = tester.widget<TransactionDateControl>(
-      find.byType(TransactionDateControl),
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('transaction-date-control')),
     );
-    control.onChanged(DateTime(2026, 10, 4, 14, 35));
+    await tester.tap(find.byKey(const ValueKey('transaction-date-control')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('transaction-hour-input')),
+      '14',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('transaction-minute-input')),
+      '35',
+    );
+    await tester.tap(find.text('完成'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('确认记账'));
     await tester.pumpAndSettle();
     expect(saved?.happenedAt, DateTime(2026, 10, 4, 14, 35));
     expect(saved?.datePrecision, 'TIME');
     expect(saved?.fieldSources['happenedAt'], 'USER');
+  });
+
+  testWidgets('day-only edit persists once without inventing time precision', (
+    tester,
+  ) async {
+    AiDraft? saved;
+    final changes = <AiDraft>[];
+    await showReview(
+      tester,
+      draft(),
+      (value) async => saved = value,
+      field: 'happenedAt',
+      onChanged: (value, _) => changes.add(value),
+    );
+    expect(find.textContaining('未指定时间'), findsOneWidget);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('transaction-date-control')),
+    );
+    await tester.tap(find.byKey(const ValueKey('transaction-date-control')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('前天'));
+    await tester.tap(find.text('完成'));
+    await tester.pumpAndSettle();
+    expect(changes, hasLength(1));
+    expect(changes.single.datePrecision, 'DAY');
+    await tester.tap(find.text('确认记账'));
+    await tester.pumpAndSettle();
+    expect(saved?.datePrecision, 'DAY');
+    expect(saved?.fieldSources['happenedAt'], 'USER');
+    expect(
+      DateUtils.isSameDay(
+        saved?.happenedAt,
+        DateUtils.addDaysToDate(DateTime.now(), -2),
+      ),
+      isTrue,
+    );
   });
 
   testWidgets('a supported currency conflict can be deliberately reconfirmed', (

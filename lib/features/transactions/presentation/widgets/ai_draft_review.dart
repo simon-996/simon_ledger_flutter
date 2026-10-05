@@ -831,10 +831,15 @@ class _AiDraftReviewState extends State<AiDraftReview> {
                           key: _dateAnchor,
                           date: _date,
                           enabled: !widget.busy,
+                          hasTime: _datePrecision == 'TIME',
+                          onTimePrecisionChanged: (hasTime) {
+                            setState(
+                              () => _datePrecision = hasTime ? 'TIME' : 'DAY',
+                            );
+                          },
                           onChanged: (date) {
                             setState(() {
                               _date = date;
-                              _datePrecision = 'TIME';
                               _clearIssues(['happenedAt']);
                               _fieldSources['happenedAt'] = 'USER';
                             });

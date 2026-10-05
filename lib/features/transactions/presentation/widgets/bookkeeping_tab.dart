@@ -340,54 +340,37 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab>
     super.dispose();
   }
 
-  void _showSavedNotice(TransactionRecord record, Ledger? ledger) {
+  void _showSavedNotice(TransactionRecord record) {
     final savedScope = ref.read(activeLocalDataScopeProvider);
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        duration: const Duration(seconds: 6),
-        content: Row(
-          children: [
-            Expanded(child: Text(record.type == 1 ? '收入已记下' : '支出已记下')),
-            if (ledger != null && widget.onOpenLedger != null)
-              TextButton(
-                style: TextButton.styleFrom(
-                  foregroundColor: Theme.of(context).colorScheme.inversePrimary,
-                ),
-                onPressed: () => widget.onOpenLedger!(ledger),
-                child: const Text('查看'),
-              ),
-          ],
-        ),
-        action: SnackBarAction(
-          label: '撤销',
-          onPressed: () async {
-            if (!mounted) return;
-            if (ref.read(activeLocalDataScopeProvider) != savedScope) {
-              AppNotice.error(context, '当前账户已变化，请在原账户查看这笔记录。');
-              return;
-            }
-            try {
-              await ref
-                  .read(transactionProvider(record.ledgerUuid).notifier)
-                  .deleteTransaction(record.uuid);
-              if (mounted &&
-                  ref.read(activeLocalDataScopeProvider) == savedScope) {
-                ref.invalidate(transactionProvider(record.ledgerUuid));
-                AppNotice.success(context, '已撤销记账');
-              }
-            } catch (error) {
-              if (mounted) {
-                AppNotice.error(
-                  context,
-                  FriendlyError.message(error, fallback: '撤销失败，请稍后重试。'),
-                );
-              }
-            }
-          },
-        ),
-      ),
+    AppNotice.show(
+      context,
+      '${record.type == 1 ? '收入已记下' : '支出已记下'} · ${record.category} ${record.currencyCode} ${record.amount.toStringAsFixed(2)}',
+      type: AppNoticeType.success,
+      duration: const Duration(seconds: 6),
+      actionLabel: '撤销',
+      onAction: () async {
+        if (!mounted) return;
+        if (ref.read(activeLocalDataScopeProvider) != savedScope) {
+          AppNotice.error(context, '当前账户已变化，请在原账户查看这笔记录。');
+          return;
+        }
+        try {
+          await ref
+              .read(transactionProvider(record.ledgerUuid).notifier)
+              .deleteTransaction(record.uuid);
+          if (mounted && ref.read(activeLocalDataScopeProvider) == savedScope) {
+            ref.invalidate(transactionProvider(record.ledgerUuid));
+            AppNotice.success(context, '已撤销记账');
+          }
+        } catch (error) {
+          if (mounted) {
+            AppNotice.error(
+              context,
+              FriendlyError.message(error, fallback: '撤销失败，请稍后重试。'),
+            );
+          }
+        }
+      },
     );
   }
 
@@ -412,7 +395,6 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab>
     final category = _selectedCategory ?? '默认';
     final currency = _selectedCurrency ?? 'CNY';
     final ledgerId = _selectedLedgerUuid;
-    final ledger = _selectedLedger;
 
     if (ledgerId == null) {
       AppNotice.error(context, '请先选择一个所属账本');
@@ -474,7 +456,7 @@ class _BookkeepingTabState extends ConsumerState<BookkeepingTab>
     if (!mounted || ref.read(activeLocalDataScopeProvider) != savedScope) {
       return;
     }
-    _showSavedNotice(savedRecord, ledger);
+    _showSavedNotice(savedRecord);
     _amountController.clear();
     _noteController.clear();
     setState(() {

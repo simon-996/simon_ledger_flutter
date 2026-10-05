@@ -1717,11 +1717,16 @@ void main() {
     await tester.tap(find.textContaining('1999-12-31'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    expect(find.byType(DatePickerDialog), findsOneWidget);
-    final picker = tester.widget<DatePickerDialog>(
-      find.byType(DatePickerDialog),
+    await tester.tap(find.byKey(const ValueKey('transaction-calendar-toggle')));
+    await tester.pumpAndSettle();
+    expect(find.byType(CalendarDatePicker), findsOneWidget);
+    final picker = tester.widget<CalendarDatePicker>(
+      find.byType(CalendarDatePicker),
     );
     expect(DateUtils.isSameDay(picker.lastDate, DateTime.now()), isTrue);
+    expect(picker.firstDate.year, 1999);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('review flow closes from a real bottom sheet route', (

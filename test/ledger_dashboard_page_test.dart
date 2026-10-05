@@ -124,7 +124,7 @@ void main() {
       expect(find.text('outside'), findsNothing);
       expect(find.text('income'), findsNothing);
       expect(find.text('2025-01-02 23:59'), findsOneWidget);
-      await tester.tap(find.text('USD').first);
+      await tester.tap(find.text('US\$ USD').first);
       await tester.pumpAndSettle();
       expect(find.text('支出 USD 3.00 · 收入 USD 0.00'), findsOneWidget);
       expect(find.text('支出 (USD)'), findsOneWidget);

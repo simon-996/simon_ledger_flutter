@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simon_ledger_flutter/core/database/database_service.dart';
 import 'package:simon_ledger_flutter/core/di/providers.dart';
@@ -15,10 +16,12 @@ import 'package:simon_ledger_flutter/core/models/transaction_record.dart';
 import 'package:simon_ledger_flutter/core/preferences/bookkeeping_preference.dart';
 import 'package:simon_ledger_flutter/core/preferences/onboarding_preference.dart';
 import 'package:simon_ledger_flutter/core/theme/app_theme.dart';
+import 'package:simon_ledger_flutter/core/widgets/app_components.dart';
 import 'package:simon_ledger_flutter/features/home/presentation/screens/home_page.dart';
 import 'package:simon_ledger_flutter/features/transactions/presentation/widgets/ai_draft_review.dart';
 import 'package:simon_ledger_flutter/features/transactions/presentation/widgets/bookkeeping_tab.dart';
 import 'package:simon_ledger_flutter/features/transactions/presentation/widgets/edit_transaction_sheet.dart';
+import 'package:simon_ledger_flutter/features/transactions/presentation/widgets/transaction_form_components.dart';
 
 const _captureDir = String.fromEnvironment('UX_CAPTURE_DIR');
 
@@ -67,6 +70,104 @@ void main() {
       OnboardingPreference.completedKey: true,
     }),
   );
+  testWidgets('saved notice stays above footer with real Chinese font', (
+    tester,
+  ) async {
+    final data = await _fixture();
+    final boundary = GlobalKey();
+    await _mount(
+      tester,
+      data.database,
+      boundary,
+      Scaffold(body: BookkeepingTab(ledgers: [data.ledger])),
+      width: 390,
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('bookkeeping-amount-input')),
+      '12.50',
+    );
+    await tester.tap(find.text('保存记账'));
+    await tester.pumpAndSettle();
+    expect(find.byType(SnackBar), findsNothing);
+    expect(
+      tester.getBottomLeft(find.text('撤销')).dy,
+      lessThan(tester.getTopLeft(find.text('保存记账')).dy),
+    );
+    expect(tester.takeException(), isNull);
+    await tester.runAsync(() => _capture(boundary, 'saved-notice-390'));
+    AppNotice.dismiss();
+  });
+  for (final width in [390.0, 1100.0]) {
+    testWidgets('date and time panel fits real Chinese font at $width', (
+      tester,
+    ) async {
+      final data = await _fixture();
+      final boundary = GlobalKey();
+      await _mount(
+        tester,
+        data.database,
+        boundary,
+        Scaffold(
+          body: TransactionDateControl(
+            date: DateTime(2026, 10, 4, 19, 42),
+            onChanged: (_) {},
+          ),
+        ),
+        width: width,
+      );
+      await tester.tap(find.byKey(const ValueKey('transaction-date-control')));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.runAsync(
+        () => _capture(boundary, 'date-time-${width.toInt()}'),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('transaction-calendar-toggle')),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.runAsync(
+        () => _capture(boundary, 'date-calendar-${width.toInt()}'),
+      );
+      await tester.tap(find.text('取消'));
+      await tester.pumpAndSettle();
+    });
+  }
+  testWidgets('date panel keeps completion above keyboard at large text size', (
+    tester,
+  ) async {
+    final data = await _fixture();
+    final boundary = GlobalKey();
+    await _mount(
+      tester,
+      data.database,
+      boundary,
+      Scaffold(
+        body: TransactionDateControl(
+          date: DateTime(2026, 10, 4, 19, 42),
+          onChanged: (_) {},
+        ),
+      ),
+      width: 320,
+      textScale: 1.5,
+    );
+    await tester.tap(find.byKey(const ValueKey('transaction-date-control')));
+    await tester.pumpAndSettle();
+    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+    addTearDown(tester.view.resetViewInsets);
+    await tester.enterText(
+      find.byKey(const ValueKey('transaction-hour-input')),
+      '18',
+    );
+    await tester.pumpAndSettle();
+    expect(tester.getBottomLeft(find.text('完成')).dy, lessThanOrEqualTo(544));
+    expect(tester.takeException(), isNull);
+    await tester.runAsync(
+      () => _capture(boundary, 'date-keyboard-large-text-320'),
+    );
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+  });
   testWidgets('multi currency totals fit bookkeeping with real Chinese fonts', (
     tester,
   ) async {
@@ -126,7 +227,7 @@ void main() {
           width: width,
         );
         expect(find.byType(BookkeepingTab), findsOneWidget);
-        expect(find.text('CNY · 人民币'), findsOneWidget);
+        expect(find.text('¥ CNY · 人民币'), findsOneWidget);
         expect(
           find.byType(NavigationRail),
           width > 720 ? findsOneWidget : findsNothing,
@@ -193,7 +294,7 @@ void main() {
         ),
         width: 390,
       );
-      expect(find.text('CNY · 人民币'), findsOneWidget);
+      expect(find.text('¥ CNY · 人民币'), findsOneWidget);
       expect(find.text('保存修改'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.runAsync(() => _capture(boundary, 'edit-390'));
@@ -253,7 +354,7 @@ void main() {
         width: 390,
       );
       expect(find.text('第 2/3 笔'), findsOneWidget);
-      expect(find.text('CNY · 人民币'), findsOneWidget);
+      expect(find.text('¥ CNY · 人民币'), findsOneWidget);
       expect(find.text('确认记账'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.runAsync(() => _capture(boundary, 'ai-review-390'));
@@ -464,6 +565,9 @@ Future<void> _mount(
         key: boundary,
         child: MaterialApp(
           debugShowCheckedModeBanner: false,
+          locale: const Locale('zh', 'CN'),
+          supportedLocales: const [Locale('zh', 'CN')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
           theme: _realFontTheme(AppTheme.lightTheme),
           builder: (context, child) => MediaQuery(
             data: MediaQuery.of(

@@ -5,6 +5,7 @@ import '../../../../core/widgets/app_components.dart';
 import '../../../../core/widgets/currency_widgets.dart';
 
 export 'transaction_split_summary.dart';
+export 'transaction_date_control.dart';
 
 const transactionAmountControlHeight = 58.0;
 
@@ -312,7 +313,8 @@ class CurrencySelector extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         if (currencies.length > 4 ||
-            constraints.maxWidth < currencies.length * 88) {
+            (currencies.length > 2 &&
+                constraints.maxWidth < currencies.length * 88)) {
           return OutlinedButton.icon(
             key: const ValueKey('currency-picker'),
             style: OutlinedButton.styleFrom(
@@ -320,21 +322,38 @@ class CurrencySelector extends StatelessWidget {
             ),
             icon: CurrencyFlag(code: selectedCurrency),
             label: Text(
-              '$selectedCurrency · ${currencyName(selectedCurrency)}',
+              currencyDisplayLabel(selectedCurrency),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
             onPressed: () async {
-              final choice = await showModalBottomSheet<String>(
-                context: context,
-                isScrollControlled: true,
-                showDragHandle: true,
-                builder: (_) => _CurrencySearchSheet(
-                  currencies: currencies,
-                  selected: selectedCurrency,
-                ),
+              Widget picker(BuildContext context) => _CurrencySearchSheet(
+                currencies: currencies,
+                selected: selectedCurrency,
               );
-              if (choice != null && choice != selectedCurrency) {
+              final choice = MediaQuery.sizeOf(context).width >= 720
+                  ? await showDialog<String>(
+                      context: context,
+                      builder: (context) => Dialog(
+                        child: SizedBox(
+                          width: 420,
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 20),
+                            child: picker(context),
+                          ),
+                        ),
+                      ),
+                    )
+                  : await showModalBottomSheet<String>(
+                      context: context,
+                      isScrollControlled: true,
+                      useSafeArea: true,
+                      showDragHandle: true,
+                      builder: picker,
+                    );
+              if (context.mounted &&
+                  choice != null &&
+                  choice != selectedCurrency) {
                 onChanged(choice);
               }
             },
@@ -397,80 +416,94 @@ class _CurrencyQuickItem extends StatelessWidget {
     final displayName = currencyName(label);
     final mutedColor = colorScheme.onSurfaceVariant;
 
-    return Semantics(
-      button: true,
-      selected: selected,
-      child: AnimatedContainer(
-        key: ValueKey('currency-option-$label'),
-        width: fillWidth ? double.infinity : null,
-        duration: AppMotion.fast,
-        curve: AppMotion.standard,
-        decoration: BoxDecoration(
-          color: selected
-              ? colorScheme.primary.withValues(alpha: 0.12)
-              : colorScheme.surfaceContainerHigh.withValues(alpha: 0.3),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: onTap,
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: fillWidth ? 8 : 12,
-                vertical: 8,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 112;
+        return Semantics(
+          button: true,
+          selected: selected,
+          label: currencyDisplayLabel(currency),
+          child: ExcludeSemantics(
+            child: AnimatedContainer(
+              key: ValueKey('currency-option-$label'),
+              width: fillWidth ? double.infinity : null,
+              duration: AppMotion.fast,
+              curve: AppMotion.standard,
+              decoration: BoxDecoration(
+                color: selected
+                    ? colorScheme.primary.withValues(alpha: 0.12)
+                    : colorScheme.surfaceContainerHigh.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: Row(
-                mainAxisSize: fillWidth ? MainAxisSize.max : MainAxisSize.min,
-                mainAxisAlignment: fillWidth
-                    ? MainAxisAlignment.center
-                    : MainAxisAlignment.start,
-                children: [
-                  CurrencyFlag(code: currency, width: 18),
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: onTap,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: fillWidth ? 8 : 12,
+                      vertical: 8,
+                    ),
+                    child: Row(
+                      mainAxisSize: fillWidth
+                          ? MainAxisSize.max
+                          : MainAxisSize.min,
+                      mainAxisAlignment: fillWidth
+                          ? MainAxisAlignment.center
+                          : MainAxisAlignment.start,
                       children: [
-                        Text(
-                          label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.labelLarge
-                              ?.copyWith(
-                                color: selected
-                                    ? colorScheme.primary
-                                    : mutedColor,
-                                fontWeight: selected
-                                    ? AppTheme.emphasisWeight
-                                    : FontWeight.w500,
+                        if (!compact) ...[
+                          CurrencyFlag(code: currency, width: 18),
+                          const SizedBox(width: 6),
+                        ],
+                        Flexible(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                compact
+                                    ? label
+                                    : '${currencySymbol(label)} $label'.trim(),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.labelLarge
+                                    ?.copyWith(
+                                      color: selected
+                                          ? colorScheme.primary
+                                          : mutedColor,
+                                      fontWeight: selected
+                                          ? AppTheme.emphasisWeight
+                                          : FontWeight.w500,
+                                    ),
                               ),
-                        ),
-                        Text(
-                          displayName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(
-                                color: selected
-                                    ? colorScheme.onSurfaceVariant
-                                    : mutedColor,
-                                fontWeight: selected
-                                    ? FontWeight.w600
-                                    : FontWeight.w500,
+                              Text(
+                                compact ? currencySymbol(label) : displayName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.labelSmall
+                                    ?.copyWith(
+                                      color: selected
+                                          ? colorScheme.onSurfaceVariant
+                                          : mutedColor,
+                                      fontWeight: selected
+                                          ? FontWeight.w600
+                                          : FontWeight.w500,
+                                    ),
                               ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
                   ),
-                ],
+                ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -916,161 +949,61 @@ class _CurrencySearchSheetState extends State<_CurrencySearchSheet> {
   Widget build(BuildContext context) {
     final choices = widget.currencies
         .where(
-          (code) => '$code ${currencyName(code)}'.toLowerCase().contains(
-            _query.toLowerCase(),
-          ),
+          (code) => currencyDisplayLabel(
+            code,
+          ).toLowerCase().contains(_query.trim().toLowerCase()),
         )
         .toList();
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        20,
-        0,
-        20,
-        MediaQuery.viewInsetsOf(context).bottom + 20,
-      ),
-      child: SizedBox(
-        height: MediaQuery.sizeOf(context).height * .55,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('选择币种', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 12),
-            TextField(
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: '搜索币种',
-                prefixIcon: Icon(Icons.search),
-              ),
-              onChanged: (value) => setState(() => _query = value),
-            ),
-            Expanded(
-              child: choices.isEmpty
-                  ? const Center(child: Text('没有匹配的币种'))
-                  : ListView(
-                      children: [
-                        for (final code in choices)
-                          Semantics(
-                            selected: code == widget.selected,
-                            button: true,
-                            child: ListTile(
-                              leading: CurrencyFlag(code: code),
-                              title: Text('$code · ${currencyName(code)}'),
-                              trailing: code == widget.selected
-                                  ? const Icon(Icons.check_rounded)
-                                  : null,
-                              onTap: () => Navigator.pop(context, code),
-                            ),
-                          ),
-                      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+        final height = (constraints.maxHeight - keyboard - 20).clamp(
+          0.0,
+          MediaQuery.sizeOf(context).height * .7,
+        );
+        return Padding(
+          padding: EdgeInsets.fromLTRB(20, 0, 20, keyboard + 20),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: height),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('选择币种', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 12),
+                  TextField(
+                    decoration: const InputDecoration(
+                      labelText: '搜索币种',
+                      hintText: '名称、代码或符号',
+                      prefixIcon: Icon(Icons.search),
                     ),
+                    onChanged: (value) => setState(() => _query = value),
+                  ),
+                  if (choices.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Center(child: Text('没有匹配的币种')),
+                    ),
+                  for (final code in choices)
+                    Semantics(
+                      selected: code == widget.selected,
+                      button: true,
+                      child: ListTile(
+                        leading: CurrencyFlag(code: code),
+                        title: Text(currencyDisplayLabel(code)),
+                        trailing: code == widget.selected
+                            ? const Icon(Icons.check_rounded)
+                            : null,
+                        onTap: () => Navigator.pop(context, code),
+                      ),
+                    ),
+                ],
+              ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Changing the day keeps the time of an existing record or AI draft.
-DateTime transactionDateOnDay(DateTime day, DateTime previous) {
-  final time = previous.toLocal();
-  return DateTime(
-    day.year,
-    day.month,
-    day.day,
-    time.hour,
-    time.minute,
-    time.second,
-    time.millisecond,
-    time.microsecond,
-  );
-}
-
-/// Changing the displayed hour and minute keeps the date and finer precision.
-DateTime transactionDateAtTime(DateTime previous, TimeOfDay time) {
-  final local = previous.toLocal();
-  return DateTime(
-    local.year,
-    local.month,
-    local.day,
-    time.hour,
-    time.minute,
-    local.second,
-    local.millisecond,
-    local.microsecond,
-  );
-}
-
-class TransactionDateControl extends StatelessWidget {
-  const TransactionDateControl({
-    super.key,
-    required this.date,
-    required this.onChanged,
-    this.enabled = true,
-  });
-  final DateTime? date;
-  final ValueChanged<DateTime> onChanged;
-  final bool enabled;
-  @override
-  Widget build(BuildContext context) {
-    final value = (date ?? DateTime.now()).toLocal();
-    final label =
-        '${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
-    final timeLabel = date == null
-        ? '现在'
-        : '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Wrap(
-        spacing: 8,
-        children: [
-          TextButton.icon(
-            key: const ValueKey('transaction-date-control'),
-            icon: const Icon(Icons.event_outlined, size: 18),
-            label: Text('日期 · $label'),
-            onPressed: !enabled
-                ? null
-                : () async {
-                    final now = DateTime.now();
-                    final initial = value.isAfter(now) ? now : value;
-                    final day = await showDatePicker(
-                      context: context,
-                      initialDate: initial,
-                      firstDate: DateTime(
-                        initial.year < 2000 ? initial.year : 2000,
-                      ),
-                      lastDate: now,
-                    );
-                    if (day != null && context.mounted) {
-                      onChanged(transactionDateOnDay(day, value));
-                    }
-                  },
           ),
-          TextButton.icon(
-            key: const ValueKey('transaction-time-control'),
-            icon: const Icon(Icons.access_time_outlined, size: 18),
-            label: Text('时间 · $timeLabel'),
-            onPressed: !enabled
-                ? null
-                : () async {
-                    final time = await showTimePicker(
-                      context: context,
-                      initialTime: TimeOfDay.fromDateTime(value),
-                      helpText: '选择记账时间',
-                      builder: (context, child) => MediaQuery(
-                        data: MediaQuery.of(
-                          context,
-                        ).copyWith(alwaysUse24HourFormat: true),
-                        child: child!,
-                      ),
-                    );
-                    if (time != null && context.mounted) {
-                      onChanged(transactionDateAtTime(value, time));
-                    }
-                  },
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

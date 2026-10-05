@@ -1,6 +1,32 @@
 import 'package:country_flags/country_flags.dart';
 import 'package:flutter/material.dart';
 
+String currencySymbol(String code) => switch (code.trim().toUpperCase()) {
+  'CNY' || 'JPY' => '¥',
+  'USD' => 'US\$',
+  'EUR' => '€',
+  'GBP' => '£',
+  'HKD' => 'HK\$',
+  'TWD' => 'NT\$',
+  'MOP' => 'MOP\$',
+  'SGD' => 'S\$',
+  'THB' => '฿',
+  'MYR' => 'RM',
+  'KRW' => '₩',
+  'AUD' => 'A\$',
+  'CAD' => 'CA\$',
+  'NZD' => 'NZ\$',
+  'CHF' => 'Fr',
+  _ => '',
+};
+
+String currencyDisplayLabel(String code, {bool showName = true}) {
+  final normalized = code.trim().toUpperCase();
+  final symbol = currencySymbol(normalized);
+  final unit = symbol.isEmpty ? normalized : '$symbol $normalized';
+  return showName ? '$unit · ${currencyName(normalized)}' : unit;
+}
+
 String currencyName(String code) => switch (code.trim().toUpperCase()) {
   'CNY' => '人民币',
   'USD' => '美元',
@@ -76,7 +102,7 @@ class CurrencyLabel extends StatelessWidget {
         const SizedBox(width: 8),
         Flexible(
           child: Text(
-            showName ? '$normalized · ${currencyName(normalized)}' : normalized,
+            currencyDisplayLabel(normalized, showName: showName),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: style,

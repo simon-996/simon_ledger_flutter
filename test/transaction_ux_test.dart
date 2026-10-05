@@ -211,14 +211,14 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey('transaction-date-control')));
     await tester.pumpAndSettle();
-    final picker = tester.widget<DatePickerDialog>(
-      find.byType(DatePickerDialog),
+    await tester.tap(find.byKey(const ValueKey('transaction-calendar-toggle')));
+    await tester.pumpAndSettle();
+    final picker = tester.widget<CalendarDatePicker>(
+      find.byType(CalendarDatePicker),
     );
     expect(DateUtils.isSameDay(picker.lastDate, DateTime.now()), isTrue);
-    await tester.tap(find.byIcon(Icons.edit_outlined));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), '06/15/2026');
-    await tester.tap(find.text('OK'));
+    await tester.tap(find.text('15').last);
+    await tester.tap(find.text('完成'));
     await tester.pumpAndSettle();
     expect(chosen, DateTime(2026, 6, 15, 14, 23, 45, 67, 89));
     expect(find.byType(TimePickerDialog), findsNothing);
@@ -237,15 +237,19 @@ void main() {
         ),
       ),
     );
-    expect(find.text('时间 · 14:23'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('transaction-time-control')));
+    expect(find.textContaining('14:23'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('transaction-date-control')));
     await tester.pumpAndSettle();
-    expect(find.byType(TimePickerDialog), findsOneWidget);
-    await tester.tap(find.byIcon(Icons.keyboard_outlined));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextFormField).at(0), '09');
-    await tester.enterText(find.byType(TextFormField).at(1), '07');
-    await tester.tap(find.text('OK'));
+    expect(find.byType(TimePickerDialog), findsNothing);
+    await tester.enterText(
+      find.byKey(const ValueKey('transaction-hour-input')),
+      '09',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('transaction-minute-input')),
+      '07',
+    );
+    await tester.tap(find.text('完成'));
     await tester.pumpAndSettle();
     expect(chosen, DateTime(2026, 6, 16, 9, 7, 45, 67));
   });
@@ -363,9 +367,7 @@ void main() {
       ledger.exchangeRateToCNY = 7.2;
       await database.saveLedger(ledger);
       await mount(tester, database, BookkeepingTab(ledgers: [ledger]));
-      await tester.tap(find.byKey(const ValueKey('currency-picker')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('USD · 美元').last);
+      await tester.tap(find.byKey(const ValueKey('currency-option-USD')));
       await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const ValueKey('bookkeeping-amount-input')),
@@ -386,10 +388,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('总额 USD 50.00'), findsOneWidget);
       expect(find.text('每人 ≈ CNY 180.00'), findsOneWidget);
-      await tester.ensureVisible(find.byKey(const ValueKey('currency-picker')));
-      await tester.tap(find.byKey(const ValueKey('currency-picker')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('CNY · 人民币').last);
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('currency-option-CNY')),
+      );
+      await tester.tap(find.byKey(const ValueKey('currency-option-CNY')));
       await tester.pumpAndSettle();
       expect(find.text('总额 CNY 50.00'), findsOneWidget);
       expect(find.text('每人 ≈ USD 3.47'), findsOneWidget);

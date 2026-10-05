@@ -161,11 +161,22 @@ class AppNotice {
     );
 
     _currentEntry = entry;
+    entry.addListener(() {
+      if (!entry.mounted && identical(_currentEntry, entry)) {
+        _dismissTimer?.cancel();
+        _dismissTimer = null;
+        _currentEntry = null;
+      }
+    });
     overlay.insert(entry);
-    _dismissTimer = Timer(
-      duration ?? _durationFor(type, hasAction: actionLabel != null),
-      dismiss,
-    );
+    final hasAction = actionLabel != null && onAction != null;
+    if (!(hasAction &&
+        MediaQuery.maybeOf(context)?.accessibleNavigation == true)) {
+      _dismissTimer = Timer(
+        duration ?? _durationFor(type, hasAction: hasAction),
+        dismiss,
+      );
+    }
   }
 
   static void dismiss() {
@@ -176,7 +187,7 @@ class AppNotice {
   }
 
   static Duration _durationFor(AppNoticeType type, {required bool hasAction}) {
-    if (hasAction) return const Duration(seconds: 4);
+    if (hasAction) return const Duration(seconds: 6);
     return switch (type) {
       AppNoticeType.success => const Duration(milliseconds: 1400),
       AppNoticeType.info => const Duration(milliseconds: 1800),
@@ -204,6 +215,8 @@ class _AppNoticeOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final config = _config(colorScheme, AppColors.of(context));
+    final wide = MediaQuery.sizeOf(context).width >= 720;
+    final reducedMotion = MediaQuery.disableAnimationsOf(context);
 
     return Positioned(
       top: 0,
@@ -212,12 +225,12 @@ class _AppNoticeOverlay extends StatelessWidget {
       child: SafeArea(
         bottom: false,
         child: Align(
-          alignment: Alignment.topCenter,
+          alignment: wide ? Alignment.topRight : Alignment.topCenter,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
             child: TweenAnimationBuilder<double>(
               tween: Tween(begin: 0, end: 1),
-              duration: AppMotion.normal,
+              duration: reducedMotion ? Duration.zero : AppMotion.normal,
               curve: AppMotion.emphasized,
               builder: (context, value, child) {
                 return Opacity(
@@ -234,73 +247,76 @@ class _AppNoticeOverlay extends StatelessWidget {
               child: Material(
                 color: Colors.transparent,
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 560),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerLowest,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: config.borderColor),
-                      boxShadow: [
-                        BoxShadow(
-                          color: colorScheme.shadow.withValues(alpha: 0.12),
-                          blurRadius: 22,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
+                  constraints: BoxConstraints(maxWidth: wide ? 420 : 560),
+                  child: Semantics(
+                    liveRegion: true,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerLowest,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: config.borderColor),
+                        boxShadow: [
+                          BoxShadow(
+                            color: colorScheme.shadow.withValues(alpha: 0.12),
+                            blurRadius: 22,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 30,
-                            height: 30,
-                            decoration: BoxDecoration(
-                              color: config.color.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(999),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 30,
+                              height: 30,
+                              decoration: BoxDecoration(
+                                color: config.color.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Icon(
+                                config.icon,
+                                size: 18,
+                                color: config.color,
+                              ),
                             ),
-                            child: Icon(
-                              config.icon,
-                              size: 18,
-                              color: config.color,
+                            const SizedBox(width: 10),
+                            Flexible(
+                              child: Text(
+                                message,
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(
+                                      color: colorScheme.onSurface,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          Flexible(
-                            child: Text(
-                              message,
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(
-                                    color: colorScheme.onSurface,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                            ),
-                          ),
-                          if (actionLabel != null && onAction != null) ...[
-                            const SizedBox(width: 8),
+                            if (actionLabel != null && onAction != null) ...[
+                              const SizedBox(width: 8),
+                              AppPressable(
+                                child: TextButton(
+                                  onPressed: onAction,
+                                  child: Text(actionLabel!),
+                                ),
+                              ),
+                            ],
+                            const SizedBox(width: 2),
                             AppPressable(
-                              child: TextButton(
-                                onPressed: onAction,
-                                child: Text(actionLabel!),
+                              child: IconButton(
+                                tooltip: '关闭',
+                                visualDensity: VisualDensity.compact,
+                                icon: const Icon(Icons.close_rounded, size: 18),
+                                onPressed: onClose,
                               ),
                             ),
                           ],
-                          const SizedBox(width: 2),
-                          AppPressable(
-                            child: IconButton(
-                              tooltip: '关闭',
-                              visualDensity: VisualDensity.compact,
-                              icon: const Icon(Icons.close_rounded, size: 18),
-                              onPressed: onClose,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
