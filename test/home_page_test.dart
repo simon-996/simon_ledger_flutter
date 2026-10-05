@@ -71,8 +71,9 @@ void main() {
 
       expect(
         find.byKey(const ValueKey('bookkeeping-amount-input')),
-        findsOneWidget,
+        findsNothing,
       );
+      expect(find.text('旅行账本'), findsWidgets);
       expect(tester.testTextInput.isVisible, isFalse);
     },
   );

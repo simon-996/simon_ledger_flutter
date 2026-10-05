@@ -514,7 +514,7 @@ class _AppAnimatedEntryState extends State<AppAnimatedEntry>
   }
 }
 
-class AppAnimatedIndexedStack extends StatelessWidget {
+class AppAnimatedIndexedStack extends StatefulWidget {
   const AppAnimatedIndexedStack({
     super.key,
     required this.index,
@@ -527,36 +527,61 @@ class AppAnimatedIndexedStack extends StatelessWidget {
   final Duration duration;
 
   @override
+  State<AppAnimatedIndexedStack> createState() =>
+      _AppAnimatedIndexedStackState();
+}
+
+class _AppAnimatedIndexedStackState extends State<AppAnimatedIndexedStack> {
+  final Set<int> _visitedIndexes = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _visitedIndexes.add(widget.index);
+  }
+
+  @override
+  void didUpdateWidget(covariant AppAnimatedIndexedStack oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _visitedIndexes.removeWhere((index) => index >= widget.children.length);
+    _visitedIndexes.add(widget.index);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final motionDuration = MediaQuery.disableAnimationsOf(context)
         ? Duration.zero
-        : duration;
+        : widget.duration;
     return Stack(
       fit: StackFit.expand,
       children: [
-        for (var i = 0; i < children.length; i++)
+        for (var i = 0; i < widget.children.length; i++)
           Positioned.fill(
             child: IgnorePointer(
-              ignoring: i != index,
+              ignoring: i != widget.index,
               child: ExcludeSemantics(
-                excluding: i != index,
+                excluding: i != widget.index,
                 child: AnimatedOpacity(
-                  opacity: i == index ? 1 : 0,
+                  opacity: i == widget.index ? 1 : 0,
                   duration: motionDuration,
                   curve: AppMotion.standard,
                   child: AnimatedSlide(
-                    offset: i == index
+                    offset: i == widget.index
                         ? Offset.zero
-                        : Offset(i < index ? -0.018 : 0.018, 0),
+                        : Offset(i < widget.index ? -0.018 : 0.018, 0),
                     duration: motionDuration,
                     curve: AppMotion.emphasized,
                     child: AnimatedScale(
-                      scale: i == index ? 1 : 0.992,
+                      scale: i == widget.index ? 1 : 0.992,
                       duration: motionDuration,
                       curve: AppMotion.emphasized,
                       child: TickerMode(
-                        enabled: i == index,
-                        child: RepaintBoundary(child: children[i]),
+                        enabled: i == widget.index,
+                        child: RepaintBoundary(
+                          child: _visitedIndexes.contains(i)
+                              ? widget.children[i]
+                              : const SizedBox.shrink(),
+                        ),
                       ),
                     ),
                   ),
@@ -820,28 +845,31 @@ class AppSectionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return AnimatedContainer(
-      duration: AppMotion.normal,
-      curve: AppMotion.standard,
-      margin: margin,
-      padding: padding,
-      decoration: BoxDecoration(
-        color: color ?? colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-        border: Border.all(
-          color:
-              borderColor ?? colorScheme.outlineVariant.withValues(alpha: 0.58),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: colorScheme.shadow.withValues(alpha: 0.035),
-            blurRadius: 16,
-            spreadRadius: -6,
-            offset: const Offset(0, 4),
+    return RepaintBoundary(
+      child: AnimatedContainer(
+        duration: AppMotion.normal,
+        curve: AppMotion.standard,
+        margin: margin,
+        padding: padding,
+        decoration: BoxDecoration(
+          color: color ?? colorScheme.surfaceContainerLowest,
+          borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+          border: Border.all(
+            color:
+                borderColor ??
+                colorScheme.outlineVariant.withValues(alpha: 0.58),
           ),
-        ],
+          boxShadow: [
+            BoxShadow(
+              color: colorScheme.shadow.withValues(alpha: 0.035),
+              blurRadius: 16,
+              spreadRadius: -6,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: child,
       ),
-      child: child,
     );
   }
 }

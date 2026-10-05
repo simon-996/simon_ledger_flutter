@@ -49,7 +49,6 @@ class _HomePageState extends ConsumerState<HomePage> {
   Widget build(BuildContext context) {
     // 监听 Provider
     final ledgersAsyncValue = ref.watch(ledgerProvider);
-    final ledgerStatsAsyncValue = ref.watch(ledgerStatsProvider);
     final isAccountTab = _currentIndex == 3;
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
     final hideNavigationForKeyboard = keyboardVisible && _currentIndex != 0;
@@ -92,32 +91,15 @@ class _HomePageState extends ConsumerState<HomePage> {
                         onOpenLedger: _openLedger,
                         bottomNavigationReserve: wide ? 0 : 70,
                       ),
-                      ledgerStatsAsyncValue.when(
-                        loading: () => LedgerListTab(
+                      Consumer(
+                        builder: (context, ledgerRef, child) => LedgerListTab(
                           ledgers: ledgers,
-                          ledgerStats: const {},
-                          onTap: _openLedger,
-                          onEdit: _editLedger,
-                          onShare: _shareLedger,
-                          onDelete: _deleteLedger,
-                          onCreate: _openCreateLedger,
-                          onSync: _syncLedger,
-                          autoSyncEnabled: _currentIndex == 1,
-                        ),
-                        error: (err, stack) => LedgerListTab(
-                          ledgers: ledgers,
-                          ledgerStats: const {},
-                          onTap: _openLedger,
-                          onEdit: _editLedger,
-                          onShare: _shareLedger,
-                          onDelete: _deleteLedger,
-                          onCreate: _openCreateLedger,
-                          onSync: _syncLedger,
-                          autoSyncEnabled: _currentIndex == 1,
-                        ),
-                        data: (stats) => LedgerListTab(
-                          ledgers: ledgers,
-                          ledgerStats: stats,
+                          ledgerStats: ledgerRef
+                              .watch(ledgerStatsProvider)
+                              .maybeWhen(
+                                data: (stats) => stats,
+                                orElse: () => const {},
+                              ),
                           onTap: _openLedger,
                           onEdit: _editLedger,
                           onShare: _shareLedger,
