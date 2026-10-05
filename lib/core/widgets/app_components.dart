@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../models/ledger.dart';
@@ -40,12 +41,17 @@ class AppPressable extends StatefulWidget {
 
 class _AppPressableState extends State<AppPressable> {
   bool _pressed = false;
+  int? _pressedPointer;
+  Offset? _pointerDownPosition;
+  double _dragSlop = kTouchSlop;
 
   @override
   void didUpdateWidget(covariant AppPressable oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!widget.enabled && _pressed) {
+    if (!widget.enabled) {
       _pressed = false;
+      _pressedPointer = null;
+      _pointerDownPosition = null;
     }
   }
 
@@ -54,14 +60,41 @@ class _AppPressableState extends State<AppPressable> {
     setState(() => _pressed = pressed);
   }
 
+  void _onPointerDown(PointerDownEvent event) {
+    if (_pressedPointer != null || event.buttons & kPrimaryButton == 0) return;
+    _pressedPointer = event.pointer;
+    _pointerDownPosition = event.position;
+    _dragSlop = computeHitSlop(
+      event.kind,
+      MediaQuery.gestureSettingsOf(context),
+    );
+    _setPressed(true);
+  }
+
+  void _onPointerMove(PointerMoveEvent event) {
+    if (event.pointer != _pressedPointer || !_pressed) return;
+    if ((event.position - _pointerDownPosition!).distance > _dragSlop) {
+      // A drag must not keep scaling the surface beneath the scrolling finger.
+      _setPressed(false);
+    }
+  }
+
+  void _onPointerEnd(PointerEvent event) {
+    if (event.pointer != _pressedPointer) return;
+    _pressedPointer = null;
+    _pointerDownPosition = null;
+    _setPressed(false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final reducedMotion = MediaQuery.disableAnimationsOf(context);
     return Listener(
       behavior: HitTestBehavior.deferToChild,
-      onPointerDown: widget.enabled ? (_) => _setPressed(true) : null,
-      onPointerUp: widget.enabled ? (_) => _setPressed(false) : null,
-      onPointerCancel: widget.enabled ? (_) => _setPressed(false) : null,
+      onPointerDown: widget.enabled ? _onPointerDown : null,
+      onPointerMove: widget.enabled ? _onPointerMove : null,
+      onPointerUp: widget.enabled ? _onPointerEnd : null,
+      onPointerCancel: widget.enabled ? _onPointerEnd : null,
       child: AnimatedScale(
         scale: !reducedMotion && widget.enabled && _pressed
             ? widget.pressedScale
@@ -388,11 +421,15 @@ class _AppAnimatedEntryState extends State<AppAnimatedEntry>
   late final Animation<double> _opacity;
   late final Animation<Offset> _slide;
   late final Animation<double> _scale;
+  final Set<ValueNotifier<bool>> _scrollActivities = {};
+  Timer? _delayTimer;
+  bool _started = false;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(vsync: this, duration: widget.duration);
+    _controller.addStatusListener(_onAnimationStatus);
     final curved = CurvedAnimation(parent: _controller, curve: widget.curve);
     _opacity = curved;
     _slide = Tween<Offset>(
@@ -400,18 +437,66 @@ class _AppAnimatedEntryState extends State<AppAnimatedEntry>
       end: Offset.zero,
     ).animate(curved);
     _scale = Tween<double>(begin: 0.985, end: 1).animate(curved);
+  }
 
-    if (widget.delay == Duration.zero) {
-      _controller.forward();
-    } else {
-      Future.delayed(widget.delay, () {
-        if (mounted) _controller.forward();
-      });
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_controller.isCompleted) return;
+
+    // Horizontal person lists can also be moving with their vertical page.
+    final scrollActivities = {
+      for (final axis in Axis.values)
+        if (Scrollable.maybeOf(context, axis: axis) case final scrollable?)
+          scrollable.position.isScrollingNotifier,
+    };
+    if (_scrollActivities.length != scrollActivities.length ||
+        !scrollActivities.every(_scrollActivities.contains)) {
+      _removeScrollListeners();
+      _scrollActivities.addAll(scrollActivities);
+      for (final activity in _scrollActivities) {
+        activity.addListener(_onScrollChanged);
+      }
     }
+    if (MediaQuery.disableAnimationsOf(context) || _isScrolling) {
+      _finishEntry();
+    } else if (!_started) {
+      _started = true;
+      if (widget.delay == Duration.zero) {
+        _controller.forward();
+      } else {
+        _delayTimer = Timer(widget.delay, () => _controller.forward());
+      }
+    }
+  }
+
+  bool get _isScrolling => _scrollActivities.any((activity) => activity.value);
+
+  void _onScrollChanged() {
+    if (_isScrolling) _finishEntry();
+  }
+
+  void _finishEntry() {
+    _delayTimer?.cancel();
+    _delayTimer = null;
+    _controller.value = 1;
+  }
+
+  void _onAnimationStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed) _removeScrollListeners();
+  }
+
+  void _removeScrollListeners() {
+    for (final activity in _scrollActivities) {
+      activity.removeListener(_onScrollChanged);
+    }
+    _scrollActivities.clear();
   }
 
   @override
   void dispose() {
+    _delayTimer?.cancel();
+    _removeScrollListeners();
     _controller.dispose();
     super.dispose();
   }
