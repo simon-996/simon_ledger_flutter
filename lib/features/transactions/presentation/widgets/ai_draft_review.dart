@@ -73,9 +73,8 @@ class _AiDraftReviewState extends State<AiDraftReview> {
   final _dateAnchor = GlobalKey();
   final _noteAnchor = GlobalKey();
   String? get _amountError {
-    final value = double.tryParse(_amount.text.trim());
-    return _validationActive && (value == null || !value.isFinite || value <= 0)
-        ? '请输入大于 0 的有效金额'
+    return _validationActive
+        ? aiDraftAmountError(widget.draft.amount, amountInput: _amount.text)
         : null;
   }
 
@@ -126,7 +125,11 @@ class _AiDraftReviewState extends State<AiDraftReview> {
     super.initState();
     final draft = widget.draft;
     _amount = TextEditingController(
-      text: widget.amountInput ?? draft.amount.toStringAsFixed(2),
+      text:
+          widget.amountInput ??
+          (aiDraftAmountError(draft.amount) == null
+              ? draft.amount.toStringAsFixed(2)
+              : draft.amount.toString()),
     );
     _note = TextEditingController(text: draft.note ?? '');
     _type = draft.type;
@@ -315,6 +318,16 @@ class _AiDraftReviewState extends State<AiDraftReview> {
     _changed();
   }
 
+  void _cancelExclusion(AiDraftIssue issue) {
+    setState(() {
+      _issues.removeWhere((value) => value.id == issue.id);
+      _participantScope = 'SPECIFIED';
+      _fieldSources['participants'] = 'USER';
+      _fieldSources['excludedParticipants'] = 'USER';
+    });
+    _changed();
+  }
+
   String _issueMessage(AiDraftIssue issue) {
     final source = issue.sourceText;
     return switch (issue.code) {
@@ -374,6 +387,12 @@ class _AiDraftReviewState extends State<AiDraftReview> {
                       },
               ),
             ],
+            if (issue.field == 'excludedParticipants')
+              TextButton(
+                key: ValueKey('ai-cancel-exclusion-${issue.id}'),
+                onPressed: widget.busy ? null : () => _cancelExclusion(issue),
+                child: const Text('取消这项排除，保留当前名单'),
+              ),
           ],
         ),
       ),
@@ -490,6 +509,9 @@ class _AiDraftReviewState extends State<AiDraftReview> {
   Widget build(BuildContext context) {
     final currencies = supportedCurrenciesForLedger(widget.ledger);
     final currencyIsSupported = currencies.contains(_currency);
+    final currencyNeedsReview = _issues.any(
+      (issue) => issue.field == 'currencyCode',
+    );
     final selectedCurrency = currencyIsSupported ? _currency : currencies.first;
     final suggestion = widget.draft.categorySuggestion?.trim();
     final unknownSuggestion =
@@ -624,7 +646,11 @@ class _AiDraftReviewState extends State<AiDraftReview> {
                           keyboardType: const TextInputType.numberWithOptions(
                             decimal: true,
                           ),
-                          onChanged: (_) => _changed(),
+                          onChanged: (_) {
+                            _fieldSources['amount'] = 'USER';
+                            _clearIssues(['amount']);
+                            _changed();
+                          },
                           decoration: InputDecoration(
                             labelText: '金额',
                             errorText: _amountError,
@@ -646,6 +672,15 @@ class _AiDraftReviewState extends State<AiDraftReview> {
                                 ? null
                                 : () => _useLedgerCurrency(currencies.first),
                             child: Text('按账本币种 ${currencies.first} 继续（不换算金额）'),
+                          ),
+                        ] else if (currencyNeedsReview) ...[
+                          const Text('原文中的币种信息需要核对；确认后金额数值保持不变。'),
+                          OutlinedButton(
+                            key: const ValueKey('ai-confirm-currency'),
+                            onPressed: widget.busy
+                                ? null
+                                : () => _useLedgerCurrency(_currency),
+                            child: Text('确认币种 $_currency（不换算金额）'),
                           ),
                         ],
                       ],

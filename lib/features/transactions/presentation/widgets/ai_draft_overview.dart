@@ -47,6 +47,9 @@ class AiDraftOverview extends StatelessWidget {
 
   String _amount(AiDraftItem item) {
     final raw = item.amountInput?.trim();
+    if (aiDraftAmountError(item.draft.amount, amountInput: raw) != null) {
+      return '金额待核对';
+    }
     final amount = raw == null ? item.draft.amount : double.tryParse(raw);
     if (amount == null || !amount.isFinite || amount <= 0) return '金额待核对';
     return formatMoney(item.draft.currencyCode, amount);

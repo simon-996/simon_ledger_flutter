@@ -114,4 +114,18 @@ void main() {
       );
     },
   );
+
+  test('amount precision is checked for both edits and final draft values', () {
+    for (final value in ['400.123', '0.001', '1e3', 'Infinity', 'NaN']) {
+      expect(
+        check(draft(), amountInput: value),
+        contains('amount'),
+        reason: value,
+      );
+    }
+    expect(check(draft().copyWith(amount: 400.123)), contains('amount'));
+    for (final value in ['400.12', '27.', '.50']) {
+      expect(check(draft(), amountInput: value), isEmpty, reason: value);
+    }
+  });
 }

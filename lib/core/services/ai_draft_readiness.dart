@@ -1,5 +1,17 @@
 import '../models/ai_draft.dart';
 
+String? aiDraftAmountError(double originalAmount, {String? amountInput}) {
+  final input = amountInput?.trim() ?? originalAmount.toString();
+  final amount = double.tryParse(input);
+  if (amount == null || !amount.isFinite || amount <= 0) {
+    return '请输入大于 0 的有效金额';
+  }
+  if (!RegExp(r'^(?:\d+(?:\.\d{0,2})?|\.\d{1,2})$').hasMatch(input)) {
+    return '金额最多保留 2 位小数，请使用普通数字';
+  }
+  return null;
+}
+
 List<String> aiDraftBlockingFields(
   AiDraft draft, {
   required Set<String> activePersonIds,
@@ -9,10 +21,9 @@ List<String> aiDraftBlockingFields(
   String? amountInput,
 }) {
   final fields = <String>{};
-  final amount = amountInput == null
-      ? draft.amount
-      : double.tryParse(amountInput.trim());
-  if (amount == null || !amount.isFinite || amount <= 0) fields.add('amount');
+  if (aiDraftAmountError(draft.amount, amountInput: amountInput) != null) {
+    fields.add('amount');
+  }
   if (draft.type != 0 && draft.type != 1) fields.add('type');
   if (!supportedCurrencies.contains(draft.currencyCode)) {
     fields.add('currencyCode');

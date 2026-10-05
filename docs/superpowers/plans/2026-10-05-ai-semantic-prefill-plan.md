@@ -53,8 +53,9 @@
 ## 当前执行记录
 
 - 实施分支：`feat/ai-bookkeeping`，分别位于 API 与 Flutter 仓库的 `.worktrees/ai-bookkeeping`。
-- API 定向回归：41 项通过，包含 60 条合成 fixture 结构与覆盖检查；补充验证了无货币单位的个人金额分摊、多人付款不误选付款人，以及按比例描述不猜参与人。
-- Flutter 定向回归：72 项通过；`flutter analyze` 无诊断。
+- API 完整回归：`mvn test` 共 538 项，532 项通过、6 项依赖独立 MySQL 环境的账号删除集成测试跳过，失败与错误均为 0。包含 AI 相关 50 项，以及 60 条合成 fixture 结构与覆盖检查。
+- Flutter 完整回归：`flutter test` 共 376 项全部通过；`flutter analyze` 无诊断。覆盖摘要、角色修正、金额精度、队列恢复、保存重试、中文字体及键盘布局。
+- 追加代码复核已修正金额子串、外币单位、付款角色、否定全体、多笔来源顺序、时刻证据，以及币种冲突和排除人员无法解除的问题；详见 `../../reviews/2026-10-05-ai-bookkeeping-review.md`。
 - 真实供应商评测：未运行。语料与 provider mock 不代表模型准确率。
 - 生产发布：未执行。
 
@@ -1076,7 +1077,7 @@ mvn '-Dtest=AiParsingContextFactoryTests,DeepSeekDraftClientTests,AiSemanticRule
 
 ```powershell
 dart format lib/core/models/ai_draft.dart lib/core/repositories/ai_bookkeeping_repository.dart lib/core/services/ai_draft_readiness.dart lib/features/transactions/presentation/widgets/ai_draft_summary.dart lib/features/transactions/presentation/widgets/ai_draft_overview.dart lib/features/transactions/presentation/widgets/ai_draft_review.dart lib/features/transactions/presentation/widgets/ai_bookkeeping_flow.dart lib/features/transactions/presentation/widgets/bookkeeping_tab.dart test/ai_draft_model_test.dart test/ai_draft_readiness_test.dart test/ai_draft_summary_test.dart test/ai_draft_overview_test.dart test/ai_bookkeeping_repository_test.dart test/ai_draft_queue_test.dart test/ai_bookkeeping_flow_test.dart test/bookkeeping_tab_test.dart
-flutter test test/ai_draft_model_test.dart test/ai_draft_readiness_test.dart test/ai_draft_summary_test.dart test/ai_draft_overview_test.dart test/ai_bookkeeping_repository_test.dart test/ai_draft_queue_test.dart test/ai_bookkeeping_flow_test.dart test/bookkeeping_tab_test.dart test/ai_audio_upload_test.dart test/ai_audio_recorder_test.dart test/transaction_form_components_test.dart test/transaction_category_preference_test.dart
+flutter test test/ai_draft_model_test.dart test/ai_draft_readiness_test.dart test/ai_draft_summary_test.dart test/ai_draft_overview_test.dart test/ai_draft_review_regression_test.dart test/ai_bookkeeping_repository_test.dart test/ai_draft_queue_test.dart test/ai_bookkeeping_flow_test.dart test/bookkeeping_tab_test.dart test/ai_audio_upload_test.dart test/ai_audio_recorder_test.dart test/transaction_form_components_test.dart test/transaction_category_preference_test.dart
 flutter analyze
 ```
 

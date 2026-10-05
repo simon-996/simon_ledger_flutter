@@ -251,8 +251,10 @@ void main() {
       expect(find.text('确认记账'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.runAsync(() => _capture(boundary, 'ai-review-390'));
-      await tester.ensureVisible(find.text('谁付款'));
+      await tester.ensureVisible(find.text('付款方式'));
       await tester.pumpAndSettle();
+      expect(find.text('个人垫付'), findsOneWidget);
+      expect(find.text('共同钱包'), findsOneWidget);
       await tester.runAsync(() => _capture(boundary, 'ai-review-people-390'));
       tester.view.viewInsets = const FakeViewPadding(bottom: 300);
       await tester.enterText(find.byType(TextField).first, '-5');

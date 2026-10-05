@@ -54,6 +54,9 @@ class _AiDraftSummaryState extends State<AiDraftSummary> {
 
   String get _amountLabel {
     final raw = widget.item.amountInput?.trim();
+    if (aiDraftAmountError(_draft.amount, amountInput: raw) != null) {
+      return '金额待核对';
+    }
     final amount = raw == null ? _draft.amount : double.tryParse(raw);
     if (amount == null || !amount.isFinite || amount <= 0) return '金额待核对';
     return formatMoney(_draft.currencyCode, amount);
@@ -118,6 +121,9 @@ class _AiDraftSummaryState extends State<AiDraftSummary> {
     if (_draft.splitMode != 'EQUAL') return '原文包含非等额分摊 · 需处理';
     if (_draft.personUuids.isEmpty) return null;
     final raw = widget.item.amountInput?.trim();
+    if (aiDraftAmountError(_draft.amount, amountInput: raw) != null) {
+      return null;
+    }
     final amount = raw == null ? _draft.amount : double.tryParse(raw);
     if (amount == null || !amount.isFinite || amount <= 0) return null;
     final perPerson = formatMoney(
